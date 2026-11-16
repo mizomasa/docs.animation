@@ -1,0 +1,1120 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>パスキーの仕組みアニメーション</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet" />
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
+
+      :root {
+        --bg: #f4f6f8;
+        --surface: #ffffff;
+        --surface-2: #edf1f4;
+        --ink: #152530;
+        --muted: #5a6d7a;
+        --line: #d8e0e6;
+        --accent: #0b7a86;
+        --accent-soft: #dff3f4;
+        --priv: #bf3b21;
+        --priv-soft: #fbe9e4;
+        --pub: #1c66b0;
+        --pub-soft: #e3eef9;
+        --ok: #178a54;
+        --ok-soft: #e0f3e8;
+        --warn: #a86a08;
+        --warn-soft: #faf0da;
+        --shadow: 0 10px 28px rgba(21, 37, 48, .10);
+        --radius: 14px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0d141a;
+          --surface: #16212b;
+          --surface-2: #1c2a36;
+          --ink: #e9f1f5;
+          --muted: #9db2bf;
+          --line: #2b3d4b;
+          --accent: #35b6c2;
+          --accent-soft: #12333a;
+          --priv: #ff8a70;
+          --priv-soft: #3d2019;
+          --pub: #6db1ec;
+          --pub-soft: #17314d;
+          --ok: #4ecb8d;
+          --ok-soft: #143527;
+          --warn: #e5b45a;
+          --warn-soft: #38300f;
+          --shadow: 0 10px 28px rgba(0, 0, 0, .35);
+        }
+      }
+
+      * { box-sizing: border-box; }
+      html { -webkit-text-size-adjust: 100%; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", sans-serif;
+        line-height: 1.65;
+      }
+      .wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 56px; }
+
+      /* ---------- intro ---------- */
+      .intro { max-width: 760px; }
+      .intro h1 { font-size: clamp(26px, 4.6vw, 40px); font-weight: 900; line-height: 1.25; margin: 6px 0 10px; letter-spacing: .01em; }
+      .intro p { color: var(--muted); font-size: 15.5px; margin: 0 0 6px; }
+      .intro p strong { color: var(--ink); }
+      .key-legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
+      .key-legend span {
+        display: inline-flex; align-items: center; gap: 7px;
+        font-size: 13px; font-weight: 700;
+        padding: 6px 12px; border-radius: 999px; border: 1.5px solid;
+      }
+      .key-legend .lg-priv { color: var(--priv); background: var(--priv-soft); border-color: var(--priv); }
+      .key-legend .lg-pub { color: var(--pub); background: var(--pub-soft); border-color: var(--pub); }
+      .key-legend .lg-chal { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }
+      .key-legend svg { width: 15px; height: 15px; flex: none; }
+
+      /* ---------- flow tabs ---------- */
+      .flow-tabs { display: flex; gap: 8px; margin: 22px 0 14px; flex-wrap: wrap; }
+      .flow-tab {
+        font: inherit; font-size: 15px; font-weight: 700; cursor: pointer;
+        padding: 9px 20px; border-radius: 999px;
+        border: 2px solid var(--line); background: var(--surface); color: var(--muted);
+        transition: border-color .2s, color .2s, background .2s;
+      }
+      .flow-tab[aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+      .flow-tab .tab-sub { display: block; font-size: 11.5px; font-weight: 500; color: var(--muted); }
+      .flow-tab:focus-visible, button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+      /* ---------- stage ---------- */
+      .stage-card {
+        background: var(--surface); border: 1px solid var(--line); border-radius: 20px;
+        box-shadow: var(--shadow); padding: 18px 14px 14px; position: relative; overflow: hidden;
+      }
+      .stage { position: relative; }
+      .actor-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; position: relative; z-index: 3; }
+      .actor {
+        text-align: center; padding: 12px 4px 10px; border-radius: var(--radius);
+        border: 2px solid var(--line); background: var(--surface);
+        transition: border-color .3s, background .3s, transform .3s;
+        position: relative;
+      }
+      .actor .a-icon { width: 44px; height: 44px; margin: 0 auto 4px; color: var(--muted); transition: color .3s; }
+      .actor .a-icon svg { width: 100%; height: 100%; }
+      .actor .a-name { font-weight: 900; font-size: clamp(12.5px, 2.6vw, 16px); line-height: 1.3; }
+      .actor .a-sub { font-size: clamp(10px, 2vw, 12px); color: var(--muted); line-height: 1.4; }
+      .actor.active { border-color: var(--accent); background: var(--accent-soft); }
+      .actor.active .a-icon { color: var(--accent); }
+      .actor.done-flash { border-color: var(--ok); background: var(--ok-soft); }
+      .actor .a-check {
+        position: absolute; top: -11px; right: -7px; width: 26px; height: 26px; border-radius: 50%;
+        background: var(--ok); color: #fff; display: grid; place-items: center;
+        opacity: 0; transform: scale(.4); pointer-events: none;
+      }
+      .actor .a-check svg { width: 15px; height: 15px; }
+      .actor.done-flash .a-check { animation: pop .5s ease forwards; }
+      @keyframes pop { to { opacity: 1; transform: scale(1); } }
+
+      /* fingerprint scan overlay */
+      .finger-fx {
+        position: absolute; inset: 0; border-radius: var(--radius);
+        display: none; place-items: center; overflow: hidden; pointer-events: none;
+        background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+      }
+      .actor.scanning .finger-fx { display: grid; }
+      .finger-fx svg { width: 52px; height: 52px; color: var(--accent); opacity: .9; }
+      .finger-fx::after {
+        content: ""; position: absolute; left: 8%; right: 8%; height: 3px; border-radius: 2px;
+        background: var(--accent); box-shadow: 0 0 12px var(--accent);
+        animation: scan 1.1s ease-in-out infinite alternate;
+      }
+      @keyframes scan { from { top: 14%; } to { top: 84%; } }
+
+      /* lane + packet */
+      .lane { position: relative; height: 86px; margin: 4px 0 2px; }
+      .lane::before {
+        content: ""; position: absolute; left: 2%; right: 2%; top: 50%;
+        border-top: 2px dashed var(--line);
+      }
+      .lane .lane-note {
+        position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+        font-size: 11px; color: var(--muted); white-space: nowrap;
+      }
+      .packet {
+        position: absolute; top: 50%; left: 12.5%;
+        transform: translate(-50%, -50%);
+        display: none; align-items: center; gap: 7px;
+        max-width: 46%;
+        background: var(--ink); color: var(--bg);
+        font-size: clamp(11px, 2.4vw, 13.5px); font-weight: 700; line-height: 1.3;
+        padding: 8px 13px; border-radius: 999px; box-shadow: var(--shadow);
+        z-index: 4; text-align: center;
+      }
+      .packet svg { width: 15px; height: 15px; flex: none; }
+      .packet.show { display: inline-flex; }
+      .packet.k-priv { background: var(--priv); color: #fff; }
+      .packet.k-pub { background: var(--pub); color: #fff; }
+      .packet.k-chal { background: var(--warn); color: #fff; }
+      .packet.k-ok { background: var(--ok); color: #fff; }
+      .self-chip {
+        position: absolute; top: 50%; transform: translate(-50%, -50%);
+        display: none; background: var(--accent); color: #fff;
+        font-size: clamp(11px, 2.4vw, 13px); font-weight: 700;
+        padding: 8px 14px; border-radius: 999px; box-shadow: var(--shadow); z-index: 4;
+        animation: bob 1s ease-in-out infinite alternate; white-space: nowrap;
+      }
+      .self-chip.show { display: block; }
+      @keyframes bob { from { margin-top: -3px; } to { margin-top: 3px; } }
+
+      /* vaults */
+      .vault-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; position: relative; z-index: 2; }
+      .vault {
+        border: 1.5px dashed var(--line); border-radius: var(--radius);
+        padding: 8px 8px 9px; min-height: 64px; background: var(--surface-2);
+      }
+      .vault h3 { margin: 0 0 6px; font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .04em; }
+      .vault ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+      .vault .empty { font-size: 11.5px; color: var(--muted); }
+      .v-item {
+        display: flex; align-items: flex-start; gap: 6px;
+        font-size: clamp(11px, 2.3vw, 12.5px); font-weight: 700; line-height: 1.35;
+        padding: 5px 7px; border-radius: 8px; border: 1.5px solid;
+        animation: v-in .45s ease both; background: var(--surface);
+      }
+      .v-item svg { width: 14px; height: 14px; flex: none; margin-top: 1px; }
+      .v-item small { display: block; font-weight: 500; font-size: 10.5px; opacity: .85; }
+      .v-item.vi-priv { color: var(--priv); border-color: var(--priv); background: var(--priv-soft); }
+      .v-item.vi-pub { color: var(--pub); border-color: var(--pub); background: var(--pub-soft); }
+      .v-item.vi-chal { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+      .v-item.vi-ok { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
+      .v-item.vi-plain { color: var(--ink); border-color: var(--line); }
+      .v-item.used { opacity: .45; text-decoration: line-through; }
+      .v-item.pulse { animation: v-in .45s ease both, pulse-ring 1s ease-in-out 2; }
+      @keyframes v-in { from { opacity: 0; transform: translateY(6px) scale(.94); } to { opacity: 1; transform: none; } }
+      @keyframes pulse-ring { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 4px var(--priv-soft); } }
+
+      /* ---------- controls ---------- */
+      .controls {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        margin: 16px 0 0;
+      }
+      .ctl-btn {
+        font: inherit; font-weight: 700; font-size: 14.5px; cursor: pointer;
+        border-radius: 999px; border: 2px solid var(--line);
+        background: var(--surface); color: var(--ink); padding: 8px 18px;
+        display: inline-flex; align-items: center; gap: 7px;
+        transition: border-color .2s, background .2s, opacity .2s;
+      }
+      .ctl-btn:hover:not(:disabled) { border-color: var(--accent); }
+      .ctl-btn:disabled { opacity: .38; cursor: default; }
+      .ctl-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; min-width: 128px; justify-content: center; }
+      .ctl-btn svg { width: 15px; height: 15px; }
+      .step-meta { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .dots { display: flex; gap: 6px; }
+      .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--line); transition: background .25s, transform .25s; }
+      .dot.on { background: var(--accent); transform: scale(1.25); }
+      .dot.done { background: var(--accent); opacity: .45; }
+      .step-count { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--muted); font-weight: 700; }
+      .speed-sel {
+        font: inherit; font-size: 13.5px; font-weight: 700; color: var(--ink);
+        background: var(--surface); border: 2px solid var(--line); border-radius: 999px; padding: 6px 10px; cursor: pointer;
+      }
+      .kbd-hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+      .kbd-hint kbd {
+        font-family: "IBM Plex Mono", monospace; font-size: 11px;
+        border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; background: var(--surface);
+      }
+
+      /* ---------- duplicated controls & flow section ---------- */
+      .controls {
+        background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+        box-shadow: var(--shadow); padding: 12px 14px; margin: 14px 0 0;
+      }
+      .controls-label {
+        width: 100%; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; font-weight: 700;
+        color: var(--accent); letter-spacing: .08em; margin: 0 0 2px;
+      }
+      .flow-section { margin-top: 14px; }
+      .flow-section-head {
+        background: var(--surface); border: 1px solid var(--line); border-bottom: none;
+        border-radius: 20px 20px 0 0; padding: 20px 22px 0;
+      }
+      .flow-section-head .f-kicker { font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .08em; margin: 0 0 4px; }
+      .flow-section-head h2 { margin: 0 0 4px; font-size: clamp(18px, 3.2vw, 23px); font-weight: 900; line-height: 1.35; }
+      .flow-section-head .f-lead { margin: 0; font-size: 14px; color: var(--muted); max-width: 720px; }
+      .flow-section .stage-card { border-radius: 0 0 20px 20px; border-top: none; box-shadow: var(--shadow); }
+      @media (max-width: 760px) {
+        .flow-section-head { padding: 16px 16px 0; }
+        .controls { padding: 10px; }
+      }
+
+      /* ---------- explain ---------- */
+      .explain {
+        margin-top: 14px; background: var(--surface); border: 1px solid var(--line);
+        border-radius: 20px; box-shadow: var(--shadow); padding: 20px 22px 22px;
+      }
+      .explain .e-kicker {
+        font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 700;
+        color: var(--accent); letter-spacing: .08em; margin: 0 0 4px;
+      }
+      .explain h2 { margin: 0 0 8px; font-size: clamp(19px, 3.4vw, 25px); font-weight: 900; line-height: 1.35; }
+      .explain .e-desc { margin: 0; font-size: 15.5px; }
+      .explain .e-desc code {
+        font-family: "IBM Plex Mono", monospace; font-size: .88em;
+        background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px;
+      }
+      .e-point {
+        margin-top: 14px; border-radius: 12px; padding: 12px 15px;
+        background: var(--accent-soft); font-size: 14.5px; display: flex; gap: 10px;
+      }
+      .e-point .p-label {
+        flex: none; font-weight: 900; font-size: 12px; letter-spacing: .06em;
+        background: var(--accent); color: #fff; border-radius: 6px; padding: 2px 8px; height: fit-content; margin-top: 2px;
+      }
+      .e-point p { margin: 0; }
+      .explain.swap .e-inner { animation: swap-in .35s ease both; }
+      @keyframes swap-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+      .next-flow-btn {
+        margin-top: 16px; font: inherit; font-weight: 700; font-size: 14.5px; cursor: pointer;
+        background: var(--ink); color: var(--bg); border: none; border-radius: 999px; padding: 10px 22px;
+        display: none;
+      }
+      .next-flow-btn.show { display: inline-block; }
+
+      /* ---------- screen mock (user's view) ---------- */
+      .screen-card { margin-top: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 20px 22px 22px; }
+      .screen-card .s-kicker { font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: .08em; margin: 0 0 4px; }
+      .screen-card h2 { margin: 0 0 4px; font-size: clamp(18px, 3.2vw, 23px); font-weight: 900; line-height: 1.35; }
+      .screen-card .s-lead { margin: 0 0 16px; font-size: 14px; color: var(--muted); max-width: 720px; }
+      .screen-layout { display: grid; grid-template-columns: 300px 1fr; gap: 26px; align-items: start; }
+      .phone-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+      .phone {
+        width: 280px; max-width: 86vw; height: 520px; border-radius: 38px;
+        border: 3px solid var(--ink); background: var(--surface);
+        box-shadow: var(--shadow); overflow: hidden; position: relative;
+        display: flex; flex-direction: column; flex: none;
+      }
+      .phone-notch { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 96px; height: 20px; border-radius: 999px; background: var(--ink); z-index: 6; }
+      .phone-status { display: flex; justify-content: space-between; padding: 10px 18px 2px 22px; font-size: 11px; font-weight: 700; font-family: "IBM Plex Mono", monospace; }
+      .phone-url { margin: 8px 12px 0; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; font-size: 11.5px; font-family: "IBM Plex Mono", monospace; display: flex; align-items: center; gap: 6px; color: var(--muted); }
+      .phone-url b { color: var(--ink); font-weight: 700; }
+      .phone-page { flex: 1; position: relative; overflow: hidden; padding: 16px 16px 14px; }
+      .phone-page.swap { animation: swap-in .35s ease both; }
+      .pg-logo { font-weight: 900; font-size: 15px; letter-spacing: .02em; }
+      .pg-logo span { color: var(--accent); }
+      .pg-title { font-size: 19px; font-weight: 900; line-height: 1.4; margin: 14px 0 6px; }
+      .pg-text { font-size: 12.5px; color: var(--muted); line-height: 1.6; margin: 0 0 12px; }
+      .pg-field { border: 1.5px solid var(--line); border-radius: 10px; padding: 9px 12px; font-size: 13px; margin-bottom: 10px; background: var(--surface); color: var(--muted); }
+      .pg-field b { color: var(--ink); }
+      .pg-btn { display: block; width: 100%; text-align: center; font-weight: 800; font-size: 14px; border-radius: 12px; padding: 12px 10px; border: 2px solid var(--line); background: var(--surface); color: var(--ink); margin-bottom: 10px; }
+      .pg-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      .pg-btn.hot { border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); animation: btn-pulse 1.1s ease-in-out infinite alternate; }
+      @keyframes btn-pulse { from { transform: scale(1); } to { transform: scale(1.025); } }
+      .pg-btn.dim { opacity: .45; }
+      .pg-link { text-align: center; font-size: 12px; color: var(--accent); font-weight: 700; }
+      .pg-card { border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; }
+      .pg-card h4 { margin: 0 0 3px; font-size: 13.5px; font-weight: 900; }
+      .pg-card p { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.55; }
+      .pg-comm { display: flex; align-items: center; gap: 8px; background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 8px 11px; font-size: 12px; font-weight: 700; margin-bottom: 12px; }
+      .pg-comm .spin { width: 14px; height: 14px; flex: none; border: 2.5px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.9s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .pg-toast { position: absolute; left: 12px; right: 12px; bottom: 12px; background: var(--ink); color: var(--bg); border-radius: 10px; padding: 9px 12px; font-size: 12px; font-weight: 700; text-align: center; animation: swap-in .35s ease both; }
+      .pg-success { text-align: center; padding-top: 26px; }
+      .pg-success .big-check { width: 64px; height: 64px; margin: 0 auto 12px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); display: grid; place-items: center; }
+      .pg-success .big-check svg { width: 32px; height: 32px; }
+      .pg-avatar { width: 56px; height: 56px; margin: 6px auto 8px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-weight: 900; font-size: 20px; }
+      .sheet-scrim { position: absolute; inset: 0; background: rgba(10, 20, 28, .42); z-index: 4; animation: swap-in .3s ease both; }
+      .sheet {
+        position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+        background: var(--surface); border-radius: 22px 22px 0 0; padding: 18px 18px 20px;
+        box-shadow: 0 -8px 30px rgba(0,0,0,.22); animation: sheet-up .45s cubic-bezier(.3,.9,.3,1) both; text-align: center;
+      }
+      @keyframes sheet-up { from { transform: translateY(105%); } to { transform: none; } }
+      .sheet .sh-grab { width: 38px; height: 4.5px; border-radius: 3px; background: var(--line); margin: -8px auto 12px; }
+      .sheet h4 { margin: 0 0 5px; font-size: 15.5px; font-weight: 900; line-height: 1.45; }
+      .sheet p { margin: 0 0 13px; font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+      .sheet .sh-acct { display: flex; align-items: center; gap: 10px; text-align: left; border: 1.5px solid var(--accent); background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; margin-bottom: 12px; font-size: 13px; font-weight: 800; }
+      .sheet .sh-acct small { display: block; font-weight: 500; color: var(--muted); font-size: 11px; }
+      .sheet .faceid { width: 62px; height: 62px; margin: 2px auto 10px; color: var(--accent); position: relative; }
+      .sheet .faceid svg { width: 100%; height: 100%; }
+      .sheet .faceid::after { content: ""; position: absolute; left: 4%; right: 4%; height: 3px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: scan 1s ease-in-out infinite alternate; }
+      .sheet .work-spin { width: 40px; height: 40px; margin: 4px auto 10px; border: 4.5px solid var(--accent-soft); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.9s linear infinite; }
+      .phone-caption { font-size: 12px; color: var(--muted); text-align: center; margin: 0; }
+      .screen-side h3 { margin: 2px 0 6px; font-size: 16.5px; font-weight: 900; line-height: 1.45; }
+      .screen-side .s-desc { margin: 0 0 12px; font-size: 14.5px; }
+      .behavior-list { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 7px; }
+      .behavior-list li { display: flex; gap: 9px; font-size: 13.5px; background: var(--surface-2); border-radius: 10px; padding: 9px 12px; line-height: 1.55; }
+      .behavior-list li b { flex: none; color: var(--accent); }
+      .film-label { font-size: 12px; font-weight: 900; letter-spacing: .05em; color: var(--muted); margin: 0 0 8px; }
+      .filmstrip { display: flex; gap: 8px; flex-wrap: wrap; }
+      .film-thumb { font: inherit; cursor: pointer; text-align: left; width: 118px; border: 2px solid var(--line); background: var(--surface); border-radius: 12px; padding: 9px 10px; transition: border-color .2s, background .2s; }
+      .film-thumb .f-no { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; font-weight: 700; color: var(--muted); display: block; }
+      .film-thumb .f-name { font-size: 12px; font-weight: 800; line-height: 1.4; display: block; margin-top: 2px; }
+      .film-thumb[aria-current="true"] { border-color: var(--accent); background: var(--accent-soft); }
+      .film-thumb[aria-current="true"] .f-no { color: var(--accent); }
+      .film-thumb.done { opacity: .65; }
+      @media (max-width: 760px) {
+        .screen-layout { grid-template-columns: 1fr; }
+        .screen-card { padding: 16px; }
+        .film-thumb { width: calc(50% - 4px); }
+      }
+
+      /* ---------- lower sections ---------- */
+      .section { margin-top: 40px; }
+      .section h2 { font-size: clamp(19px, 3.4vw, 24px); font-weight: 900; margin: 0 0 6px; }
+      .section .lead { color: var(--muted); font-size: 14.5px; margin: 0 0 16px; max-width: 720px; }
+
+      .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .cmp-card { border-radius: 16px; padding: 18px; border: 1.5px solid var(--line); background: var(--surface); }
+      .cmp-card.bad { border-color: var(--priv); }
+      .cmp-card.good { border-color: var(--accent); }
+      .cmp-card h3 { margin: 0 0 10px; font-size: 16px; font-weight: 900; display: flex; align-items: center; gap: 8px; }
+      .cmp-card ul { margin: 0; padding-left: 1.15em; font-size: 14px; display: grid; gap: 6px; }
+      .cmp-card li::marker { color: var(--muted); }
+
+      .flow-mini { display: grid; gap: 10px; }
+      .mini-row {
+        display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+        background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+        font-size: 13.5px;
+      }
+      .mini-row .m-who { font-weight: 900; flex: none; min-width: 7.5em; }
+      .mini-row .m-arrow { color: var(--accent); font-weight: 900; flex: none; }
+      .mini-row .m-what { font-weight: 700; }
+      .mini-row .m-note { color: var(--muted); width: 100%; font-size: 12.5px; }
+
+      .glossary { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+      .g-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 15px 17px; }
+      .g-card h3 { margin: 0 0 5px; font-size: 15px; font-weight: 900; }
+      .g-card h3 .en { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--accent); display: block; letter-spacing: .04em; }
+      .g-card p { margin: 0; font-size: 13.5px; color: var(--muted); }
+
+      footer { margin-top: 44px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12.5px; }
+      footer p { margin: 0 0 4px; }
+
+      @media (max-width: 640px) {
+        .wrap { padding: 14px 10px 44px; }
+        .stage-card { padding: 12px 8px 10px; }
+        .actor .a-icon { width: 34px; height: 34px; }
+        .vault { min-height: 56px; padding: 6px 5px 7px; }
+        .vault h3 { font-size: 10px; }
+        .lane { height: 84px; }
+        .packet { max-width: 64%; }
+        .compare { grid-template-columns: 1fr; }
+        .explain { padding: 16px; }
+        .step-meta { margin-left: 0; width: 100%; justify-content: space-between; }
+        .ctl-btn.primary { min-width: 0; flex: 1; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .finger-fx::after, .self-chip, .v-item, .explain.swap .e-inner { animation: none !important; }
+        * { transition-duration: .01ms !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+
+      <div class="intro">
+        <h1>パスキーは、どうやってログインさせるのか</h1>
+        <p>パスキー（WebAuthn / FIDO2）の動きを、登場人物のあいだで<strong>何が飛び交っているか</strong>で追うアニメーションです。再生ボタンかステップ送りで、登録と認証の流れを1手ずつ確認できます。各ステップには<strong>利用者のスマホ画面の移り変わり</strong>も連動して表示されます。</p>
+        <p>色分けが要点です。<strong>秘密鍵や生体情報がサイト側のサーバーへ送られることはありません</strong>。ただし、ログイン時に送られるのは署名だけではなく、クレデンシャルID・clientDataJSON・authenticatorDataなどを含む認証レスポンスです。</p>
+        <div class="key-legend" aria-label="色の凡例">
+          <span class="lg-priv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8" cy="15" r="4.5"/><path d="M11.2 11.8 20 3M17 6l3 3M14.5 8.5l2.5 2.5"/></svg>秘密鍵 ― サーバーには送られない</span>
+          <span class="lg-pub"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8" cy="15" r="4.5"/><path d="M11.2 11.8 20 3M17 6l3 3M14.5 8.5l2.5 2.5"/></svg>公開鍵 ― サーバーに保管</span>
+          <span class="lg-chal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 20 4M14 4h6v6M9 15l-4.5 4.5"/></svg>チャレンジ ― 使い捨ての乱数</span>
+        </div>
+      </div>
+
+      <div class="flow-tabs" role="tablist" aria-label="フローの選択">
+        <button class="flow-tab" role="tab" id="tab-reg" aria-selected="true" data-flow="reg">登録フロー<span class="tab-sub">はじめてパスキーを作る</span></button>
+        <button class="flow-tab" role="tab" id="tab-auth" aria-selected="false" data-flow="auth">認証フロー<span class="tab-sub">パスキーでログインする</span></button>
+      </div>
+
+      <div class="controls" data-controls="top" aria-label="アニメーション操作（上）">
+        <p class="controls-label">CONTROLS ― 操作ボタン</p>
+        <button class="ctl-btn ctl-prev" data-action="prev" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>前へ
+        </button>
+        <button class="ctl-btn primary ctl-play" data-action="play" type="button">
+          <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.8v14.4c0 .9 1 1.5 1.8 1L20 13a1.2 1.2 0 0 0 0-2L8.8 3.9C8 3.4 7 4 7 4.8Z"/></svg>
+          <span class="play-label">再生</span>
+        </button>
+        <button class="ctl-btn ctl-next" data-action="next" type="button">
+          次へ<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <button class="ctl-btn ctl-restart" data-action="restart" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>最初から
+        </button>
+        <div class="step-meta">
+          <div class="dots" aria-hidden="true"></div>
+          <span class="step-count">STEP 1 / 7</span>
+          <select class="speed-sel" aria-label="再生速度">
+            <option value="slow">ゆっくり</option>
+            <option value="normal" selected>ふつう</option>
+            <option value="fast">はやい</option>
+          </select>
+        </div>
+      </div>
+      <p class="kbd-hint">キーボード： <kbd>Space</kbd> 再生／停止　<kbd>→</kbd> 次へ　<kbd>←</kbd> 前へ（発表中の操作に便利です）</p>
+
+      <section class="screen-card" aria-label="利用者の画面イメージ">
+        <p class="s-kicker">SCREEN ― あなたの画面ではこう見える</p>
+        <h2>画面の移り変わりとアプリの挙動</h2>
+        <p class="s-lead">上下の操作ボタンと、下の「実際の中身のフロー」と連動しています。ステップを進めると、利用者の画面イメージがどう変わるかを確認できます。OSやブラウザ、パスキープロバイダーによって画面や操作は異なり、別の端末のパスキーをQRコードとBluetoothなどで使うクロスデバイス認証もあります。ここでは端末内のパスキーを使う代表的な例を示します。</p>
+        <div class="screen-layout">
+          <div class="phone-wrap">
+            <div class="phone" id="phone" aria-hidden="true">
+              <div class="phone-notch"></div>
+              <div class="phone-status"><span>9:41</span><span>5G ▰▰▰</span></div>
+              <div class="phone-url" id="phoneUrl"></div>
+              <div class="phone-page" id="phonePage"></div>
+            </div>
+            <p class="phone-caption">スマホでサービスを開いている想定の画面モック</p>
+          </div>
+          <div class="screen-side">
+            <h3 id="screenTitle"></h3>
+            <p class="s-desc" id="screenDesc"></p>
+            <ul class="behavior-list" id="behaviorList"></ul>
+            <p class="film-label">画面遷移の全体像（タップでそのステップへ移動）</p>
+            <div class="filmstrip" id="filmstrip"></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="controls" data-controls="bottom" aria-label="アニメーション操作（下）">
+        <p class="controls-label">CONTROLS ― 操作ボタン</p>
+        <button class="ctl-btn ctl-prev" data-action="prev" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>前へ
+        </button>
+        <button class="ctl-btn primary ctl-play" data-action="play" type="button">
+          <svg class="play-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.8v14.4c0 .9 1 1.5 1.8 1L20 13a1.2 1.2 0 0 0 0-2L8.8 3.9C8 3.4 7 4 7 4.8Z"/></svg>
+          <span class="play-label">再生</span>
+        </button>
+        <button class="ctl-btn ctl-next" data-action="next" type="button">
+          次へ<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <button class="ctl-btn ctl-restart" data-action="restart" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/></svg>最初から
+        </button>
+        <div class="step-meta">
+          <div class="dots" aria-hidden="true"></div>
+          <span class="step-count">STEP 1 / 7</span>
+          <select class="speed-sel" aria-label="再生速度">
+            <option value="slow">ゆっくり</option>
+            <option value="normal" selected>ふつう</option>
+            <option value="fast">はやい</option>
+          </select>
+        </div>
+      </div>
+
+      <section class="flow-section" aria-label="実際の中身のフロー">
+        <div class="flow-section-head">
+          <p class="f-kicker">FLOW ― 裏側ではこう動いている</p>
+          <h2>実際の中身のフロー</h2>
+          <p class="f-lead">上の「画面でこう見える」と同じステップで、サーバー・ブラウザ・認証器のあいだで何が飛び交っているかを示します。秘密鍵がサーバーへ送られない点に注目してください。</p>
+        </div>
+      <div class="stage-card">
+        <div class="stage" id="stage">
+          <div class="actor-grid" id="actorGrid"></div>
+          <div class="lane" id="lane">
+            <div class="packet" id="packet"></div>
+            <div class="self-chip" id="selfChip"></div>
+            <div class="lane-note">― データの通り道 ―</div>
+          </div>
+          <div class="vault-grid" id="vaultGrid"></div>
+        </div>
+      </div>
+      </section>
+
+      <section class="explain" id="explain" aria-live="polite">
+        <div class="e-inner">
+          <p class="e-kicker" id="eKicker">登録フロー ・ STEP 1</p>
+          <h2 id="eTitle"></h2>
+          <p class="e-desc" id="eDesc"></p>
+          <div class="e-point" id="ePoint"><span class="p-label">ポイント</span><p id="ePointText"></p></div>
+          <button class="next-flow-btn" id="btnNextFlow" type="button"></button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>パスワード方式と何が違うのか</h2>
+        <p class="lead">パスワードは利用者が入力した秘密をサーバーへ送り、サーバー側の検証用情報と照合します（通常はHTTPSで保護され、サーバーにはソルト付きハッシュなどを保存します）。パスキーは秘密鍵をサイト側サーバーに渡さず、公開鍵で署名を検証します。</p>
+        <div class="compare">
+          <div class="cmp-card bad">
+            <h3>パスワード方式</h3>
+            <ul>
+              <li>ログインのたびに<strong>入力したパスワードをサーバーへ送る</strong>（通常はTLSで暗号化）</li>
+              <li>サーバー側にも照合用の情報が保管され、漏洩すると悪用される</li>
+              <li>偽サイトに本物のパスワードを入力してしまう（フィッシング）</li>
+              <li>他のサイトと使い回すと、1件の漏洩が連鎖する</li>
+            </ul>
+          </div>
+          <div class="cmp-card good">
+            <h3>パスキー</h3>
+            <ul>
+              <li>サーバーへ送られるのは<strong>署名を含む認証レスポンス</strong>。秘密鍵そのものは送られない</li>
+              <li>サーバーが保管するのは公開鍵やクレデンシャルIDなど。公開鍵だけでは署名を作れない</li>
+              <li>OriginとRP IDが認証データ・署名に結びつくため、<strong>偽サイトでは本物のサイト用パスキーを使えない</strong></li>
+              <li>鍵はサイト・アカウントごとに別々に作られるので、使い回し自体が起きない</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>用語ミニ解説</h2>
+        <p class="lead">アニメーションに出てくる言葉の早見表です。勉強会の質疑の補助にどうぞ。</p>
+        <div class="glossary">
+          <div class="g-card"><h3><span class="en">CHALLENGE</span>チャレンジ</h3><p>サーバーが毎回発行する使い捨てのランダムな値。「さっきの使い回し」ではなく「今この場で作った署名」であることを保証し、盗聴した署名の再利用（リプレイ攻撃）を防ぎます。</p></div>
+          <div class="g-card"><h3><span class="en">SIGNATURE</span>署名</h3><p>秘密鍵でしか作れない、データに付けられる「印」。公開鍵で「本物かどうか」だけ検証できますが、署名から秘密鍵を逆算することはできません。</p></div>
+          <div class="g-card"><h3><span class="en">AUTHENTICATOR</span>認証器</h3><p>鍵ペアを生成・保管し、署名を行う装置。スマホやPC内蔵のもの（Touch ID、Windows Hello、Androidの指紋認証など）と、USBセキュリティキーがあります。</p></div>
+          <div class="g-card"><h3><span class="en">CREDENTIAL ID</span>クレデンシャルID</h3><p>認証器が生成する「どの公開鍵クレデンシャルか」を示す識別子です。サーバーはこれを手がかりに登録済みの公開鍵を探します。IDだけでは署名を作れないため、漏れてもログインはできません。</p></div>
+          <div class="g-card"><h3><span class="en">USER HANDLE</span>ユーザーハンドル</h3><p>サーバー（RP）がアカウントごとに指定する不透明な識別値です。発見可能なクレデンシャルでは認証器に保存され、ユーザー名を入力しない認証で返されます。仕様上、メールアドレスやユーザー名などの個人情報を含めてはいけません。</p></div>
+          <div class="g-card"><h3><span class="en">RP ID / ORIGIN</span>ドメインの結びつけ</h3><p>RP IDはパスキーを結びつけるドメイン名（スキームやポートは含まない）です。Originはスキーム・ホスト・ポートの組です。OriginはclientDataJSONに、RP IDのSHA-256ハッシュはauthenticatorDataに入り、両方が署名で保護されます。</p></div>
+          <div class="g-card"><h3><span class="en">WEBAUTHN / FIDO2</span>WebAuthn と FIDO2</h3><p>ブラウザのJavaScript APIが WebAuthn、認証器との通信規格が CTAP、合わせて FIDO2 と呼ばれます。パスキーはこの標準の上で動く仕組みの総称です。</p></div>
+          <div class="g-card"><h3><span class="en">SYNCED PASSKEY</span>同期パスキー</h3><p>iCloudキーチェーンやGoogleパスワードマネージャーで、自分の端末間に同期される方式。この場合、秘密鍵は同期サービスを通じて暗号化された形で端末間に共有されます（サーバー＝RPへ送られることはありません）。USBキーなどのデバイスバウンド型では、秘密鍵はその認証器の外へ出ません。同期アカウント自体の守りが重要になります。</p></div>
+        </div>
+      </section>
+
+      <footer>
+        <p>このアニメーションは WebAuthn（FIDO2）の概念モデルを勉強会向けに簡略化したものです。実際の認証レスポンスにはcredential ID、clientDataJSON、authenticatorData、signatureが含まれ、発見可能なクレデンシャルを使うユーザー名なしの認証ではuserHandleも返されます。署名はauthenticatorDataとclientDataJSONのハッシュを対象に作られます。OriginとRP IDは別の値です。また、User Verification（UV）は常に必須ではなく、RP側の設定によりUser Presence（UP）のみを求める場合もあります。</p>
+        <p>次回は OIDC（認可コードフロー＋PKCE）のアニメーションを予定。</p>
+      </footer>
+    </div>
+
+    <script>
+      "use strict";
+
+      /* ============ icons (inline SVG) ============ */
+      var IC = {
+        user: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><circle cx="24" cy="16" r="7.5"/><path d="M9 40c1.8-8 7.8-12 15-12s13.2 4 15 12"/></svg>',
+        browser: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><rect x="6" y="9" width="36" height="30" rx="4"/><path d="M6 18h36"/><circle cx="11.5" cy="13.5" r="1.4" fill="currentColor" stroke="none"/><circle cx="17" cy="13.5" r="1.4" fill="currentColor" stroke="none"/><path d="M15 31.5 21 26l4 3.5L31 24" stroke-linejoin="round"/></svg>',
+        auth: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><rect x="14" y="5" width="20" height="38" rx="4"/><path d="M21 39h6"/><path d="M24 17a6 6 0 0 1 6 6c0 4-1 6-2.5 8M24 17a6 6 0 0 0-6 6c0 5-1 7.5-2 9.5M24 21a2.5 2.5 0 0 1 2.5 2.5c0 3.5-.5 5.5-1.5 7.5"/></svg>',
+        server: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><ellipse cx="24" cy="11" rx="15" ry="5.5"/><path d="M9 11v13c0 3 6.7 5.5 15 5.5s15-2.5 15-5.5V11"/><path d="M9 24v13c0 3 6.7 5.5 15 5.5s15-2.5 15-5.5V24"/></svg>',
+        key: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="8" cy="15" r="4.5"/><path d="M11.2 11.8 20 3M17 6l3 3M14.5 8.5l2.5 2.5"/></svg>',
+        bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z"/></svg>',
+        pen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20c2-1 3-2 4-4l9-9a2.1 2.1 0 0 0-3-3l-9 9c-2 1-3 2-4 4l-1 4 4-1Z"/><path d="M13.5 6.5l3 3"/></svg>',
+        check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5 10 18 19.5 6.5"/></svg>',
+        finger: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M24 6a14 14 0 0 1 14 14c0 8-1.5 13-4 18M24 6a14 14 0 0 0-14 14c0 9-1.5 15-4.5 20M24 13a7.5 7.5 0 0 1 7.5 7.5c0 7-1 11-3 15M24 13a7.5 7.5 0 0 0-7.5 7.5c0 8-1 13-3 17M24 20.5a2.8 2.8 0 0 1 2.8 2.8c0 5-.6 8.5-1.8 12"/></svg>',
+        doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/></svg>',
+        face: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 10h.01M15.5 10h.01" stroke-width="3"/><path d="M8 15.5c1.2 1.4 2.5 2 4 2s2.8-.6 4-2"/></svg>'
+      };
+
+      /* ============ actors ============ */
+      var ACTORS = [
+        { id: "user",    name: "あなた",       sub: "利用者",                icon: IC.user },
+        { id: "browser", name: "ブラウザ",     sub: "WebAuthn API",          icon: IC.browser },
+        { id: "auth",    name: "認証器",       sub: "スマホ / PC（指紋・顔）", icon: IC.auth },
+        { id: "server",  name: "サーバー",     sub: "サービス側（RP）",       icon: IC.server }
+      ];
+
+      /* ============ flow data ============ */
+      /* step: from,to (actor ids; same = internal action), packet label/kind,
+         selfLabel for internal actions, fx: 'finger'|'check', adds/removes for vaults */
+      var FLOWS = {
+        reg: {
+          label: "登録フロー",
+          steps: [
+            {
+              from: "user", to: "browser", packet: "「パスキーを作成」をクリック", kind: "",
+              title: "サイトで「パスキーを作成」を押す",
+              desc: "登録は、サービスの画面でパスキー作成を開始するところから始まります。この時点ではまだ鍵は存在しません。",
+              point: "パスワード方式なら「自分で考えた文字列を登録する」場面。パスキーでは、文字列を考える必要自体がありません。",
+              adds: []
+            },
+            {
+              from: "server", to: "browser", packet: "チャレンジ＋RP ID＋ユーザーハンドル", kind: "k-chal", packetIcon: IC.bolt,
+              title: "サーバーがチャレンジと登録情報を渡す",
+              desc: "サーバーはランダムな値「チャレンジ」と、パスキーを結びつけるRP ID、アカウントを示すユーザーハンドルをブラウザに返します。チャレンジはこの登録のためだけの使い捨てです。ユーザーハンドルにはメールアドレスなどの個人情報を入れません。",
+              point: "あとで認証器が返す署名が「今この場で作られたもの」だと証明するために、予測できない乱数を使います。ユーザーハンドルは発見可能なクレデンシャルと関連付けて認証器に保存されるため、個人情報を入れません。",
+              adds: [
+                { actor: "server", id: "chal", cls: "vi-chal", icon: IC.bolt, text: "チャレンジ", sub: "発行した乱数（使い捨て）" },
+                { actor: "server", id: "uid", cls: "vi-plain", icon: IC.doc, text: "ユーザーハンドル", sub: "アカウントごとの不透明な値" }
+              ]
+            },
+            {
+              from: "browser", to: "auth", packet: "鍵の作成リクエスト", kind: "", packetIcon: IC.doc,
+              title: "ブラウザが認証器を呼び出す",
+              desc: "ブラウザは WebAuthn API（<code>navigator.credentials.create()</code>）を通じて、認証器に「このRP ID用の鍵を作って」と依頼します。RP IDとユーザーハンドル、チャレンジなどが処理に使われます。",
+              point: "ドメインがここで固定されるのが、フィッシングに強い理由のひとつです。鍵はサイトごとに別々に作られます。",
+              adds: []
+            },
+            {
+              from: "auth", to: "auth", selfLabel: "指紋・顔・PINで本人確認", fx: "finger",
+              title: "認証器が本人確認を行う",
+              desc: "この例では、スマホの指紋認証や顔認証、PCのPINなどで本人確認（User Verification）を行います。WebAuthnでは設定によって本人確認を必須にせず、タッチなどのユーザー存在確認（User Presence）だけで進む場合もあります。",
+              point: "生体情報は認証器側で照合され、サーバーにもブラウザにも送られません。認証レスポンスには、本人確認が行われたかを示すUVフラグなどが含まれます。",
+              adds: []
+            },
+            {
+              from: "auth", to: "auth", selfLabel: "鍵ペアを生成", fx: "",
+              title: "認証器の中で鍵ペアが生まれる",
+              desc: "認証器が、このRP IDにスコープされた<strong>秘密鍵と公開鍵のペア</strong>と、クレデンシャルIDを生成します。秘密鍵は認証器の管理下に置かれ、発見可能なクレデンシャルではユーザーハンドルなどと関連付けて保存されます。秘密鍵そのものがサイト側サーバーへ送られることはありません（同期型パスキーについては用語解説を参照）。",
+              point: "今回の主役の場面です。「覚える秘密」ではなく「端末の中に閉じ込めた秘密」を使うのがパスキーの発想です。鍵ペアは登録のたびに新しく作られ、ログインのときは作られません。",
+              adds: [
+                { actor: "auth", id: "priv", cls: "vi-priv", icon: IC.key, text: "秘密鍵", sub: "認証器の管理下・サーバーへ送らない" },
+                { actor: "auth", id: "cred", cls: "vi-plain", icon: IC.doc, text: "クレデンシャルID", sub: "「どの鍵か」を指す名札" },
+                { actor: "auth", id: "pubready", cls: "vi-pub", icon: IC.key, text: "公開鍵", sub: "サーバーへ渡す用" }
+              ]
+            },
+            {
+              from: "browser", to: "server", packet: "登録レスポンス（公開鍵を含む）", kind: "k-pub", packetIcon: IC.key,
+              title: "ブラウザが登録レスポンスをサーバーへ送る",
+              desc: "認証器からブラウザへ返された登録レスポンスを、ブラウザがサーバーへ送ります。レスポンスにはcredential ID、clientDataJSON、attestationObjectなどが含まれ、公開鍵はattestationObject内のauthenticatorDataに含まれます。秘密鍵は送られません。",
+              point: "登録レスポンスには複数のデータが含まれますが、秘密鍵は含まれません。サーバーはレスポンスを検証し、公開鍵とクレデンシャルIDをアカウントに紐づけて保存します。",
+              adds: [
+                { actor: "server", id: "pub", cls: "vi-pub", icon: IC.key, text: "公開鍵＋クレデンシャルID", sub: "登録レスポンスを検証して保管" }
+              ],
+              removes: ["pubready"],
+              marks: [{ id: "chal", cls: "used" }]
+            },
+            {
+              from: "server", to: "server", selfLabel: "公開鍵を保存", fx: "check",
+              title: "サーバーが公開鍵を保管して登録完了",
+              desc: "サーバーは受け取った内容を検証し、「アカウント・クレデンシャルID・公開鍵」を組にして保存します。1人が複数の端末でパスキーを作れば、組が複数になります。これで登録は完了です。",
+              point: "サーバー側に残るのは公開鍵などの「漏れても署名は作れない」情報だけなので、万が一サーバーから情報が漏れても、それでログインされることはありません。",
+              adds: [],
+              removes: ["chal"]
+            }
+          ]
+        },
+        auth: {
+          label: "認証フロー",
+          steps: [
+            {
+              from: "user", to: "browser", packet: "「パスキーでログイン」をクリック", kind: "",
+              title: "サイトで「パスキーでログイン」を押す",
+              desc: "ログイン画面でパスキーを選ぶと、ブラウザが使える認証器を探します。パスワードの入力欄に何か打ち込む必要はありません。",
+              point: "登録済みの前提で進みます。サーバーには公開鍵、認証器には秘密鍵が、それぞれ保管された状態です。",
+              adds: [
+                { actor: "auth", id: "priv", cls: "vi-priv", icon: IC.key, text: "秘密鍵", sub: "登録時に生成・認証器の中" },
+                { actor: "auth", id: "cred", cls: "vi-plain", icon: IC.doc, text: "クレデンシャルID", sub: "認証器に保存" },
+                { actor: "server", id: "pub", cls: "vi-pub", icon: IC.key, text: "公開鍵＋クレデンシャルID", sub: "アカウントに紐づけて保管済み" }
+              ]
+            },
+            {
+              from: "server", to: "browser", packet: "チャレンジ＋RP ID", kind: "k-chal", packetIcon: IC.bolt,
+              title: "サーバーが新しいチャレンジを発行する",
+              desc: "サーバーは今回のログイン専用に、新しいランダムなチャレンジを作ってブラウザへ送ります。RP IDも要求情報として指定します。ユーザー名を入力しないログインでは、どのクレデンシャルIDを使うかはここでは指定しません。",
+              point: "毎回違う値だからこそ、過去の通信を盗んで再送してもログインできません（リプレイ攻撃の防止）。",
+              adds: [
+                { actor: "server", id: "chal", cls: "vi-chal", icon: IC.bolt, text: "チャレンジ", sub: "今回のログイン専用" }
+              ]
+            },
+            {
+              from: "browser", to: "auth", packet: "署名リクエスト", kind: "", packetIcon: IC.pen,
+              title: "ブラウザが認証器に署名を頼む",
+              desc: "ブラウザは WebAuthn API（<code>navigator.credentials.get()</code>）で、チャレンジと<strong>RP ID</strong>を使って認証器に署名を依頼します。clientDataJSONには実際のOriginも記録されます。",
+              point: "認証器はRP IDに対応するパスキーを探します。偽サイトのOriginから本物のRP ID用パスキーを自由に使うことはできず、OriginとRP IDの情報も署名検証で確認されます。",
+              adds: []
+            },
+            {
+              from: "auth", to: "auth", selfLabel: "指紋・顔・PINで本人確認", fx: "finger",
+              title: "認証器が本人確認を行う",
+              desc: "この例では署名の前に、指紋・顔・PINで本人確認（User Verification）をします。WebAuthnの設定によっては、本人確認を必須にせず、タッチなどのユーザー存在確認（User Presence）だけの場合もあります。",
+              point: "UVが要求されている構成では、設定された本人確認を通らないと署名を作れません。生体情報そのものは端末の外に出ません。",
+              adds: []
+            },
+            {
+              from: "auth", to: "auth", selfLabel: "秘密鍵で署名", fx: "", pulsePriv: true,
+              title: "秘密鍵でチャレンジに署名する",
+              desc: "認証器は、authenticatorDataとclientDataJSONのハッシュを対象に、保管している秘密鍵で署名します。authenticatorDataにはRP IDのSHA-256ハッシュが、clientDataJSONにはチャレンジやOriginが含まれます。",
+              point: "「秘密鍵を持っている証明」が署名です。署名を見ても秘密鍵は分かりませんが、公開鍵で本物かどうかを検証できます。",
+              adds: [
+                { actor: "auth", id: "sig", cls: "vi-plain", icon: IC.pen, text: "署名", sub: "チャレンジへの署名が完成" }
+              ]
+            },
+            {
+              from: "browser", to: "server", packet: "認証レスポンス（credential ID・データ・署名）", kind: "", packetIcon: IC.pen,
+              title: "ブラウザが認証レスポンスをサーバーへ送る",
+              desc: "ブラウザからサーバーへ、credential ID、clientDataJSON、authenticatorData、signatureを含む認証レスポンスが送られます。このユーザー名なしのログイン例ではuserHandleも含まれます。秘密鍵も、生体情報そのものも、ネットワークを流れません。",
+              point: "送られるデータは署名だけではありませんが、秘密鍵や生体情報そのものは含まれません。署名は今回のチャレンジ・Origin・RP IDに結びついており、そのまま次のログインに使い回すことはできません。",
+              adds: [],
+              removes: ["sig"]
+            },
+            {
+              from: "server", to: "server", selfLabel: "登録済みか確認 → 公開鍵で検証", fx: "check",
+              title: "サーバーが登録を確認し、公開鍵で検証 → ログイン完了",
+              desc: "サーバーはcredential IDに対応する登録情報を特定し、userHandleが返された場合は対象アカウントとの対応も確認します。さらにチャレンジ、Origin、RP IDハッシュなどを検証し、保管していた公開鍵で署名を検証します。すべて確認できればログイン成功です。チャレンジは破棄されます。",
+              point: "検証に使う公開鍵は「公開」情報なので、サーバーは秘密を抱えていません。これが漏洩に強い構造の理由です。",
+              adds: [
+                { actor: "server", id: "login", cls: "vi-ok", icon: IC.check, text: "ログイン成功", sub: "検証OK" }
+              ],
+              removes: ["chal"]
+            }
+          ]
+        }
+      };
+
+      /* ============ screen mock data (what the user sees) ============ */
+      var PG = {
+        logo: '<div class="pg-logo">Example <span>サービス</span></div>',
+        lock: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+        comm: '<div class="pg-comm"><span class="spin"></span>サーバーと通信中…</div>',
+        faceSheet: function (title, sub) {
+          return '<div class="sheet-scrim"></div><div class="sheet"><div class="sh-grab"></div>' +
+            '<div class="faceid">' + IC.face + '</div><h4>' + title + '</h4><p>' + sub + '</p>' +
+            '<span class="pg-btn dim">キャンセル</span></div>';
+        },
+        workSheet: function (title, sub) {
+          return '<div class="sheet-scrim"></div><div class="sheet"><div class="sh-grab"></div>' +
+            '<div class="work-spin"></div><h4>' + title + '</h4><p>' + sub + '</p></div>';
+        }
+      };
+      function regPage(extra, btnCls) {
+        return PG.logo + '<div class="pg-title">アカウント設定</div>' + (extra || "") +
+          '<div class="pg-card"><h4>パスキー</h4><p>指紋・顔・PINでログインできるようにします。パスワードは不要になります。</p></div>' +
+          '<span class="pg-btn primary ' + (btnCls || "") + '">パスキーを作成</span>' +
+          '<div class="pg-link">パスワードでログインに戻る</div>';
+      }
+      function loginPage(extra, btnCls, toast) {
+        return PG.logo + '<div class="pg-title">ログイン</div>' + (extra || "") +
+          '<span class="pg-btn primary ' + (btnCls || "") + '">パスキーでログイン</span>' +
+          '<span class="pg-btn">パスワードでログイン</span>' +
+          '<div class="pg-link">アカウントを作成</div>' + (toast || "");
+      }
+
+      var SCREENS = {
+        reg: [
+          { film: "設定画面", title: "画面：サービスの設定画面", desc: "いつものWebサイト／アプリの画面です。まだOSの出番はなく、ボタンが押せる通常の状態です。",
+            behaviors: [["タップ", "「パスキーを作成」を押すと処理が始まる"], ["見た目", "ボタンが目立つ状態（押せる合図）"]],
+            url: "example.com/settings", page: regPage("", "hot") },
+          { film: "通信中", title: "画面：そのまま待つ（通信中）", desc: "画面は設定画面のまま。裏でブラウザがサーバーからチャレンジを受け取っています。利用者は何も操作しません。",
+            behaviors: [["自動", "ブラウザがサーバーと通信（数秒）"], ["操作", "なし ― 画面はほぼ変わらない"]],
+            url: "example.com/settings", page: regPage(PG.comm, "dim") },
+          { film: "作成確認UI", title: "画面：パスキー作成の確認UI", desc: "ここでブラウザやOS、パスキープロバイダーの確認UIが表示されることがあります。表示形式やタイミングは環境によって異なり、必ずこのような下から出るシートになるわけではありません。",
+            behaviors: [["シート", "下からスライドして出てくる"], ["タップ", "「続ける」を押すと次へ進む"]],
+            url: "example.com/settings", page: regPage("", "dim") + '<div class="sheet-scrim"></div><div class="sheet"><div class="sh-grab"></div><h4>example.com の<br>パスキーを作成しますか？</h4><p>この端末に、あなたのアカウント用のパスキーが保存されます。</p><span class="pg-btn primary">続ける</span><span class="pg-btn">キャンセル</span></div>' },
+          { film: "本人確認", title: "画面：本人確認のプロンプト", desc: "この例では顔認証／指紋認証などの本人確認UIが表示されます。端末や設定によってはPIN、端末パスコード、またはタッチによる存在確認になる場合もあります。",
+            behaviors: [["認証", "設定に応じて顔・指紋・PINなどで確認"], ["補足", "本人確認を必須にしない設定もある"]],
+            url: "example.com/settings", page: regPage("", "dim") + PG.faceSheet("本人確認", "顔認証・指紋認証・PINなどで本人確認をします。") },
+          { film: "鍵を作成中", title: "画面：作成中の表示（一瞬）", desc: "認証が通ると、認証器が鍵ペアを作ります。実際は一瞬で終わるため、この画面を目にする時間はほとんどありません。",
+            behaviors: [["自動", "端末の中で鍵ペアを生成"], ["操作", "なし ― 自動で次へ進む"]],
+            url: "example.com/settings", page: regPage("", "dim") + PG.workSheet("パスキーを作成中…", "認証器の管理下で処理しています。") },
+          { film: "送信中", title: "画面：シートが閉じて元の画面へ", desc: "OSのシートが下に閉じ、再びサービスの画面に戻ります。下部に「登録しています」のような小さな通知（トースト）が出る実装が多いです。",
+            behaviors: [["遷移", "確認UIが閉じてWeb画面に復帰"], ["自動", "公開鍵を含む登録レスポンスをサーバーへ送信"]],
+            url: "example.com/settings", page: regPage("", "dim") + '<div class="pg-toast">公開鍵を送信しています…</div>' },
+          { film: "登録完了", title: "画面：完了画面に切り替わる", desc: "ページが完了表示に切り替わって登録終了です。次回からはログイン画面で「パスキーでログイン」が使えます。",
+            behaviors: [["遷移", "完了画面へ切り替わる"], ["次回", "認証フローの画面遷移につながる"]],
+            url: "example.com/settings", page: PG.logo + '<div class="pg-success"><div class="big-check">' + IC.check + '</div><div class="pg-title">パスキーが<br>登録されました</div><p class="pg-text">次回からは、指紋・顔・PINだけで<br>ログインできます。</p><span class="pg-btn primary">設定に戻る</span></div>' }
+        ],
+        auth: [
+          { film: "ログイン画面", title: "画面：ログイン画面", desc: "サービスのログイン画面です。ユーザー名やパスワードを入力する代わりに、「パスキーでログイン」のボタンを押します（ユーザー名を先に入力する方式もありますが、ここでは入力しない流れで説明します）。",
+            behaviors: [["タップ", "「パスキーでログイン」を押す"], ["見た目", "パスワード入力は不要"]],
+            url: "example.com/login", page: loginPage("", "hot") },
+          { film: "通信中", title: "画面：そのまま待つ（通信中）", desc: "画面はログイン画面のまま。裏でサーバーが新しいチャレンジを発行しています。利用者の操作はありません。",
+            behaviors: [["自動", "ブラウザがサーバーと通信（数秒）"], ["操作", "なし ― 画面はほぼ変わらない"]],
+            url: "example.com/login", page: loginPage(PG.comm, "dim") },
+          { film: "パスキー選択", title: "画面：使うパスキーを選ぶUI", desc: "この例ではパスキー選択UIが表示され、example.com用の候補から選びます。実際のUIや候補の表示方法はOS・ブラウザ・パスキープロバイダーによって異なります。別端末のパスキーをQRコードとBluetoothなどで使う場合もあります。",
+            behaviors: [["シート", "下からスライドして出てくる"], ["タップ", "使うアカウントを選ぶ"]],
+            url: "example.com/login", page: loginPage("", "dim") + '<div class="sheet-scrim"></div><div class="sheet"><div class="sh-grab"></div><h4>どのパスキーを<br>使いますか？</h4><p>example.com 用のパスキーがこの端末にあります。</p><div class="sh-acct"><span>mizoguchi<small>example.com ・ この端末</small></span></div><span class="pg-btn">キャンセル</span></div>' },
+          { film: "本人確認", title: "画面：本人確認のプロンプト", desc: "この例では登録時と同じ本人確認を行います。本人確認を必須にするかどうかはサイト側のuserVerification設定によって異なります。",
+            behaviors: [["認証", "設定に応じて顔・指紋・PINなどで確認"], ["補足", "本人確認を必須にしない設定もある"]],
+            url: "example.com/login", page: loginPage("", "dim") + PG.faceSheet("本人確認", "顔認証・指紋認証・PINなどで本人確認をします。") },
+          { film: "署名中", title: "画面：署名中の表示（一瞬）", desc: "認証器が秘密鍵で署名を作っています。端末の中だけの処理で、実際はほぼ一瞬です。",
+            behaviors: [["自動", "端末の中で署名を生成"], ["操作", "なし ― 自動で次へ進む"]],
+            url: "example.com/login", page: loginPage("", "dim") + PG.workSheet("ログイン処理中…", "認証器の管理下で署名を作っています。") },
+          { film: "送信中", title: "画面：シートが閉じて元の画面へ", desc: "確認UIが閉じてログイン画面に戻り、認証レスポンスがサーバーへ送られます。検証が終わるまで、短い読み込み表示が出ます。",
+            behaviors: [["遷移", "確認UIが閉じてWeb画面に復帰"], ["自動", "認証レスポンスをサーバーへ送信"]],
+            url: "example.com/login", page: loginPage(PG.comm, "dim", '<div class="pg-toast">認証レスポンスを送信しています…</div>') },
+          { film: "ログイン完了", title: "画面：ログイン後の画面へ遷移", desc: "ページ全体がマイページ（ログイン後の画面）に切り替わります。これが利用者にとっての「ログインできた」という実感の瞬間です。",
+            behaviors: [["遷移", "マイページへ画面が切り替わる"], ["状態", "ログイン済みとして扱われる"]],
+            url: "example.com/mypage", page: PG.logo + '<div class="pg-avatar">M</div><div class="pg-title" style="text-align:center">ようこそ、<br>mizoguchi さん</div><p class="pg-text" style="text-align:center">パスキーでログインしました。</p><div class="pg-card"><h4>お知らせ</h4><p>新しいお知らせはありません。</p></div><div class="pg-card"><h4>最近の利用</h4><p>ログイン履歴や注文履歴がここに並びます。</p></div>' }
+        ]
+      };
+
+      /* ============ DOM build ============ */
+      var stage = document.getElementById("stage");
+      var actorGrid = document.getElementById("actorGrid");
+      var vaultGrid = document.getElementById("vaultGrid");
+      var packet = document.getElementById("packet");
+      var selfChip = document.getElementById("selfChip");
+      var lane = document.getElementById("lane");
+
+      var actorEls = {}, vaultLists = {};
+      ACTORS.forEach(function (a) {
+        var d = document.createElement("div");
+        d.className = "actor"; d.id = "actor-" + a.id;
+        d.innerHTML =
+          '<span class="a-check">' + IC.check + "</span>" +
+          '<div class="a-icon">' + a.icon + "</div>" +
+          '<div class="a-name">' + a.name + "</div>" +
+          '<div class="a-sub">' + a.sub + "</div>" +
+          '<div class="finger-fx">' + IC.finger + "</div>";
+        actorGrid.appendChild(d);
+        actorEls[a.id] = d;
+
+        var v = document.createElement("div");
+        v.className = "vault"; v.id = "vault-" + a.id;
+        v.innerHTML = "<h3>" + a.name + " の持ち物</h3><ul></ul>";
+        vaultGrid.appendChild(v);
+        vaultLists[a.id] = v.querySelector("ul");
+      });
+
+      var dotsEls = document.querySelectorAll(".dots");
+      var stepCounts = document.querySelectorAll(".step-count");
+      var eKicker = document.getElementById("eKicker");
+      var eTitle = document.getElementById("eTitle");
+      var eDesc = document.getElementById("eDesc");
+      var ePointText = document.getElementById("ePointText");
+      var explain = document.getElementById("explain");
+      var btnPrevList = document.querySelectorAll('[data-action="prev"]');
+      var btnNextList = document.querySelectorAll('[data-action="next"]');
+      var btnPlayList = document.querySelectorAll('[data-action="play"]');
+      var btnRestartList = document.querySelectorAll('[data-action="restart"]');
+      var btnNextFlow = document.getElementById("btnNextFlow");
+      var playLabels = document.querySelectorAll(".play-label");
+      var playIcons = document.querySelectorAll(".play-icon");
+      var speedSels = document.querySelectorAll(".speed-sel");
+      var currentSpeed = "normal";
+      function setPlayUI(label, iconPath) {
+        playLabels.forEach(function (el) { el.textContent = label; });
+        playIcons.forEach(function (el) { el.innerHTML = iconPath; });
+      }
+      function syncSpeed(value, source) {
+        currentSpeed = value;
+        speedSels.forEach(function (el) { if (el !== source) el.value = value; });
+      }
+      var phoneUrl = document.getElementById("phoneUrl");
+      var phonePage = document.getElementById("phonePage");
+      var screenTitle = document.getElementById("screenTitle");
+      var screenDesc = document.getElementById("screenDesc");
+      var behaviorList = document.getElementById("behaviorList");
+      var filmstrip = document.getElementById("filmstrip");
+
+      var SPEEDS = { slow: 3000, normal: 2200, fast: 1400 };
+      var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      var flow = "reg";
+      var cur = 0;
+      var playing = false;
+      var playToken = 0;
+
+      function steps() { return FLOWS[flow].steps; }
+
+      function actorCenter(id) {
+        var el = actorEls[id];
+        var sr = stage.getBoundingClientRect();
+        var r = el.getBoundingClientRect();
+        return (r.left - sr.left + r.width / 2) / sr.width * 100;
+      }
+
+      function rebuildVaults(upto) {
+        ACTORS.forEach(function (a) {
+          vaultLists[a.id].innerHTML = "";
+        });
+        var items = {}; // id -> {def, el}
+        for (var i = 0; i <= upto; i++) {
+          var s = steps()[i];
+          (s.removes || []).forEach(function (id) {
+            if (items[id]) { items[id].el.remove(); delete items[id]; }
+          });
+          (s.adds || []).forEach(function (ad) {
+            var li = document.createElement("li");
+            li.className = "v-item " + ad.cls + (s.pulsePriv && ad.id === "priv" ? " pulse" : "");
+            li.innerHTML = ad.icon + "<span>" + ad.text + "<small>" + ad.sub + "</small></span>";
+            vaultLists[ad.actor].appendChild(li);
+            items[ad.id] = { el: li };
+          });
+          (s.marks || []).forEach(function (m) {
+            if (items[m.id]) items[m.id].el.classList.add(m.cls);
+          });
+        }
+        ACTORS.forEach(function (a) {
+          if (!vaultLists[a.id].children.length) {
+            var li = document.createElement("li");
+            li.className = "empty"; li.textContent = "（まだ何もない）";
+            vaultLists[a.id].appendChild(li);
+          }
+        });
+      }
+
+      function clampCenter(px, width) {
+        var laneW = lane.clientWidth;
+        var half = width / 2;
+        return Math.min(laneW - half - 2, Math.max(half + 2, px));
+      }
+
+      function naturalWidth(el) {
+        // measure at left:0 — an absolutely positioned pill shrinks as its
+        // left offset grows, so pin the width once measured.
+        el.style.transition = "none";
+        el.style.width = "";
+        el.style.left = "0px";
+        void el.offsetWidth;
+        var w = el.offsetWidth;
+        el.style.width = w + "px";
+        return w;
+      }
+
+      function setPacket(step, animate) {
+        packet.classList.remove("show");
+        selfChip.classList.remove("show");
+        var laneW = lane.clientWidth;
+        if (step.from === step.to) {
+          if (step.selfLabel) {
+            selfChip.textContent = step.selfLabel;
+            selfChip.classList.add("show");
+            var cw = naturalWidth(selfChip);
+            selfChip.style.left = clampCenter(actorCenter(step.from) / 100 * laneW, cw) + "px";
+          }
+          return;
+        }
+        packet.className = "packet " + (step.kind || "");
+        packet.innerHTML = (step.packetIcon || "") + "<span>" + step.packet + "</span>";
+        packet.classList.add("show");
+        var pw = naturalWidth(packet);
+        var fromPx = clampCenter(actorCenter(step.from) / 100 * laneW, pw);
+        var toPx = clampCenter(actorCenter(step.to) / 100 * laneW, pw);
+        packet.style.left = fromPx + "px";
+        if (animate && !reduced) {
+          var dur = Math.max(450, SPEEDS[currentSpeed] * 0.38);
+          // force reflow then fly
+          void packet.offsetWidth;
+          packet.style.transition = "left " + dur + "ms cubic-bezier(.45,.05,.35,1)";
+          packet.style.left = toPx + "px";
+        } else {
+          packet.style.left = toPx + "px";
+        }
+      }
+
+      function renderScreen() {
+        var sc = SCREENS[flow][cur];
+        phoneUrl.innerHTML = PG.lock + "<span>https://<b>" + sc.url + "</b></span>";
+        phonePage.classList.remove("swap"); void phonePage.offsetWidth; phonePage.classList.add("swap");
+        phonePage.innerHTML = sc.page;
+        screenTitle.textContent = sc.title;
+        screenDesc.textContent = sc.desc;
+        behaviorList.innerHTML = "";
+        sc.behaviors.forEach(function (b) {
+          var li = document.createElement("li");
+          li.innerHTML = "<b>" + b[0] + "</b><span>" + b[1] + "</span>";
+          behaviorList.appendChild(li);
+        });
+        filmstrip.innerHTML = "";
+        SCREENS[flow].forEach(function (s2, i) {
+          var b = document.createElement("button");
+          b.type = "button";
+          b.className = "film-thumb" + (i < cur ? " done" : "");
+          b.setAttribute("aria-current", i === cur ? "true" : "false");
+          b.innerHTML = '<span class="f-no">STEP ' + (i + 1) + '</span><span class="f-name">' + s2.film + "</span>";
+          b.addEventListener("click", function () { stopPlay(); cur = i; render(false); });
+          filmstrip.appendChild(b);
+        });
+      }
+
+      function render(animatePacket) {
+        var list = steps();
+        var s = list[cur];
+
+        // actors highlight
+        ACTORS.forEach(function (a) {
+          var el = actorEls[a.id];
+          el.classList.remove("active", "scanning", "done-flash");
+          if (a.id === s.from || a.id === s.to) el.classList.add("active");
+          if (s.fx === "finger" && a.id === s.from) el.classList.add("scanning");
+          if (s.fx === "check" && a.id === s.from) el.classList.add("done-flash");
+        });
+
+        rebuildVaults(cur);
+        setPacket(s, animatePacket);
+        renderScreen();
+
+        // explain
+        explain.classList.remove("swap"); void explain.offsetWidth; explain.classList.add("swap");
+        eKicker.textContent = FLOWS[flow].label + " ・ STEP " + (cur + 1) + " / " + list.length;
+        eTitle.textContent = s.title;
+        eDesc.innerHTML = s.desc;
+        ePointText.innerHTML = s.point;
+
+        // dots
+        dotsEls.forEach(function (dotsEl) {
+          dotsEl.innerHTML = "";
+          list.forEach(function (_, i) {
+            var d = document.createElement("span");
+            d.className = "dot" + (i === cur ? " on" : i < cur ? " done" : "");
+            dotsEl.appendChild(d);
+          });
+        });
+        stepCounts.forEach(function (el) { el.textContent = "STEP " + (cur + 1) + " / " + list.length; });
+
+        btnPrevList.forEach(function (b) { b.disabled = cur === 0; });
+        btnNextList.forEach(function (b) { b.disabled = cur === list.length - 1; });
+
+        var last = cur === list.length - 1;
+        if (last) {
+          btnNextFlow.textContent = flow === "reg" ? "次は認証フローを見る →" : "登録フローに戻る →";
+          btnNextFlow.classList.add("show");
+        } else {
+          btnNextFlow.classList.remove("show");
+        }
+      }
+
+      function stopPlay() {
+        playing = false;
+        playToken++;
+        setPlayUI(cur === steps().length - 1 ? "もう一度再生" : "再生", '<path d="M7 4.8v14.4c0 .9 1 1.5 1.8 1L20 13a1.2 1.2 0 0 0 0-2L8.8 3.9C8 3.4 7 4 7 4.8Z"/>');
+      }
+
+      function scheduleNext(token) {
+        var wait = reduced ? 500 : SPEEDS[currentSpeed];
+        setTimeout(function () {
+          if (!playing || token !== playToken) return;
+          if (cur < steps().length - 1) {
+            cur++;
+            render(true);
+            scheduleNext(token);
+          } else {
+            stopPlay();
+          }
+        }, wait);
+      }
+
+      function startPlay() {
+        if (cur === steps().length - 1) cur = 0;
+        playing = true;
+        setPlayUI("一時停止", '<path d="M7 5h3.4v14H7zM13.6 5H17v14h-3.4z"/>');
+        render(true);
+        var token = ++playToken;
+        scheduleNext(token);
+      }
+
+      btnPlayList.forEach(function (b) { b.addEventListener("click", function () { playing ? stopPlay() : startPlay(); }); });
+      btnNextList.forEach(function (b) { b.addEventListener("click", function () { stopPlay(); if (cur < steps().length - 1) { cur++; render(true); } }); });
+      btnPrevList.forEach(function (b) { b.addEventListener("click", function () { stopPlay(); if (cur > 0) { cur--; render(false); } }); });
+      btnRestartList.forEach(function (b) { b.addEventListener("click", function () { stopPlay(); cur = 0; render(false); }); });
+      speedSels.forEach(function (sel) { sel.addEventListener("change", function () { syncSpeed(sel.value, sel); if (playing) { var t = ++playToken; scheduleNext(t); } }); });
+
+      function setFlow(f) {
+        stopPlay();
+        flow = f; cur = 0;
+        document.querySelectorAll(".flow-tab").forEach(function (t) {
+          t.setAttribute("aria-selected", t.dataset.flow === f ? "true" : "false");
+        });
+        render(false);
+      }
+      document.querySelectorAll(".flow-tab").forEach(function (t) {
+        t.addEventListener("click", function () { setFlow(t.dataset.flow); });
+      });
+      btnNextFlow.addEventListener("click", function () { setFlow(flow === "reg" ? "auth" : "reg"); });
+
+      document.addEventListener("keydown", function (e) {
+        if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
+        if (e.code === "Space") { e.preventDefault(); playing ? stopPlay() : startPlay(); }
+        else if (e.key === "ArrowRight") { stopPlay(); if (cur < steps().length - 1) { cur++; render(true); } }
+        else if (e.key === "ArrowLeft") { stopPlay(); if (cur > 0) { cur--; render(false); } }
+      });
+
+      window.addEventListener("resize", function () { render(false); });
+
+      render(false);
+    </script>
+  </body>
+</html>

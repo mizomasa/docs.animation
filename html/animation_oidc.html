@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>OIDCの仕組みアニメーション</title>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#ffffff; --card2:#eef1f4; --text:#18212b; --muted:#5b6b7a; --line:#dde3e8;
+  --user:#d97706; --userBg:#fef3c7; --browser:#2563eb; --browserBg:#dbeafe; --rp:#059669; --rpBg:#d1fae5; --idp:#7c3aed; --idpBg:#ede9fe;
+  --accent:#0f766e; --accentText:#fff; --warning:#fff7ed; --warningLine:#fed7aa;
+  --shadow:0 8px 30px rgba(0,0,0,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f1419; --card:#1a222c; --card2:#232e3a; --text:#eef2f5; --muted:#9fb0bf; --line:#2e3d4d; --userBg:#3a2a07; --browserBg:#172a4d; --rpBg:#073a2e; --idpBg:#2d1b4e; --warning:#2a1c0d; --warningLine:#7c4a12; --shadow:0 8px 30px rgba(0,0,0,.35);}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;line-height:1.65}
+a{color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:20px 16px 56px}
+.hero{padding:10px 0 6px}
+.hero h1{font-size:32px;line-height:1.2;margin:0;letter-spacing:-.02em}
+@media(max-width:600px){.hero h1{font-size:26px}}
+.hero p{color:var(--muted);margin:10px 0 0;max-width:760px;font-size:15.5px}
+.badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.badge{font-size:12.5px;font-weight:700;background:var(--card);border:1px solid var(--line);padding:6px 10px;border-radius:999px}
+.badge b{color:var(--accent)}
+.tabs{display:flex;gap:8px;margin:20px 0 12px;flex-wrap:wrap}
+.tab{flex:1;min-width:160px;min-height:48px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:12px;padding:10px 12px;text-align:left;cursor:pointer}
+.tab strong{display:block;font-size:15px}
+.tab span{font-size:12.5px;color:var(--muted)}
+.tab.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--card)}
+.tab.active strong{color:var(--accent)}
+.stageCard{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+.stageHead{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.stageHead h2{font-size:16px;margin:0}
+.stageHead p{margin:0;color:var(--muted);font-size:13px}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend i{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:4px}
+.stage{position:relative;padding:18px 12px 14px;background:linear-gradient(var(--card),var(--card));min-height:310px;overflow:hidden}
+.actors{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;position:relative;z-index:2}
+@media(max-width:640px){.actors{gap:6px}.stage{min-height:340px}}
+.actor{text-align:center;padding:12px 6px 10px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);transition:.25s}
+.actor.active{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,.12)}
+.actor .icon{width:52px;height:52px;margin:0 auto 6px;border-radius:50%;display:grid;place-items:center;font-size:26px}
+@media(max-width:640px){.actor .icon{width:42px;height:42px;font-size:21px}}
+.actor.user .icon{background:var(--userBg)} .actor.browser .icon{background:var(--browserBg)} .actor.rp .icon{background:var(--rpBg)} .actor.idp .icon{background:var(--idpBg)}
+.actor.user.active{border-color:var(--user)} .actor.browser.active{border-color:var(--browser)} .actor.rp.active{border-color:var(--rp)} .actor.idp.active{border-color:var(--idp)}
+.actor h3{margin:0;font-size:14.5px;line-height:1.3}
+@media(max-width:640px){.actor h3{font-size:12.5px}}
+.actor .sub{font-size:11px;color:var(--muted);line-height:1.35;margin-top:2px}
+@media(max-width:640px){.actor .sub{display:none}}
+.inv{margin-top:10px;text-align:left;background:var(--card2);border-radius:8px;padding:7px 7px;min-height:74px}
+.inv label{font-size:10.5px;font-weight:800;letter-spacing:.06em;color:var(--muted)}
+.inv ul{list-style:none;margin:4px 0 0;padding:0;display:flex;flex-direction:column;gap:4px}
+.inv li{font-size:11px;line-height:1.35;padding:4px 6px;border-radius:6px;background:var(--card);border:1px solid var(--line);word-break:break-all}
+.inv li.secret{border-color:#f59e0b;background:var(--userBg)}
+.inv li.token{border-color:#7c3aed}
+.inv li:empty{display:none}
+.inv .empty{font-size:11px;color:var(--muted)}
+#packet{position:absolute;z-index:5;top:78px;left:12%;transform:translate(-50%,-50%);background:#111827;color:#fff;font-size:12px;font-weight:700;padding:8px 11px;border-radius:999px;box-shadow:0 10px 24px rgba(0,0,0,.28);opacity:0;pointer-events:none;white-space:nowrap;max-width:86vw;overflow:hidden;text-overflow:ellipsis}
+@media(prefers-color-scheme:dark){#packet{background:#f8fafc;color:#0f172a}}
+#packet.show{opacity:1}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:13px 14px;border-top:1px solid var(--line);background:var(--card)}
+.controls.topControls{border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);margin-top:14px}
+.btn{min-height:44px;padding:9px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);font-weight:700;cursor:pointer;font-size:14px}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);min-width:110px}
+.btn:active{transform:scale(.98)}
+select{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);padding:0 10px;font-weight:700}
+.progress{flex:1;min-width:140px}
+.progressBar{height:8px;background:var(--card2);border-radius:99px;overflow:hidden}
+.progressBar i{display:block;height:100%;background:var(--accent);width:0%;transition:.4s}
+.dots{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+.dots button{width:22px;height:22px;min-height:22px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:10px;padding:0;cursor:pointer;color:var(--muted)}
+.dots button.done{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dots button.current{outline:2px solid var(--accent);font-weight:800;color:var(--text)}
+.stepBox{margin-top:12px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.stepBox .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pill{font-size:12px;font-weight:800;background:var(--accent);color:#fff;padding:4px 9px;border-radius:999px}
+.pill.route{background:var(--card2);color:var(--text);border:1px solid var(--line)}
+.stepBox h3{margin:10px 0 6px;font-size:20px;line-height:1.35}
+.stepBox p{margin:0;color:var(--muted)}
+.point{margin-top:12px;background:var(--warning);border:1px solid var(--warningLine);border-radius:10px;padding:11px 13px;font-size:14px}
+.point b{color:#c2410c}@media(prefers-color-scheme:dark){.point b{color:#fdba74}}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.card h2{font-size:18px;margin:0 0 10px}
+.card h3{font-size:15px;margin:16px 0 6px}
+.card p,.card li{color:var(--muted);font-size:14.5px}
+.card ul{margin:6px 0;padding-left:18px}
+.jwt{font-family:ui-monospace,Menlo,monospace;font-size:13px;word-break:break-all;line-height:1.7;background:var(--card2);padding:13px;border-radius:10px}
+.jwt button{font:inherit;border:0;background:none;cursor:pointer;padding:2px 3px;border-radius:5px;text-align:left}
+.jwt .h{color:#dc2626;background:#fee2e2}.jwt .p{color:#1d4ed8;background:#dbeafe}.jwt .s{color:#047857;background:#d1fae5}
+@media(prefers-color-scheme:dark){.jwt .h{background:#450a0a}.jwt .p{background:#172a4d}.jwt .s{background:#052e22}}
+#jwtExplain{margin-top:10px;font-size:14px;background:var(--card2);border-radius:10px;padding:11px 13px;min-height:62px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{border-bottom:1px solid var(--line);padding:10px 8px;text-align:left;vertical-align:top}
+th{font-size:13px}
+td{color:var(--muted)} td:first-child{color:var(--text);font-weight:700;white-space:nowrap}
+.glossary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+@media(max-width:760px){.glossary{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.glossary{grid-template-columns:1fr}}
+.term{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px}
+.term b{font-size:14px}.term code{font-size:12px;background:var(--card2);padding:2px 5px;border-radius:5px}
+.term p{margin:5px 0 0;color:var(--muted);font-size:13.5px}
+.sectionTitle{margin:28px 0 4px;font-size:21px}
+.sectionSub{color:var(--muted);margin:0;font-size:14.5px}
+.kbd{font-family:ui-monospace,monospace;font-size:12px;background:var(--card2);border:1px solid var(--line);border-bottom-width:2px;padding:1px 6px;border-radius:6px}
+.footer{color:var(--muted);font-size:13px;margin-top:28px;border-top:1px solid var(--line);padding-top:14px}
+.checklist{list-style:none;padding:0!important}
+.checklist li{display:flex;gap:9px;margin:8px 0}
+.checklist li::before{content:"✓";width:22px;height:22px;flex:0 0 22px;display:grid;place-items:center;background:var(--rpBg);color:var(--rp);border-radius:50%;font-weight:900;font-size:13px}
+/* --- Screen mock (what the user actually sees) --- */
+.screenLayout{display:grid;grid-template-columns:1.15fr .85fr;gap:14px;margin-top:12px;align-items:start}
+@media(max-width:820px){.screenLayout{grid-template-columns:1fr}}
+.browserMock{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:var(--card);box-shadow:var(--shadow)}
+.browserBar{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--card2);border-bottom:1px solid var(--line)}
+.browserDots{display:flex;gap:6px;flex:0 0 auto}
+.browserDots i{width:11px;height:11px;border-radius:50%;display:block}
+.urlPill{flex:1;min-width:0;display:flex;align-items:center;gap:7px;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 11px;font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.urlPill .lock{flex:0 0 auto}
+.urlPill b{color:var(--accent)}
+.browserBody{min-height:372px;padding:18px 16px 20px;background:var(--bg);position:relative;overflow:hidden}
+@media(max-width:520px){.browserBody{min-height:352px;padding:14px 10px 16px}}
+.mockStatus{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--line);background:var(--card);font-size:12.5px;color:var(--muted)}
+.mockStatus .tag{font-weight:800;font-size:11.5px;padding:3px 8px;border-radius:999px;background:var(--card2);border:1px solid var(--line);color:var(--text)}
+.mockStatus .tag.you{background:var(--userBg);border-color:var(--user);color:var(--text)}
+.mockStatus .tag.wait{background:var(--browserBg);border-color:var(--browser);color:var(--text)}
+.mockStatus .tag.back{background:var(--idpBg);border-color:var(--idp);color:var(--text)}
+.appCard{max-width:400px;margin:4px auto;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 18px;box-shadow:0 4px 18px rgba(0,0,0,.06)}
+.appCard.center{text-align:center}
+.appLogo{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:22px;margin:0 auto 10px}
+.appCard h4{margin:0 0 4px;font-size:17px;line-height:1.35}
+.appCard p{margin:6px 0;color:var(--muted);font-size:13.5px;line-height:1.6}
+.mockBtn{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:46px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);font-weight:700;font-size:14px;cursor:pointer;padding:10px 12px;margin-top:10px}
+.mockBtn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.mockBtn.idp{background:var(--idp);border-color:var(--idp);color:#fff}
+.mockBtn.ghost{background:transparent}
+.mockBtn:active{transform:scale(.99)}
+.mockBtn .gmark{width:20px;height:20px;border-radius:50%;background:#fff;color:#111;display:grid;place-items:center;font-weight:900;font-size:12px;flex:0 0 20px}
+.mockInput{width:100%;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--text);padding:10px 11px;font-size:14px;margin-top:8px}
+.mockDivider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:14px 0 4px}
+.mockDivider::before,.mockDivider::after{content:"";flex:1;height:1px;background:var(--line)}
+.consentList{list-style:none;margin:10px 0;padding:0;text-align:left}
+.consentList li{display:flex;gap:9px;align-items:flex-start;font-size:13.5px;padding:8px 9px;background:var(--card2);border-radius:9px;margin:6px 0;color:var(--text)}
+.consentList li span{color:var(--muted);font-size:12.5px;display:block}
+.avatarRow{display:flex;gap:12px;align-items:center;text-align:left}
+.avatarBig{width:52px;height:52px;border-radius:50%;background:var(--userBg);display:grid;place-items:center;font-size:26px;flex:0 0 52px;border:2px solid var(--user)}
+.spinner{width:34px;height:34px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--accent);margin:14px auto;animation:mockSpin 1s linear infinite}
+@keyframes mockSpin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spinner{animation:none}}
+.redirectBar{height:5px;background:var(--card2);border-radius:99px;overflow:hidden;margin:12px 0}
+.redirectBar i{display:block;height:100%;width:72%;background:var(--browser);border-radius:99px}
+.serverLog{font-family:ui-monospace,Menlo,monospace;font-size:12px;line-height:1.75;background:#111827;color:#d1fae5;border-radius:10px;padding:12px 13px;text-align:left;word-break:break-all}
+@media(prefers-color-scheme:dark){.serverLog{background:#050a12}}
+.serverLog .dim{color:#9ca3af}
+.homeGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px;text-align:left}
+.homeGrid div{background:var(--card2);border-radius:10px;padding:10px;font-size:12.5px}
+.homeGrid b{display:block;font-size:13px}
+.filmstrip{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.filmBtn{flex:1 1 30%;min-width:96px;border:1px solid var(--line);background:var(--card);color:var(--text);border-radius:10px;padding:8px 8px;cursor:pointer;text-align:left}
+.filmBtn small{display:block;color:var(--muted);font-size:11px;line-height:1.3}
+.filmBtn strong{font-size:12.5px;line-height:1.3;display:block}
+.filmBtn.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.filmBtn.done{border-color:var(--accent)}
+.mockMetaUrl{font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all;background:var(--card2);border-radius:8px;padding:9px 10px;margin-top:10px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>OIDCの仕組み — 「Googleでログイン」のような仕組みは何をしているのか</h1>
+    <p>OpenID Connect（OIDC）は、OAuth 2.0の上に「本人確認」を載せた仕組みです。パスワードをサービスごとに渡さず、IdP（Googleなど）が発行する <strong>IDトークン</strong> で「誰か」を証明します。下のアニメーションで、認可コードフロー＋PKCEを1ステップずつ追ってみましょう。</p>
+    <div class="badges"><span class="badge">土台 <b>OAuth 2.0</b></span><span class="badge">主役 <b>IDトークン（JWT）</b></span><span class="badge">推奨フロー <b>認可コード + PKCE</b></span><span class="badge">勉強会用 <b>スペース / ← →</b> 対応</span></div>
+  </header>
+
+  <div class="controls topControls" aria-label="ステップ操作（画面の上）">
+    <button class="btn" onclick="prevStep()">← 前へ</button>
+    <button class="btn primary js-playBtn" id="playBtn" onclick="togglePlay()">▶ 再生</button>
+    <button class="btn" onclick="nextStep()">次へ →</button>
+    <button class="btn" onclick="resetFlow()">↺ 最初から</button>
+    <label style="font-size:13px;font-weight:700">速度 <select class="js-speed" id="speed" onchange="changeSpeed(this)"><option value="0.6">0.6× ゆっくり</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2.2">2.2× 速い</option></select></label>
+    <div class="progress"><div class="progressBar"><i class="js-bar" id="bar"></i></div><div class="dots js-dots" id="dots"></div></div>
+  </div>
+
+  <h2 class="sectionTitle">画面ではこう見える — ブラウザの移り変わり</h2>
+  <p class="sectionSub">下のアニメーションは「裏側の通信」を表しています。では、あなたの目にはどう映るのか。操作ボタンでステップを進めると、このブラウザ画面・アドレスバー・あなたの操作と、下の通信アニメーションが連動して変わります。画面の中のボタンも実際に押せます（押すと次のステップへ進みます）。操作ボタンはこの画面の下にもあり、どちらも同じアニメーションを操作できます。</p>
+
+  <div class="screenLayout">
+    <div class="browserMock" aria-label="ブラウザ画面モック">
+      <div class="browserBar">
+        <div class="browserDots" aria-hidden="true"><i style="background:#f87171"></i><i style="background:#fbbf24"></i><i style="background:#34d399"></i></div>
+        <div class="urlPill"><span class="lock">🔒</span><span id="mockUrl">https://<b>app.example.com</b>/login</span></div>
+        <span style="font-size:11px;color:var(--muted);white-space:nowrap" id="mockTab">ログイン</span>
+      </div>
+      <div class="browserBody" id="mockBody"></div>
+      <div class="mockStatus"><span class="tag you" id="mockWho">あなたが操作中</span><span id="mockStatusText">サービスのログイン画面です。ここではまだパスワードを入れません。</span></div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="pill" id="mockPill">スタート前</span><span class="pill route" id="mockDomain">ドメイン：RP（app.example.com）</span></div>
+        <h3 id="mockTitle" style="margin:10px 0 6px;font-size:19px;line-height:1.35">① サービスのログイン画面</h3>
+        <p id="mockDesc" style="margin:0;color:var(--muted);font-size:14.5px">いつものサービス（RP）の画面。「Example IDでログイン」ボタン（「Googleでログイン」と同じ種類）があるだけで、このサービス専用のパスワードは作りません。</p>
+        <div class="mockMetaUrl" id="mockUrlFull">URL： https://app.example.com/login</div>
+        <div class="point" id="mockNote" style="margin-top:12px"><b>見どころ：</b> ドメインが切り替わった瞬間がOIDCの境目です。RP → IdP → RP と、アドレスバーのドメインが2回変わります。</div>
+      </div>
+      <div class="filmstrip" id="filmstrip" aria-label="画面一覧"></div>
+      <p style="color:var(--muted);font-size:13px;margin:10px 2px 0">※ 画面は学習用の簡略モックです。IdPは架空の「Example ID（idp.example.com）」としており、実際のGoogle／Microsoft等の画面デザイン・文言とは異なります。バックチャネル（ステップ9〜10）の間、あなたの画面は「処理中」のまま変わりません — それが正常です。</p>
+    </div>
+  </div>
+
+  <div class="controls topControls" aria-label="ステップ操作（画面とフローの間）" style="margin-top:18px">
+    <button class="btn" onclick="prevStep()">← 前へ</button>
+    <button class="btn primary js-playBtn" id="playBtn2" onclick="togglePlay()">▶ 再生</button>
+    <button class="btn" onclick="nextStep()">次へ →</button>
+    <button class="btn" onclick="resetFlow()">↺ 最初から</button>
+    <label style="font-size:13px;font-weight:700">速度 <select class="js-speed" id="speed2" onchange="changeSpeed(this)"><option value="0.6">0.6× ゆっくり</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2.2">2.2× 速い</option></select></label>
+    <div class="progress"><div class="progressBar"><i class="js-bar" id="bar2"></i></div><div class="dots js-dots" id="dots2"></div></div>
+  </div>
+
+  <h2 class="sectionTitle">実際の中身のフロー — 裏側の通信</h2>
+  <p class="sectionSub">上の画面と連動して、ブラウザ・RP・IdPの間で何が飛んでいるかを表示します。上の操作ボタンでも、下のフローはそのまま操作できます。</p>
+
+  <div class="tabs" role="tablist">
+    <button class="tab active" id="tab-code" onclick="switchFlow('code')"><strong>① 認可コードフロー</strong><span>ログイン全体の流れ（11ステップ）</span></button>
+    <button class="tab" id="tab-verify" onclick="switchFlow('verify')"><strong>② 検証の裏側</strong><span>Discovery / JWKS / 署名検証（7ステップ）</span></button>
+  </div>
+
+  <section class="stageCard" aria-label="OIDCアニメーション">
+    <div class="stageHead">
+      <div><h2 id="flowTitle">認可コードフロー + PKCE</h2><p id="flowSub">フロントチャネル（ブラウザ経由）とバックチャネル（サーバー間直接）の違いに注目</p></div>
+      <div class="legend"><span><i style="background:var(--user)"></i>あなた</span><span><i style="background:var(--browser)"></i>ブラウザ</span><span><i style="background:var(--rp)"></i>RP</span><span><i style="background:var(--idp)"></i>IdP</span></div>
+    </div>
+    <div class="stage" id="stage">
+      <div id="packet">📦 packet</div>
+      <div class="actors" id="actors">
+        <div class="actor user" data-i="0"><div class="icon">🧑</div><h3>あなた</h3><div class="sub">ユーザー<br>User</div><div class="inv"><label>持ち物</label><ul data-inv="0"></ul></div></div>
+        <div class="actor browser" data-i="1"><div class="icon">🌐</div><h3>ブラウザ</h3><div class="sub">User Agent<br>リダイレクトを運ぶ</div><div class="inv"><label>持ち物</label><ul data-inv="1"></ul></div></div>
+        <div class="actor rp" data-i="2"><div class="icon">🛎️</div><h3>サービス（RP）</h3><div class="sub">Relying Party / Client<br>＝記事の「アプリ」</div><div class="inv"><label>持ち物</label><ul data-inv="2"></ul></div></div>
+        <div class="actor idp" data-i="3"><div class="icon">🪪</div><h3>IdP</h3><div class="sub">OpenID Provider<br>＝記事の「認可サーバー」</div><div class="inv"><label>持ち物</label><ul data-inv="3"></ul></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="stepBox" aria-live="polite">
+    <div class="meta"><span class="pill" id="stepPill">STEP 0 / 11</span><span class="pill route" id="routePill">準備画面</span></div>
+    <h3 id="stepTitle">再生か「次へ」を押してスタート</h3>
+    <p id="stepDesc">RPは「ログインさせたいサービス」、IdPは「本人確認を請け負う側」です。OIDCの肝は、RPがパスワードを一切受け取らず、IdPの署名付きIDトークンだけを信じる点にあります。</p>
+    <div class="point" id="stepPoint"><b>ポイント：</b> 各役の「持ち物」がどう増減するかを見てください。特に <b>code_verifier はブラウザ経由（フロントチャネル）には出ず、認可時はハッシュ化した code_challenge だけが送られる</b>こと（verifier本体はトークン交換時にバックチャネルでIdPへ提示されます）、そして<b>認可コードとトークンは別物</b>という2点が試験でも実務でも問われます。</div>
+  </section>
+
+  <h2 class="sectionTitle">IDトークン（JWT）の中身</h2>
+  <p class="sectionSub">色のついた3つの部分をタップすると、役割が分かります。IDトークンは「暗号化」ではなく「署名付き」— 中身は誰でも読めるので、秘密を入れてはいけません。</p>
+  <div class="card" style="margin-top:12px">
+    <div class="jwt"><button class="h" onclick="showJwt('h')">eyJhbGciOiJSUzI1NiIsImtpZCI6ImtleS0yMDI2LTAxIiwidHlwIjoiSldUIn0</button>.<button class="p" onclick="showJwt('p')">eyJpc3MiOiJodHRwczovL2lkcC5leGFtcGxlLmNvbSIsInN1YiI6IjI0ODI4OTc2MTAwMSIsImF1ZCI6Im15LWFwcCIsImlhdCI6MTc5MzA1OTIwMCwiZXhwIjoxNzkzMDYyODAwLCJub25jZSI6ImRmc0tVNUtudklMcVRJNDdQWlhRTm1xeFdLZGN3bVNFQzF2clFHY0ZvbHciLCJlbWFpbCI6Inl1a29AZXhhbXBsZS5jb20iLCJuYW1lIjoi44KG44GG44GTIn0</button>.<button class="s" onclick="showJwt('s')">SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c…（署名）</button></div>
+    <div id="jwtExplain"><strong>ヘッダー（赤）</strong> — 署名アルゴリズム <code>alg=RS256</code> と、鍵のID <code>kid</code>。RPはこのkidでJWKSから公開鍵を選びます。alg はRP側で固定し、ヘッダーの値をそのまま信用しません。</div>
+    <div class="grid" style="margin-top:14px">
+      <div><h3>ペイロードの代表クレーム</h3><ul><li><code>iss</code> 発行者（IdPのURL）— 想定したIdPか？</li><li><code>aud</code> 宛先（自分の client_id）— 他サービス向けトークンの流用防止</li><li><code>sub</code> ユーザーの恒久ID（メールアドレスではない）</li><li><code>exp / iat</code> 有効期限 / 発行時刻</li><li><code>nonce</code> RPが送った値と一致するか — リプレイ防止</li><li><code>email / name / picture</code> scopeで許されたプロフィール</li></ul></div>
+      <div><h3>RPが必ずやる検証（全部）</h3><ul class="checklist"><li>署名アルゴリズムをRP側で固定する（ヘッダーの alg をそのまま信用しない）</li><li>署名をJWKSの公開鍵で検証する</li><li>iss が設定したIdPと一致する</li><li>aud に自分の client_id が含まれる</li><li>exp が切れていない</li><li>nonce がログイン開始時に保存した値と一致する</li></ul><p>1つでも失敗したらログイン拒否。「署名が合う＝中身が改ざんされていない」ことの証明です。</p></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <section class="card"><h2>OAuth 2.0 と OIDC の違い</h2><table><tr><th></th><th>OAuth 2.0</th><th>OIDC</th></tr><tr><td>目的</td><td>認可 —「何をしてよいか」<br>APIアクセスの委任</td><td>認証 —「誰か」を伝える<br>（OAuth 2.0の上に載せた本人確認の層。APIの認可はOAuthの部分で行う）</td></tr><tr><td>成果物</td><td>アクセストークン</td><td>IDトークン ＋ アクセストークン</td></tr><tr><td>ユーザー情報</td><td>仕様にない（独自実装）</td><td>標準クレーム / UserInfo endpoint</td></tr><tr><td>例え</td><td>ホテルのキーカード（部屋に入れる）</td><td>キーカード＋身分証（誰のカードか分かる）</td></tr></table><p style="margin-top:10px">だから「OAuthでログイン」は厳密には誤りで、正しくは「OIDCでログイン、OAuthでAPI認可」です。</p></section>
+    <section class="card"><h2>なぜコードを直接トークンにしないの？</h2><ul><li><strong>認可コードはブラウザを経由する</strong>ため、履歴・ログ・悪性拡張機能に漏れる前提で設計する。だから短命（通常10分以内）・1回限り。</li><li><strong>トークン交換はバックチャネル</strong>（RPサーバー⇔IdPの直接HTTPS）で行い、ブラウザを経由しない。</li><li><strong>PKCE</strong>：コードを横取りされても、RPだけが持つ <code>code_verifier</code> がなければ交換できない。</li><li><strong>state</strong> は戻り先URLで照合してログインCSRFを防ぎ、<strong>nonce</strong> はIDトークンの中で照合してリプレイを防ぎます。OIDCではnonceもCSRF対策になり、PKCEもCSRF対策を兼ねます。役割は重なりますが、<strong>3つを併用する</strong>のが実装の取り違えにも強く安全です。</li></ul></section>
+  </div>
+
+  <h2 class="sectionTitle">用語ミニ解説</h2>
+  <p class="sectionSub">アニメーションに出てきた言葉だけに絞っています。</p>
+  <div class="glossary">
+    <div class="term"><b>RP / Client</b> <code>Relying Party</code><p>ログイン機能を使いたいサービス側。「IdPを信頼する側」だからRelying Party。記事では「アプリ（クライアント）」と呼んでいます。</p></div>
+    <div class="term"><b>IdP / OP</b> <code>OpenID Provider</code><p>本人確認とトークン発行を行う側。Google、Microsoft Entra ID、Auth0、Keycloakなど。OAuthでは「認可サーバー」と呼び、記事ではこの呼び方を使っています。</p></div>
+    <div class="term"><b>scope</b> <code>openid profile email</code><p>何を求めるかの宣言。<code>openid</code> が必須で、これがあるとOIDCとして動作する。</p></div>
+    <div class="term"><b>redirect_uri</b><p>認可後に戻るURL。IdPに事前登録したものと完全一致しないと拒否される（オープンリダイレクタ防止）。</p></div>
+    <div class="term"><b>認可コード</b> <code>code</code><p>トークンへの引換券。短命・使い捨て。ブラウザ経由でRPへ届く。</p></div>
+    <div class="term"><b>PKCE</b> <code>code_verifier / challenge</code><p>verifierのハッシュがchallenge。認可時はchallenge、交換時はverifierを提示し、IdPが照合する。</p></div>
+    <div class="term"><b>Discovery</b> <code>/.well-known/openid-configuration</code><p>IdPの設定一式（各endpointや対応方式）を置く標準URL。RPは手打ち設定を減らせる。</p></div>
+    <div class="term"><b>JWKS</b> <code>jwks_uri</code><p>IdPの公開鍵セット。鍵ローテーション時はここが更新され、RPはkidで鍵を選ぶ。</p></div>
+    <div class="term"><b>UserInfo</b> <code>/userinfo</code><p>アクセストークンで叩くと、許された範囲のユーザー情報を返すendpoint。IDトークンを補う。</p></div>
+  </div>
+
+  <div class="grid">
+    <section class="card"><h2>パスキーとの関係</h2><p>競合ではなく、<strong>階層が違う</strong>技術です。OIDCのステップ5「IdPでの本人確認」の中身として、パスワードの代わりにパスキー（WebAuthn）が使われることが増えています。</p><ul><li>OIDC：サービス ⇔ IdP の間の「信頼の取り決め」</li><li>パスキー：あなた ⇔ IdP の間の「本人確認の手段」</li><li>つまり「Googleでログイン（OIDC）」のGoogle側ログインがパスキー、という組み合わせが今の主流形です。</li></ul></section>
+    <section class="card"><h2>やってはいけないこと</h2><ul><li>Implicitフロー（トークンをURLフラグメントで直接返す旧方式）を新規採用する</li><li>IDトークンをAPIのアクセストークン代わりに使う</li><li>署名検証をせずペイロードだけ読んでログインさせる</li><li>アクセストークンをlocalStorageに無造作に置く（XSSで盗まれる）</li><li>redirect_uriをワイルドカードで広く登録する</li></ul></section>
+  </div>
+
+  <p class="footer">操作：<span class="kbd">Space</span> 再生／停止　<span class="kbd">→</span> 次へ　<span class="kbd">←</span> 前へ　／　このページは認可コードフロー（+PKCE、confidential client想定）の学習用モデルです。実際のパラメータや有効期限はIdP・ライブラリにより異なります。仕様：OpenID Connect Core 1.0 / OAuth 2.0（RFC 6749）/ PKCE（RFC 7636）/ RFC 9700。例のドメイン・値は記事（#2）と同じものを使っています。</p>
+</div>
+
+<script>
+var ACTOR_POS=[12.5,37.5,62.5,87.5];
+var flows={
+code:{title:"認可コードフロー + PKCE",sub:"フロントチャネル（ブラウザ経由）とバックチャネル（サーバー間直接）の違いに注目",steps:[
+{t:"ログイン開始",route:"あなた → ブラウザ",from:0,to:1,packet:"🖱️ 「Example IDでログイン」を押す",d:"あなたがサービスのログイン画面で「Example IDでログイン」（「Googleでログイン」と同じ種類のボタン）を押します。この時点でサービス（RP）にパスワードを入力していません。",p:"OIDCでは、パスワードを預ける相手はIdPだけ。RPの画面にパスワード欄が出てきたら、それはOIDCではありません。",inv:{0:["サービスを使いたい"],1:[],2:["client_id","client_secret 🔒"],3:["あなたのIdPアカウント"]}},
+{t:"RPへログイン開始を伝える",route:"ブラウザ → RP（通常のアクセス）",from:1,to:2,packet:"ログインしたい",d:"ブラウザがRPにアクセスし、RPは「IdPへ行ってもらう」準備を始めます。",p:"RPは次のステップで state と nonce を作り、このブラウザのセッションに保存します。後で戻ってきたときに「自分の仕掛けたログインか」を照合するためです。",inv:{0:["サービスを使いたい"],1:["RPにアクセス中"],2:["client_id","client_secret 🔒"],3:["あなたのIdPアカウント"]}},
+{t:"RPがPKCEと合言葉を用意",route:"RP内部の処理（外に出ない）",from:2,to:2,packet:"⚙️ verifier生成 → SHA256 → challenge",d:"RPはランダムな code_verifier を生成し、そのSHA256ハッシュである code_challenge を作ります。verifier本体はRPの中だけに保管します。あわせて state と nonce も、安全な乱数（256ビット）で生成し、このブラウザのセッションに保存します。連番や時刻のような推測できる値は使いません。",p:"最重要ポイント：この段階でRPの外（特にブラウザ経由）に出るのはハッシュ化されたchallengeだけ。verifier本体はトークン交換のときまでRP内に保管され、そのときバックチャネルでIdPへ提示されます。",inv:{0:["サービスを使いたい"],1:["RPにアクセス中"],2:["client_id","client_secret 🔒","code_verifier 🔒","state / nonce"],3:["あなたのIdPアカウント"]}},
+{t:"認可リクエスト（リダイレクト）",route:"ブラウザ → IdP ｜ フロントチャネル",from:1,to:3,packet:"response_type=code & scope=openid & state & nonce & code_challenge",d:"ブラウザがIdPの認可endpointへリダイレクトされます。URLには client_id、redirect_uri、scope=openid profile email、state、nonce、code_challenge が含まれます。",p:"URLに載るので秘密は載せられません。だから client_secret も code_verifier もここには入っていません。",inv:{0:["サービスを使いたい"],1:["認可リクエストを運搬中"],2:["client_id","client_secret 🔒","code_verifier 🔒","state / nonce"],3:["あなたのIdPアカウント","認可リクエスト受信"]}},
+{t:"IdPが本人確認と同意を確認",route:"IdP → あなた",from:3,to:0,packet:"🪪 ログイン＋同意画面",d:"IdPがあなた本人にログインを求めます（ここでパスワード／パスキー／MFAが使われます）。続いて「このサービスにメールアドレスと名前を渡してよいか」の同意画面が出ます。",p:"RPはこのやり取りを見られません。あなたがIdPにどうログインしたかは、RPには（原則）知らされません。",inv:{0:["サービスを使いたい","IdPで本人確認中"],1:["IdPの画面を表示"],2:["client_id","client_secret 🔒","code_verifier 🔒","state / nonce"],3:["あなたのIdPアカウント","認可リクエスト受信"]}},
+{t:"認証して同意する",route:"あなた → IdP",from:0,to:3,packet:"✅ 本人確認OK ＋ 同意",d:"あなたが本人確認を終え、情報提供に同意します。IdPは「誰が・どのサービスに・何を許したか」を確定させます。",p:"同意はscope単位です。email scopeがなければ、RPにメールアドレスは渡りません。",inv:{0:["IdPで認証済み"],1:["IdPの画面を表示"],2:["client_id","client_secret 🔒","code_verifier 🔒","state / nonce"],3:["あなたのIdPアカウント","あなたを認証済み","同意を取得"]}},
+{t:"認可コードを発行",route:"IdP → ブラウザ ｜ フロントチャネル",from:3,to:1,packet:"code= SplxlOBe… & state=…",d:"IdPが認可コードを発行し、事前登録された redirect_uri へブラウザをリダイレクトします。コードと一緒に、送ったときと同じ state が返ってきます。",p:"コードは「引換券」にすぎず、それ自体ではユーザー情報は分かりません。短命（目安10分以内）・1回限りです。",inv:{0:["IdPで認証済み"],1:["認可コードを運搬中"],2:["client_id","client_secret 🔒","code_verifier 🔒","state / nonce"],3:["あなたのIdPアカウント","認可コード発行済み"]}},
+{t:"コードがRPに届く",route:"ブラウザ → RP（callback）",from:1,to:2,packet:"GET /callback?code=…&state=…",d:"ブラウザがRPの redirect_uri（callback）に到着し、コードを渡します。RPはまず state が保存値と一致するか確認し、CSRFや別セッションの混入を弾きます。",p:"state不一致なら即中断し、照合済みのstateは破棄します。stateは「他人のログイン結果を自分のセッションに送りつける」攻撃（ログインCSRF）を防ぎます。PKCEやnonceもこの攻撃への対策になりますが、3つを併用しておくのが安全です。",inv:{0:["IdPで認証済み"],1:["callbackへ到着"],2:["client_id","client_secret 🔒","code_verifier 🔒","state ✓ 一致","認可コード"],3:["あなたのIdPアカウント","認可コード発行済み"]}},
+{t:"トークンリクエスト（直接通信）",route:"RP → IdP ｜ バックチャネル ★",from:2,to:3,packet:"code + code_verifier + client_secret",d:"RPのサーバーがIdPのトークンendpointへ直接HTTPSで交換を要求します。ここで初めて code_verifier 本体と client_secret を提示します。ブラウザは経由しません。",p:"IdPは verifier をハッシュ化し、認可時の challenge と一致するか照合します。コードを盗んだだけの攻撃者は verifier を持たないので交換できません。",inv:{0:["IdPで認証済み"],1:["（関与しない）"],2:["client_id","client_secret 🔒","code_verifier 🔒 → 提示","認可コード → 提示"],3:["あなたのIdPアカウント","challenge照合中"]}},
+{t:"IDトークン＋アクセストークン発行",route:"IdP → RP ｜ バックチャネル ★",from:3,to:2,packet:"🎫 IDトークン（JWT）＋ アクセストークンなど",d:"照合OKなら、IdPは署名付きIDトークンとアクセストークンを発行します（設定によってはリフレッシュトークンも）。IDトークンには iss / aud / sub / exp / nonce などが入っています。",p:"IDトークン＝「誰か」の証明、アクセストークン＝「APIを叩く鍵」。用途が違うので混用しないこと。",inv:{0:["IdPで認証済み"],1:["（関与しない）"],2:["client_id","client_secret 🔒","IDトークン 🎫","アクセストークン"],3:["あなたのIdPアカウント","トークン発行済み"]}},
+{t:"検証してログイン完了",route:"RP → あなた／ブラウザ",from:2,to:1,packet:"🍪 セッション発行 → ログイン完了",d:"RPはIDトークンの署名・iss・aud・exp・nonce をすべて検証し、問題なければ自前のログインセッションを作ってブラウザに返します。これでサービスにログインした状態になります。",p:"検証の詳細はタブ②へ。RPが作るのはあくまで自前セッションで、IDトークン自体をセッション代わりに使い回す設計は避けます。",inv:{0:["ログイン完了 🎉"],1:["セッションCookie 🍪"],2:["client_id","client_secret 🔒","ログインセッション","sub = あなたのID","IDトークン検証 ✓"],3:["あなたのIdPアカウント","トークン発行済み"]}}
+]},
+verify:{title:"検証の裏側 — Discovery / JWKS / 署名検証",sub:"RPはIdPの公開鍵でIDトークンをどう確かめるのか",steps:[
+{t:"設定を取りに行く（Discovery）",route:"RP → IdP",from:2,to:3,packet:"GET /.well-known/openid-configuration",d:"RPはIdPの決まったURLから設定文書を取得します。手作業でendpointをコピペする代わりに、標準の場所から機械的に読みます。",p:"このURLは issuer のURLにパスを足したもの。issクレームとこの取得元が一致することも検証対象です。",inv:{0:[],1:[],2:["issuer = IdPのURL"],3:["Discovery文書を公開中"]}},
+{t:"メタデータが返る",route:"IdP → RP",from:3,to:2,packet:"📄 endpoints / jwks_uri / 対応方式",d:"authorization_endpoint、token_endpoint、userinfo_endpoint、jwks_uri、対応する署名アルゴリズムなどが返ります。RPはこれをキャッシュします。",p:"ライブラリ（例：openid-client、Spring Security等）がこの処理を肩代わりしてくれるのが普通です。自前実装は非推奨。",inv:{0:[],1:[],2:["issuer","jwks_uri","token_endpoint"],3:["Discovery文書を公開中"]}},
+{t:"公開鍵セットを取りに行く（JWKS）",route:"RP → IdP",from:2,to:3,packet:"GET jwks_uri",d:"RPは jwks_uri から公開鍵のセット（JWKS）を取得します。各鍵には kid（鍵ID）が付いています。",p:"秘密鍵はIdPだけが持ち、公開鍵だけが配られます。鍵を差し替える「ローテーション」も、この配布の更新で回ります。",inv:{0:[],1:[],2:["issuer","jwks_uri","token_endpoint"],3:["署名用秘密鍵 🔒","公開鍵を配布中"]}},
+{t:"公開鍵が返る",route:"IdP → RP",from:3,to:2,packet:"🔑 公開鍵（kid=key-2026-01）",d:"RPは公開鍵をキャッシュします。以後のIDトークンは、この鍵で署名検証できます。",p:"公開鍵は「公開」しても安全です。署名は秘密鍵でしか作れず、公開鍵では検証しかできません（RSA/ECDSAの非対称性）。",inv:{0:[],1:[],2:["IdPの公開鍵 🔑","jwks_uri"],3:["署名用秘密鍵 🔒","公開鍵を配布中"]}},
+{t:"署名を検証する",route:"RP内部の処理",from:2,to:2,packet:"⚙️ header.kid → 公開鍵で検証",d:"IDトークンが届いたら、ヘッダーの kid に合う公開鍵をJWKSから選び、RP側で固定したアルゴリズム（例：RS256）で署名を検証します。ヘッダーの alg の指定はそのまま信用しません。合わなければ中身が改ざんされたか、偽の発行者です。知らないkidならJWKSを取り直します。",p:"「ペイロードが読める」ことと「信じてよい」ことは別。検証前に sub や email を信用してはいけません。",inv:{0:[],1:[],2:["IdPの公開鍵 🔑","IDトークン 🎫","署名検証中…"],3:["署名用秘密鍵 🔒"]}},
+{t:"クレームを検証する",route:"RP内部の処理",from:2,to:2,packet:"⚙️ iss / aud / exp / nonce チェック",d:"署名が正しくても終わりではありません。iss が想定IdPか、aud が自client_idか、exp が切れていないか、nonce が開始時の値と一致するかを全部確認します。",p:"aud検証を省くと、別サービス向けに発行されたトークンでログインできてしまう「流用」が成立します。",inv:{0:[],1:[],2:["IdPの公開鍵 🔑","IDトークン 🎫","署名 ✓","iss/aud/exp/nonce ✓"],3:["署名用秘密鍵 🔒"]}},
+{t:"検証OKならログイン成立",route:"RP → あなた／ブラウザ",from:2,to:1,packet:"✅ 検証完了 → セッション作成",d:"すべての検証を通過して初めて、RPは sub を「ログインしたユーザー」として扱います。失敗が1つでもあれば、理由を外部に詳しく漏らさず拒否します。",p:"まとめ：信頼の根拠は「IdPの秘密鍵でしか作れない署名」＋「宛先と合言葉の一致」。OIDCの安全性はこの検証をサボらないことに懸かっています。",inv:{0:["ログイン完了 🎉"],1:["セッションCookie 🍪"],2:["検証完了 ✓","sub = あなたのID"],3:["署名用秘密鍵 🔒"]}}
+]}
+};
+var curFlow='code', cur=-1, playing=false, timer=null, speed=1, animating=false;
+function $(id){return document.getElementById(id)}
+function steps(){return flows[curFlow].steps}
+function setPlayLabel(txt){document.querySelectorAll('.js-playBtn').forEach(function(b){b.textContent=txt})}
+function syncSpeedSelects(v){document.querySelectorAll('.js-speed').forEach(function(s){s.value=String(v)})}
+function renderDots(){var pct=(cur<0?0:((cur+1)/steps().length*100))+'%';document.querySelectorAll('.js-bar').forEach(function(b){b.style.width=pct});document.querySelectorAll('.js-dots').forEach(function(d){d.innerHTML='';steps().forEach(function(s,i){var b=document.createElement('button');b.textContent=i+1;b.title=s.t;b.onclick=function(){jumpTo(i)};if(i<cur)b.className='done';if(i===cur)b.className='current';d.appendChild(b)})})}
+function renderInv(inv){for(var a=0;a<4;a++){var ul=document.querySelector('[data-inv="'+a+'"]');ul.innerHTML='';var items=(inv&&inv[a])||[];if(!items.length){ul.innerHTML='<li class="empty">—</li>'}items.forEach(function(x){var li=document.createElement('li');li.textContent=x;if(x.indexOf('🔒')>=0)li.className='secret';if(x.indexOf('トークン')>=0)li.className='token';ul.appendChild(li)})}}
+function setActive(from,to){document.querySelectorAll('.actor').forEach(function(el,i){el.classList.toggle('active',i===from||i===to)})}
+function showStep(i,animate){
+  var s=steps()[i]; if(!s) return; cur=i; animating=!!animate;
+  $('stepPill').textContent='STEP '+(i+1)+' / '+steps().length;
+  $('routePill').textContent=s.route; $('stepTitle').textContent=s.t; $('stepDesc').textContent=s.d; $('stepPoint').innerHTML='<b>ポイント：</b> '+s.p;
+  if(typeof updateMock==='function') updateMock(i);
+  setActive(s.from,s.to); renderDots();
+  var pk=$('packet'); pk.textContent=s.packet;
+  var stage=$('stage').getBoundingClientRect();
+  // position packet along actor centers (percent-based, stage-relative)
+  var startX=ACTOR_POS[s.from], endX=ACTOR_POS[s.to];
+  pk.style.transition='none'; pk.style.left=startX+'%'; pk.style.top='64px'; pk.classList.add('show');
+  if(animate && s.from!==s.to){
+    // force reflow then animate
+    void pk.offsetWidth;
+    var dur=Math.round(950/speed);
+    pk.style.transition='left '+dur+'ms cubic-bezier(.4,0,.2,1)';
+    pk.style.left=endX+'%';
+    setTimeout(function(){renderInv(s.inv); animating=false; setTimeout(function(){pk.classList.remove('show')},500)},dur);
+  } else if(s.from===s.to){
+    pk.style.top='52px';
+    setTimeout(function(){renderInv(s.inv); animating=false; pk.classList.remove('show')},650/speed);
+  } else { renderInv(s.inv); animating=false; pk.classList.remove('show'); }
+}
+function jumpTo(i){ stopPlay(); showStep(i,false); }
+function nextStep(){ if(animating) return; if(cur>=steps().length-1){stopPlay();return} showStep(cur+1,true); }
+function prevStep(){ if(cur<=0){resetFlow();return} showStep(cur-1,false); }
+function resetFlow(){ stopPlay(); cur=-1; document.querySelectorAll('.actor').forEach(function(e){e.classList.remove('active')}); renderInv(null); renderDots(); $('stepPill').textContent='STEP 0 / '+steps().length; $('routePill').textContent='準備画面'; $('stepTitle').textContent='再生か「次へ」を押してスタート'; $('stepDesc').textContent=flows[curFlow].steps[0].d; $('stepPoint').innerHTML='<b>ポイント：</b> 各役の「持ち物」の増減を追ってください。'; $('packet').classList.remove('show'); if(typeof updateMock==='function') updateMock(-1); }
+function togglePlay(){ playing?stopPlay():startPlay(); }
+function startPlay(){ if(cur>=steps().length-1) resetFlow(); playing=true; setPlayLabel('⏸ 一時停止'); nextStep(); timer=setInterval(function(){ if(animating) return; if(cur>=steps().length-1){stopPlay();return} nextStep(); },2600/speed); }
+function stopPlay(){ playing=false; setPlayLabel('▶ 再生'); if(timer)clearInterval(timer); timer=null; }
+function changeSpeed(el){ speed=parseFloat(el?el.value:$('speed').value); syncSpeedSelects(speed); if(playing){stopPlay();startPlay();} }
+function switchFlow(name){ curFlow=name; stopPlay(); document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('active')}); $('tab-'+name).classList.add('active'); $('flowTitle').textContent=flows[name].title; $('flowSub').textContent=flows[name].sub; cur=-1; renderInv(null); renderDots(); resetFlow(); }
+function showJwt(part){var box=$('jwtExplain'); if(part==='h')box.innerHTML='<strong>ヘッダー（赤）</strong> — 署名アルゴリズム <code>alg=RS256</code> と鍵ID <code>kid</code>。RPはkidでJWKSから公開鍵を選びます。alg はRP側で固定し、ヘッダーの値をそのまま信用しません。'; if(part==='p')box.innerHTML='<strong>ペイロード（青）</strong> — iss / aud / sub / exp / iat / nonce と、scopeで許可された email・name など。Base64URLでエンコードされているだけで、誰でも読めます。'; if(part==='s')box.innerHTML='<strong>署名（緑）</strong> — ヘッダー＋ペイロードをIdPの秘密鍵で署名したもの。1文字でも改ざんすると検証に失敗します。これが「本物」の根拠です。'; }
+/* ---------- Screen mock: what the user actually sees ---------- */
+function mockBodyHTML(type,log){
+  if(type==='rpLogin') return '<div class="appCard center"><div class="appLogo" style="background:var(--rpBg)">🛎️</div><h4>Shop Example へようこそ</h4><p>ログインして買い物を続けましょう</p><button class="mockBtn" onclick="mockAdvance()"><span class="gmark">ID</span> Example IDでログイン</button><div class="mockDivider">または</div><input class="mockInput" disabled placeholder="メールアドレス（このサービス専用）"><input class="mockInput" disabled placeholder="パスワード" type="password"><p style="font-size:12px">※ 上のボタンを押すのがOIDC。専用パスワードは作りません。下の欄は使わない例として薄く表示しています。</p></div>';
+  if(type==='rpPrep') return '<div class="appCard center"><div class="spinner"></div><h4>ログインの準備をしています…</h4><p>サービスがリクエストを受け取りました。<br>画面は一瞬、真っ白かクルクル表示になります。</p><p style="font-size:12.5px;background:var(--card2);border-radius:8px;padding:8px">裏側：このあと state / nonce を作る準備に入ります</p></div>';
+  if(type==='pkce') return '<div class="appCard center"><div class="spinner"></div><h4>まだ同じ画面です</h4><p>PKCEの生成はサーバーの中だけの処理なので、<strong>あなたの画面には何も出ません</strong>。</p><p style="font-family:ui-monospace,monospace;font-size:12px;background:var(--card2);border-radius:8px;padding:9px;text-align:left">code_verifier = dBjftJeZ… 🔒（外に出ない）<br>↓ SHA256<br>code_challenge = E9Melhoa…（これだけ送る）<br><br>state = mxXMkpPl…<br>nonce = dfsKU5Kn…<br><span style="font-family:inherit">（どちらも256ビットの乱数。セッションに保存）</span></p></div>';
+  if(type==='redirectIdp') return '<div class="appCard center"><h4>ページが切り替わります</h4><div class="redirectBar"><i></i></div><p>アドレスバーが <b>app.example.com</b> から<br><b>idp.example.com</b> に変わります。</p><p style="font-size:12.5px">↪ 302 リダイレクト中… ボタンを押した直後の、一瞬の画面です。</p></div>';
+  if(type==='idpLogin') return '<div class="appCard center"><div class="appLogo" style="background:var(--idpBg)">🪪</div><h4>Example ID にログイン</h4><p>Shop Example に移動しようとしています</p><input class="mockInput" value="yuko@example.com" readonly><button class="mockBtn idp" onclick="mockAdvance()">🔑 パスキーでログイン</button><button class="mockBtn" onclick="mockAdvance()">パスワードで次へ</button><p style="font-size:12px">パスワードやパスキーを入力するのは <b>IdPの画面だけ</b>。RPには渡りません。</p></div>';
+  if(type==='idpConsent') return '<div class="appCard"><div class="avatarRow"><div class="avatarBig">🧑</div><div><b>yuko@example.com</b><div style="color:var(--muted);font-size:12.5px">としてログイン済み</div></div></div><h4 style="margin-top:14px">Shop Example がアクセスを求めています</h4><ul class="consentList"><li>👤<div><b>名前とプロフィール写真</b><span>scope: profile</span></div></li><li>✉️<div><b>メールアドレス</b><span>scope: email — yuko@example.com</span></div></li></ul><button class="mockBtn primary" onclick="mockAdvance()">許可する</button><button class="mockBtn ghost" onclick="mockDeny()">キャンセル</button><p style="font-size:12px">「キャンセル」を押すとどうなるかも試せます → RPに error=access_denied が返ります。</p></div>';
+  if(type==='redirectBack') return '<div class="appCard center"><h4>元のサービスへ戻ります</h4><div class="redirectBar"><i></i></div><p>アドレスバーが <b>idp.example.com</b> から<br><b>app.example.com/callback</b> に戻ります。</p><p style="font-family:ui-monospace,monospace;font-size:11.5px;background:var(--card2);border-radius:8px;padding:8px;word-break:break-all;text-align:left">/callback?code=SplxlOBe…&amp;state=mxXMkpPl…</p><p style="font-size:12.5px">URLに一瞬だけ見えるのが「認可コード」。トークンではありません。</p></div>';
+  if(type==='callback') return '<div class="appCard center"><div class="spinner"></div><h4>ログインを確認しています…</h4><p>戻ってきた画面で、サービスが state の一致を確認しています。</p><p style="font-size:12.5px;background:var(--rpBg);border-radius:8px;padding:8px">state ✓ 一致 — 自分が始めたログインだと確認</p></div>';
+  if(type==='backchannel') return '<div class="appCard center"><div class="spinner"></div><h4>ログイン処理中…</h4><p>そのままお待ちください</p><p style="font-size:12.5px">⏳ あなたの画面はここで止まったままです。<br>裏側では RPサーバー ⇔ IdP がブラウザを経由せず直接通信しています（バックチャネル）。</p><div class="serverLog" style="margin-top:10px">POST /token<br>code=SplxlOBe… &amp; code_verifier=dBjftJeZ…<br><span class="dim"># ブラウザには見えない通信</span></div></div>';
+  if(type==='backchannel2') return '<div class="appCard center"><div class="spinner"></div><h4>もうすぐ完了です…</h4><p>トークンを受け取り、検証しています。</p><div class="serverLog" style="margin-top:10px">200 OK<br>id_token: eyJhbGciOi… 🎫<br>access_token: …<br><span class="dim"># この内容も画面には出ません</span></div></div>';
+  if(type==='loggedIn') return '<div class="appCard"><div class="avatarRow"><div class="avatarBig">🧑</div><div><b>こんにちは、ゆうこさん</b><div style="color:var(--muted);font-size:12.5px">ログイン中 · yuko@example.com</div></div></div><div class="homeGrid"><div><b>🛒 注文履歴</b>最近の買い物</div><div><b>⭐ お気に入り</b>保存した商品</div><div><b>🎫 クーポン</b>使えるクーポン</div><div><b>⚙️ アカウント</b>設定・住所</div></div><button class="mockBtn" onclick="mockLogout()">ログアウト（最初に戻る）</button><p style="font-size:12px">セッションCookieでログイン状態を保持しています。IDトークンそのものを毎回見せるわけではありません。</p></div>';
+  if(type==='waitLog') return '<div class="appCard center"><div class="spinner"></div><h4>ログイン処理中…</h4><p>あなたの画面は待機中のまま。<br>下はRPサーバーの裏側ログ（実際は画面に出ません）。</p><div class="serverLog" style="margin-top:10px">'+(log||'')+'</div></div>';
+  if(type==='denied') return '<div class="appCard center"><div class="appLogo" style="background:#fee2e2">⚠️</div><h4>ログインできませんでした</h4><p>IdPで「キャンセル」が押されたため、サービスに戻されました。</p><p style="font-family:ui-monospace,monospace;font-size:12px;background:var(--card2);border-radius:8px;padding:8px">error = access_denied</p><p style="font-size:12.5px">RPは理由を詳しく追わず、このような汎用エラー画面を出すのが普通です。</p><button class="mockBtn primary" onclick="resetFlow()">もう一度ログインを試す</button></div>';
+  return '<div class="appCard center"><p>画面</p></div>';
+}
+var codeScreens=[
+ {body:'rpLogin',tab:'ログイン',url:'https://<b>app.example.com</b>/login',urlFull:'URL： https://app.example.com/login',domain:'ドメイン：RP（app.example.com）',who:'あなたが操作中',whoClass:'you',status:'サービスのログイン画面です。ここではまだパスワードを入れません。',title:'① サービスのログイン画面',desc:'いつものサービス（RP）の画面。「Example IDでログイン」ボタン（「Googleでログイン」と同じ種類）があるだけで、このサービス専用のパスワードは作りません。',note:'ドメインが切り替わった瞬間がOIDCの境目です。RP → IdP → RP と、アドレスバーのドメインが2回変わります。'},
+ {body:'rpPrep',tab:'ログイン処理中',url:'https://<b>app.example.com</b>/login',urlFull:'URL： https://app.example.com/login（画面は遷移中）',domain:'ドメイン：RP（app.example.com）',who:'待機中',whoClass:'wait',status:'ボタンが押され、RPへリクエストが届いたところです。',title:'② 準備中（クルクル）',desc:'ボタンを押した直後。多くのサービスでは一瞬の読み込み画面になります。',note:'このあとRPは、PKCEの値と state / nonce をまとめて作り、セッションへ保存します。'},
+ {body:'pkce',tab:'ログイン処理中',url:'https://<b>app.example.com</b>/login',urlFull:'URL： まだ RP のまま（外への通信はこれから）',domain:'ドメイン：RP（内部処理）',who:'待機中 — 裏側処理',whoClass:'back',status:'画面に変化はありません。サーバーの中だけが動いています。',title:'② 準備中（PKCE生成）',desc:'code_verifier の生成も画面には出ません。「何も起きていないように見える」ステップです。',note:'verifier本体は画面にもURLにも出ません。出るのはハッシュ化した challenge だけです。'},
+ {body:'redirectIdp',tab:'IdPへ移動中',url:'https://<b>idp.example.com</b>/authorize?…',urlFull:'URL： https://idp.example.com/authorize?response_type=code&client_id=…&redirect_uri=…&scope=openid+profile+email&state=…&nonce=…&code_challenge=…',domain:'ドメイン：RP → IdP へ切替',who:'自動で移動中',whoClass:'wait',status:'ブラウザがIdPへリダイレクトされています。',title:'③ IdPへリダイレクト',desc:'ページがパッと切り替わります。フィッシング対策として、ここでアドレスバーのドメインが本物のIdPか確認する習慣が有効です。',note:'URLに長いパラメータが付きますが、秘密（client_secret / verifier）は含まれていません。'},
+ {body:'idpLogin',tab:'IdP ログイン',url:'https://<b>idp.example.com</b>/signin',urlFull:'URL： https://idp.example.com/signin',domain:'ドメイン：IdP（idp.example.com）',who:'あなたが操作中',whoClass:'you',status:'IdPのログイン画面です。操作するのはここだけ。',title:'④ IdPのログイン画面',desc:'パスワード／パスキー／指紋などでの本人確認は、すべてIdPの画面で行います。既にIdPにログイン済みなら、この画面は丸ごとスキップされることもあります。',note:'RPの画面でパスワードを入れることはありません。もしRP側でパスワード欄が出たら、それはOIDCではありません。'},
+ {body:'idpConsent',tab:'アクセス許可',url:'https://<b>idp.example.com</b>/consent',urlFull:'URL： https://idp.example.com/consent',domain:'ドメイン：IdP（idp.example.com）',who:'あなたが操作中',whoClass:'you',status:'同意画面です。「許可する」か「キャンセル」かを選べます。',title:'⑤ 同意画面',desc:'「どの情報を、どのサービスに渡すか」の確認です。初回ログイン時によく出て、2回目以降は省略されることもあります。',note:'ここで「キャンセル」を押すと、RPには error=access_denied が返り、RPは汎用エラー画面を出します（モックで試せます）。'},
+ {body:'redirectBack',tab:'サービスへ戻る',url:'https://<b>app.example.com</b>/callback?code=…',urlFull:'URL： https://app.example.com/callback?code=SplxlOBe…&state=mxXMkpPl…',domain:'ドメイン：IdP → RP へ切替',who:'自動で移動中',whoClass:'wait',status:'IdPからRPへ戻るリダイレクト中です。',title:'⑥ サービスへ戻る',desc:'同意が終わると、自動で元のサービスに戻ります。ユーザーが何か入力する場面ではありません。',note:'URLに一瞬見える code=… が認可コードです。履歴に残る前提だからこそ、短命・使い捨てになっています。'},
+ {body:'callback',tab:'ログイン確認中',url:'https://<b>app.example.com</b>/callback?code=…',urlFull:'URL： https://app.example.com/callback?code=…&state=…',domain:'ドメイン：RP（app.example.com）',who:'待機中',whoClass:'wait',status:'RPに戻りました。確認が終わるまで待機画面です。',title:'⑥ 確認中（コールバック）',desc:'サービスに戻った直後の読み込み画面。state の照合はこの裏で行われます。',note:'state が合わなければ、ここでエラー画面に切り替わります。先へは進みません。'},
+ {body:'backchannel',tab:'ログイン処理中',url:'https://<b>app.example.com</b>/callback',urlFull:'画面のURL： https://app.example.com/callback（通信自体はサーバー間）',domain:'ドメイン：RP（画面は待機）',who:'待機中 — 裏側通信',whoClass:'back',status:'画面は変わりません。バックチャネル通信の最中です。',title:'⑦ 処理中（画面はそのまま）',desc:'トークン交換はサーバー同士の直接通信なので、あなたの画面には一切出ません。「固まった？」と感じる数秒がこれです。',note:'電波が悪いとここで長く待たされます。リロードするとコードが消費済みで失敗することがあるのは、この構造のためです。'},
+ {body:'backchannel2',tab:'ログイン処理中',url:'https://<b>app.example.com</b>/callback',urlFull:'画面のURL： https://app.example.com/callback',domain:'ドメイン：RP（画面は待機）',who:'待機中 — 裏側処理',whoClass:'back',status:'トークンを受け取り、RPが検証しています。',title:'⑦ 処理中（トークン受領）',desc:'IDトークンが届いても画面はまだ処理中。検証が終わるまでログイン完了にはなりません。',note:'IDトークンの中身（名前・メール）が画面に表示されることはありません。検証にだけ使われます。'},
+ {body:'loggedIn',tab:'マイページ',url:'https://<b>app.example.com</b>/home',urlFull:'URL： https://app.example.com/home（セッションCookieでログイン状態）',domain:'ドメイン：RP（app.example.com）',who:'ログイン完了',whoClass:'you',status:'ログイン後のホーム画面に切り替わりました。',title:'⑧ ログイン完了 — サービスのホーム',desc:'検証が通ると、サービスは自前のセッションを作り、ログイン後の画面を表示します。ここから先は普通のアプリ利用です。',note:'ログイン状態を保つのはRPのセッションCookieです。IDトークンを毎画面で使うわけではありません。'}
+];
+var verifyScreens=[
+ {body:'waitLog',log:'GET /.well-known/openid-configuration<br><span class="dim"># issuer から設定を取得中…</span>',tab:'ログイン処理中',url:'https://<b>app.example.com</b>/callback',urlFull:'画面のURL： https://app.example.com/callback（待機中）',domain:'ドメイン：RP（画面は待機）',who:'待機中 — 裏側処理',whoClass:'back',status:'検証フローでも、あなたの画面は待機中のままです。',title:'処理中（Discovery）',desc:'裏側でRPがIdPの設定を取りに行っています。ユーザー操作はありません。',note:'検証タブの間、画面はほぼずっと「処理中」です。変わるのはサーバーログだけ — それが実態に近いです。'},
+ {body:'waitLog',log:'200 OK<br>authorization_endpoint / token_endpoint<br>jwks_uri = https://…/jwks.json',tab:'ログイン処理中',url:'https://<b>app.example.com</b>/callback',urlFull:'画面のURL： https://app.example.com/callback（待機中）',domain:'ドメイン：RP（画面は待機）',who:'待機中 — 裏側処理',whoClass:'back',status:'メタデータが返り、RPがキャッシュしています。',title:'処理中（メタデータ受領）',desc:'endpointの一覧が分かりました。画面には何も表示されません。',note:'この取得は毎ログインではなく、キャッシュされるのが普通です。'},
+ {body:'waitLog',log:'GET jwks_uri<br><span class="dim"># 公開鍵セットを取りに行く…</span>',tab:'ログイン処理中',url:'https://<b>app.example.com</b>/callback',urlFull:'画面のURL： https://app.example.com/callback（待機中）',domain:'ドメイン：RP（画面は待機）',who:'待機中 — 裏側処理',whoClass:'back',status:'公開鍵を取りに行っています。画面は待機中です。',title:'処理中（JWKS取得）',desc:'署名検証に使う公開鍵の取得です。',note:'秘密鍵はIdPから出ません。配られるのは公開鍵だけです。'},
+ {body:'waitLog',log:'200 OK<br>keys: [{ kid: "key-2026-01", kty: "RSA", … }]',tab:'ログイン処理中',url:'https://<b>app.example.com</b>/callback',urlFull:'画面のURL： https://app.example.com/callback（待機中）',domain:'ドメイン：RP（画面は待機）',who:'待機中 — 裏側処理',whoClass:'back',status:'公開鍵が届きました。次が署名検証です。',title:'処理中（公開鍵 受領）',desc:'RPは公開鍵をキャッシュし、以後のトークン検証に使います。',note:'鍵ローテーション時は、この配布が更新されることで追随します。'},
+ {body:'waitLog',log:'verify(id_token)<br>kid = key-2026-01 → 公開鍵で検証中…',tab:'ログイン処理中',url:'https://<b>app.example.com</b>/callback',urlFull:'画面のURL： https://app.example.com/callback（待機中）',domain:'ドメイン：RP（画面は待機）',who:'待機中 — 裏側処理',whoClass:'back',status:'署名を検証しています。画面は待機中です。',title:'処理中（署名検証）',desc:'IDトークンの署名が本物かを確認する、検証の核心です。',note:'失敗すれば、ユーザーは汎用エラー画面を見ます。詳しい理由は画面に出しません。'},
+ {body:'waitLog',log:'iss ✓ &nbsp;aud ✓ &nbsp;exp ✓ &nbsp;nonce ✓<br><span class="dim"># 全クレームをチェック中…</span>',tab:'ログイン処理中',url:'https://<b>app.example.com</b>/callback',urlFull:'画面のURL： https://app.example.com/callback（待機中）',domain:'ドメイン：RP（画面は待機）',who:'待機中 — 裏側処理',whoClass:'back',status:'クレームを検証しています。あと少しです。',title:'処理中（クレーム検証）',desc:'署名の次に、宛先・期限・合言葉を全部確認します。',note:'1つでも失敗すればログイン拒否です。'},
+ {body:'loggedIn',tab:'マイページ',url:'https://<b>app.example.com</b>/home',urlFull:'URL： https://app.example.com/home',domain:'ドメイン：RP（app.example.com）',who:'ログイン完了',whoClass:'you',status:'検証がすべて通ると、初めてホーム画面に切り替わります。',title:'⑧ ログイン完了 — サービスのホーム',desc:'すべての検証を通過して、ようやくログイン後の画面になります。',note:'「処理中が長い＝裏で検証している」という対応関係が分かると、実装時の体感にもつながります。'}
+];
+var filmTargets={code:[{step:0,label:'RPログイン'},{step:3,label:'IdPへ移動'},{step:4,label:'IdPログイン'},{step:5,label:'同意画面'},{step:7,label:'戻って確認中'},{step:10,label:'ログイン完了'}],verify:[{step:0,label:'Discovery'},{step:2,label:'JWKS取得'},{step:4,label:'署名検証'},{step:6,label:'ログイン完了'}]};
+function renderFilmstrip(active){
+  var box=$('filmstrip'); if(!box) return; box.innerHTML='';
+  filmTargets[curFlow].forEach(function(f,idx){
+    var b=document.createElement('button'); b.className='filmBtn'+(active===f.step?' active':'')+((active>f.step)?' done':'');
+    b.innerHTML='<small>画面 '+(idx+1)+'</small><strong>'+f.label+'</strong>';
+    b.onclick=function(){ jumpTo(f.step); };
+    box.appendChild(b);
+  });
+}
+function updateMock(i){
+  var arr=(curFlow==='code')?codeScreens:verifyScreens;
+  var s=(i<0)?arr[0]:arr[i]; if(!s) return;
+  $('mockUrl').innerHTML=s.url; $('mockTab').textContent=s.tab;
+  var who=$('mockWho'); who.textContent=s.who; who.className='tag '+s.whoClass;
+  $('mockStatusText').textContent=s.status;
+  $('mockPill').textContent=(i<0?'スタート前':'STEP '+(i+1)+' に対応');
+  $('mockDomain').textContent=s.domain; $('mockTitle').textContent=s.title; $('mockDesc').textContent=s.desc;
+  $('mockUrlFull').textContent=s.urlFull; $('mockNote').innerHTML='<b>見どころ：</b> '+s.note;
+  $('mockBody').innerHTML=mockBodyHTML(s.body,s.log);
+  renderFilmstrip(i);
+}
+function mockAdvance(){ if(animating) return; if(cur>=steps().length-1){ resetFlow(); return; } nextStep(); }
+function mockDeny(){ stopPlay(); $('mockBody').innerHTML=mockBodyHTML('denied'); $('mockWho').textContent='エラー'; $('mockWho').className='tag'; $('mockStatusText').textContent='同意がキャンセルされ、RPのエラー画面が表示されています。'; $('mockTitle').textContent='分岐：キャンセルした場合'; $('mockDesc').textContent='IdPでキャンセルすると、認可コードは発行されず、RPへ error=access_denied が返ります。もう一度試すには「最初から」を押してください。'; }
+function mockLogout(){ resetFlow(); }
+document.addEventListener('keydown',function(e){ if(e.target.tagName==='SELECT'||e.target.tagName==='INPUT')return; if(e.code==='Space'){e.preventDefault();togglePlay();} if(e.key==='ArrowRight')nextStep(); if(e.key==='ArrowLeft')prevStep(); });
+renderInv(null); renderDots(); updateMock(-1);
+</script>
+</body>
+</html>
