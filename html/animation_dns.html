@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>DNSの仕組みアニメーション</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
+      * { box-sizing: border-box; }
+      :root {
+        --bg: #f4f6f5;
+        --surface: #ffffff;
+        --surface-2: #eef2f0;
+        --ink: #17211d;
+        --ink-2: #44534c;
+        --ink-3: #6b7a72;
+        --line: #d5ded9;
+        --accent: #0e7a5f;
+        --accent-ink: #ffffff;
+        --accent-soft: #dff0e9;
+        --packet: #b45309;
+        --packet-soft: #fdf0dd;
+        --danger: #b3261e;
+        --danger-soft: #fbe9e7;
+        --term-bg: #101613;
+        --term-ink: #c9e7d6;
+        --term-dim: #7d968a;
+        --radius: 10px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0e1311;
+          --surface: #161d1a;
+          --surface-2: #1d2622;
+          --ink: #e6ede9;
+          --ink-2: #b3c2ba;
+          --ink-3: #84958c;
+          --line: #2c3833;
+          --accent: #2fbf9a;
+          --accent-ink: #06231a;
+          --accent-soft: #14332a;
+          --packet: #f0a832;
+          --packet-soft: #3a2c12;
+          --danger: #f0867e;
+          --danger-soft: #3d1d1a;
+          --term-bg: #070a09;
+          --term-ink: #c9e7d6;
+          --term-dim: #71877b;
+          color-scheme: dark;
+        }
+      }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "IBM Plex Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        line-height: 1.75;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { max-width: 960px; margin: 0 auto; padding: 28px 18px 72px; }
+      h1 { font-size: clamp(26px, 5.4vw, 38px); line-height: 1.3; margin: 0 0 10px; letter-spacing: .01em; }
+      .lede { color: var(--ink-2); font-size: 16px; margin: 0 0 6px; max-width: 42em; }
+      .lede .mono { color: var(--accent); font-weight: 600; }
+      h2 { font-size: 21px; margin: 0 0 6px; line-height: 1.4; }
+      h3 { font-size: 16px; margin: 0 0 6px; }
+      .sec-head { margin: 40px 0 14px; }
+      .sec-head p { margin: 0; color: var(--ink-2); font-size: 14.5px; max-width: 44em; }
+      .sec-num { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 1px 10px; margin-bottom: 8px; letter-spacing: .08em; }
+
+      /* ---------- controls ---------- */
+      .controls {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 10px 12px; margin: 18px 0;
+      }
+      .controls .btn {
+        appearance: none; border: 1px solid var(--line); background: var(--surface-2);
+        color: var(--ink); border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 14.5px; font-weight: 600;
+        cursor: pointer; min-width: 44px;
+      }
+      .controls .btn:hover { border-color: var(--accent); }
+      .controls .btn:focus-visible, .speedsel:focus-visible, .dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .controls .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 92px; }
+      .controls .btn:disabled { opacity: .38; cursor: default; }
+      .controls .btn:disabled:hover { border-color: var(--line); }
+      .controls .btn.primary:disabled:hover { border-color: var(--accent); }
+      .speedwrap { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13.5px; color: var(--ink-2); }
+      .speedsel { font: inherit; font-size: 14px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+      .progress-line { display: flex; align-items: center; gap: 12px; margin: 4px 2px 0; flex-wrap: wrap; }
+      .progress-label { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+      .progress-track { flex: 1 1 140px; height: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+      .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .45s ease; }
+      .dots { display: flex; gap: 6px; flex-wrap: wrap; }
+      .dot { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+      .dot.done { border-color: var(--accent); color: var(--accent); }
+      .dot.now { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+      /* ---------- browser mock ---------- */
+      .stage-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      @media (min-width: 820px) { .stage-grid { grid-template-columns: 1.15fr .85fr; } }
+      .browser, .term {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+      }
+      .browser-bar {
+        display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+        background: var(--surface-2); border-bottom: 1px solid var(--line);
+      }
+      .traffic { display: flex; gap: 6px; flex: none; }
+      .traffic i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+      .traffic i:nth-child(1) { background: #e0655f; } .traffic i:nth-child(2) { background: #e8b23f; } .traffic i:nth-child(3) { background: #58b368; }
+      .addr {
+        flex: 1; display: flex; align-items: center; gap: 8px; background: var(--surface);
+        border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; font-size: 14.5px; min-height: 34px;
+        overflow: hidden; white-space: nowrap;
+      }
+      .addr .lock { font-size: 12px; color: var(--ink-3); flex: none; }
+      .addr .url { overflow: hidden; text-overflow: ellipsis; }
+      .addr .placeholder { color: var(--ink-3); }
+      .spinner {
+        width: 16px; height: 16px; border-radius: 50%; flex: none;
+        border: 2.5px solid var(--line); border-top-color: var(--accent);
+        animation: spin .8s linear infinite; display: none;
+      }
+      .spinner.on { display: block; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .browser-body { padding: 20px 18px 22px; min-height: 218px; display: flex; flex-direction: column; gap: 12px; }
+      .status-line { font-size: 13.5px; color: var(--ink-2); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 6px; font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600;
+        border-radius: 999px; padding: 2px 12px; border: 1.5px solid var(--accent); color: var(--accent); background: var(--accent-soft);
+      }
+      .chip.amber { border-color: var(--packet); color: var(--packet); background: var(--packet-soft); }
+      .chip.gray { border-color: var(--line); color: var(--ink-2); background: var(--surface-2); }
+      .page-mock { border: 1px dashed var(--line); border-radius: 8px; padding: 16px; flex: 1; }
+      .page-mock .pm-title { font-size: 19px; font-weight: 700; margin: 0 0 6px; }
+      .page-mock .pm-text { font-size: 14px; color: var(--ink-2); margin: 0; }
+      .skeleton { display: none; flex-direction: column; gap: 10px; padding: 6px 0; }
+      .skeleton i { display: block; height: 13px; border-radius: 6px; background: var(--surface-2); }
+      .skeleton i:nth-child(1) { width: 55%; } .skeleton i:nth-child(2) { width: 88%; } .skeleton i:nth-child(3) { width: 72%; }
+      .term-head { padding: 8px 14px; font-size: 12.5px; color: var(--term-dim); background: var(--term-bg); border-bottom: 1px solid #223028; font-family: "IBM Plex Mono", monospace; }
+      .term-body {
+        background: var(--term-bg); color: var(--term-ink); margin: 0; padding: 14px 16px 18px;
+        font-family: "IBM Plex Mono", monospace; font-size: 12.8px; line-height: 1.65; min-height: 218px;
+        white-space: pre-wrap; word-break: break-all;
+      }
+      .term-body .dim { color: var(--term-dim); }
+      .fig-cap { font-size: 12.5px; color: var(--ink-3); margin: 8px 2px 0; }
+
+      /* ---------- flow diagram ---------- */
+      .flow-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 16px 16px; }
+      .actors { display: flex; align-items: stretch; gap: 0; }
+      .actor {
+        flex: 1 1 0; min-width: 0; text-align: center; padding: 12px 6px 10px; border: 1.5px solid var(--line);
+        border-radius: var(--radius); background: var(--surface-2); transition: border-color .3s, background .3s, box-shadow .3s;
+      }
+      .actor .a-icon { font-size: 24px; line-height: 1.2; display: block; }
+      .actor .a-name { font-weight: 700; font-size: 13.5px; display: block; margin-top: 4px; line-height: 1.45; }
+      .actor .a-sub { font-size: 11.5px; color: var(--ink-3); display: block; line-height: 1.5; }
+      .actor.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .actor.cache-on { border-color: var(--packet); }
+      .actor .cache-tag { display: none; margin-top: 6px; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; color: var(--packet); }
+      .actor.cache-on .cache-tag { display: inline-block; }
+      .link-arrow { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 15px; }
+      @media (max-width: 640px) {
+        .actors { flex-direction: column; gap: 0; }
+        .link-arrow { transform: rotate(90deg); height: 22px; flex-basis: 22px; margin: 0 auto; }
+      }
+      .packet-bar {
+        margin-top: 16px; border: 1.5px solid var(--packet); background: var(--packet-soft); border-radius: var(--radius);
+        padding: 12px 16px; min-height: 76px;
+      }
+      .packet-bar .p-label { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; color: var(--packet); margin-bottom: 2px; }
+      .packet-bar .p-route { font-weight: 700; font-size: 15px; }
+      .packet-bar .p-body { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; margin-top: 2px; word-break: break-all; }
+      .step-card { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px; }
+      .step-card .s-kicker { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent); font-weight: 600; letter-spacing: .06em; }
+      .step-card h3 { font-size: 19px; margin: 4px 0 8px; }
+      .step-card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+      .step-card p .mono { color: var(--ink); font-weight: 600; font-size: .94em; }
+      .tag { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 1px 10px; margin-left: 8px; vertical-align: 2px; }
+      .tag.rec { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+      .tag.itr { background: var(--packet-soft); color: var(--packet); border: 1px solid var(--packet); }
+
+      /* ---------- supplements ---------- */
+      .cards { display: grid; grid-template-columns: 1fr; gap: 14px; }
+      @media (min-width: 720px) { .cards.two { grid-template-columns: 1fr 1fr; } .cards.three { grid-template-columns: repeat(3, 1fr); } }
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+      .card p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+      .card p + p { margin-top: 8px; }
+      .card .mono { color: var(--ink); font-weight: 600; }
+      table.rec-table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; font-size: 14.5px; }
+      .rec-table th, .rec-table td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+      .rec-table tr:last-child th, .rec-table tr:last-child td { border-bottom: none; }
+      .rec-table thead th { background: var(--surface-2); font-size: 13px; color: var(--ink-2); }
+      .rec-table .rtype { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 15px; white-space: nowrap; }
+      .rec-table td.ex { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink-2); word-break: break-all; }
+      @media (max-width: 640px) {
+        .rec-table td.ex { display: none; }
+        .rec-table th.ex-h { display: none; }
+      }
+      .ttl-viz { margin-top: 14px; }
+      .ttl-track { height: 14px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; }
+      .ttl-fill { height: 100%; width: 100%; background: var(--accent); }
+      .ttl-marks { display: flex; justify-content: space-between; font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-3); margin-top: 5px; }
+      .vs-route { font-family: "IBM Plex Mono", monospace; font-size: 13px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; line-height: 1.9; word-break: break-all; }
+      dl.glossary { display: grid; grid-template-columns: 1fr; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 0; }
+      @media (min-width: 720px) { dl.glossary { grid-template-columns: 1fr 1fr; } }
+      .glossary .g-item { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+      .glossary dt { font-weight: 700; font-size: 15px; }
+      .glossary dt .mono { font-size: 13px; color: var(--accent); font-weight: 600; margin-left: 6px; }
+      .glossary dd { margin: 4px 0 0; font-size: 14px; color: var(--ink-2); }
+      .note-box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 6px; padding: 14px 18px; font-size: 14.5px; color: var(--ink-2); margin-top: 14px; }
+      .note-box strong { color: var(--ink); }
+      footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .spinner { animation: none; }
+        .progress-fill { transition: none; }
+        .actor { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>DNSの仕組みアニメーション</h1>
+      <p class="lede">
+        ブラウザに <span class="mono">www.example.com</span> と入力してからページが表示されるまで、その裏側では「名前から住所（IPアドレス）を引く」問い合わせが世界中を駆け巡っています。
+        その名前解決の流れを、9ステップで再生できます。
+      </p>
+
+      <!-- 1. 操作ボタン -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+      <div class="progress-line">
+        <span class="progress-label" data-progress-label>ステップ 1 / 9</span>
+        <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+        <div class="dots" data-dots aria-label="ステップ一覧"></div>
+      </div>
+
+      <!-- 2. 画面でこう見える -->
+      <div class="sec-head">
+        <span class="sec-num">VIEW</span>
+        <h2>画面でこう見える</h2>
+        <p>ブラウザの画面と、<span class="mono">dig</span> コマンドで同じ問い合わせをのぞいた結果です。どちらもステップに連動して変化します。</p>
+      </div>
+      <div class="stage-grid">
+        <div>
+          <div class="browser" aria-label="ブラウザ画面のモック">
+            <div class="browser-bar">
+              <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="addr">
+                <span class="lock" data-lock>🔒</span>
+                <span class="url mono" data-url><span class="placeholder">アドレスを入力…</span></span>
+                <span class="spinner" data-spinner aria-hidden="true"></span>
+              </div>
+            </div>
+            <div class="browser-body">
+              <div class="status-line" data-status>アドレスバーにURLが入力されました</div>
+              <div data-chips></div>
+              <div class="page-mock" data-page>
+                <div class="skeleton" data-skeleton aria-hidden="true"><i></i><i></i><i></i></div>
+                <div data-page-content>
+                  <p class="pm-title" data-page-title>まだ何も表示されません</p>
+                  <p class="pm-text" data-page-text>接続先のIPアドレスが分からないため、ブラウザはまだどこにも接続できません。</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="fig-cap">ブラウザ画面のモック。読み込み中 → 表示完了までがステップと連動します。</p>
+        </div>
+        <div>
+          <div class="term" aria-label="digコマンドのモック">
+            <div class="term-head">$ dig www.example.com — 問い合わせ結果</div>
+            <pre class="term-body" data-dig></pre>
+          </div>
+          <p class="fig-cap">dig風モック。実際に名前解決を試すコマンドの出力イメージです（値は説明用の例）。</p>
+        </div>
+      </div>
+
+      <!-- 3. 操作ボタン（連動） -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+
+      <!-- 4. 実際の中身のフロー -->
+      <div class="sec-head">
+        <span class="sec-num">FLOW</span>
+        <h2>実際の中身のフロー</h2>
+        <p>問い合わせは「ブラウザ → 再帰リゾルバ → ルート → TLD → 権威サーバー」と辿られます。光っている登場人物が、そのステップで動いている側です。</p>
+      </div>
+      <div class="flow-wrap">
+        <div class="actors" role="img" aria-label="DNSの登場人物：ブラウザ、再帰リゾルバ、ルートサーバー、TLDサーバー、権威サーバー">
+          <div class="actor" data-actor="browser">
+            <span class="a-icon" aria-hidden="true">🌐</span>
+            <span class="a-name">あなた／ブラウザ</span>
+            <span class="a-sub">OSのスタブリゾルバ</span>
+            <span class="cache-tag mono" data-cache-tag="browser">CACHE HIT</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="resolver">
+            <span class="a-icon" aria-hidden="true">🗄️</span>
+            <span class="a-name">再帰リゾルバ</span>
+            <span class="a-sub">キャッシュDNSサーバー</span>
+            <span class="cache-tag mono" data-cache-tag="resolver">CACHED · TTL 300</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="root">
+            <span class="a-icon" aria-hidden="true">🌳</span>
+            <span class="a-name">ルートサーバー</span>
+            <span class="a-sub">最上位「.」を担当</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="tld">
+            <span class="a-icon" aria-hidden="true">🏷️</span>
+            <span class="a-name">TLDサーバー</span>
+            <span class="a-sub">.com を担当</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="auth">
+            <span class="a-icon" aria-hidden="true">📖</span>
+            <span class="a-name">権威サーバー</span>
+            <span class="a-sub">example.com を担当</span>
+          </div>
+        </div>
+        <div class="packet-bar" aria-live="polite">
+          <div class="p-label">いま飛んでいる問い合わせ／応答</div>
+          <div class="p-route" data-packet-route>あなた → ブラウザ</div>
+          <div class="p-body mono" data-packet-body>www.example.com を開きたい</div>
+        </div>
+        <div class="step-card">
+          <div class="s-kicker" data-step-kicker>STEP 1 / 9</div>
+          <h3 data-step-title>URLを入力する</h3>
+          <p data-step-desc></p>
+        </div>
+      </div>
+
+      <!-- 5. 補足 -->
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>レコードの種類</h2>
+        <p>DNSに登録される情報は「レコード」と呼ばれ、種類ごとに役割が違います。今回引いたのは A レコードです。</p>
+      </div>
+      <table class="rec-table">
+        <thead>
+          <tr><th>種類</th><th>役割</th><th class="ex-h">値の例</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="rtype">A</td>
+            <td>ドメイン名 → IPv4アドレス。Webサイトへの接続で最もよく使われる</td>
+            <td class="ex">93.184.216.34</td>
+          </tr>
+          <tr>
+            <td class="rtype">AAAA</td>
+            <td>ドメイン名 → IPv6アドレス。AのIPv6版（「クアッドA」と読む）</td>
+            <td class="ex">2606:2800:21f:cb07:6820:80da:af6b:8b2c</td>
+          </tr>
+          <tr>
+            <td class="rtype">CNAME</td>
+            <td>ドメイン名 → 別のドメイン名（別名）。向き先のAレコードをさらに引く</td>
+            <td class="ex">www → example.com</td>
+          </tr>
+          <tr>
+            <td class="rtype">MX</td>
+            <td>そのドメイン宛メールの配送先サーバー。優先度（小さいほど優先）とセットで登録</td>
+            <td class="ex">10 mail.example.com</td>
+          </tr>
+          <tr>
+            <td class="rtype">TXT</td>
+            <td>自由なテキスト情報。ドメイン所有確認や、SPF（送信元メールサーバーの宣言）などに使う</td>
+            <td class="ex">v=spf1 include:... ~all</td>
+          </tr>
+          <tr>
+            <td class="rtype">NS</td>
+            <td>そのドメインの権威サーバーを指定する。ステップ4・5の「紹介」の正体はこのレコード</td>
+            <td class="ex">a.iana-servers.net</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>再帰問い合わせと反復問い合わせ</h2>
+        <p>アニメーション前半のポイントです。「答えが返るまで全部やって」と頼むのが再帰、「次の聞き先だけ教えてもらって自分で辿る」のが反復です。</p>
+      </div>
+      <div class="cards two">
+        <div class="card">
+          <h3>再帰問い合わせ <span class="mono" style="font-size:13px;color:var(--accent)">recursive</span></h3>
+          <div class="vs-route">ブラウザ → 再帰リゾルバ<br>「www.example.com のIPを教えて。<br>　分からなければ調べてきて」</div>
+          <p>頼まれた側（再帰リゾルバ）が、最終的な答えを返すまで責任を持ちます。ブラウザやOSは1回問い合わせるだけで済むので、普段の通信はこの形です。</p>
+        </div>
+        <div class="card">
+          <h3>反復問い合わせ <span class="mono" style="font-size:13px;color:var(--packet)">iterative</span></h3>
+          <div class="vs-route">リゾルバ → ルート → TLD → 権威<br>「知らないけど、次はあそこへ」<br>　という紹介（NSレコード）だけが返る</div>
+          <p>各サーバーは自分の知っている範囲だけ答え、リゾルバ自身が紹介を辿って歩きます。ルートやTLDのサーバーが世界中の問い合わせを肩代わりせずに済むのは、この分担のおかげです。</p>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>キャッシュとTTL</h2>
+        <p>一度引いた答えは、ブラウザ・OS・再帰リゾルバの各層で保存（キャッシュ）されます。保存期間を決めるのが TTL（Time To Live、秒数）です。</p>
+      </div>
+      <div class="card">
+        <h3>TTLのイメージ — 300秒のあいだ使い回せる</h3>
+        <div class="ttl-viz" aria-hidden="true">
+          <div class="ttl-track"><div class="ttl-fill"></div></div>
+          <div class="ttl-marks"><span>取得直後 · 残り300秒</span><span>150秒</span><span>0秒 → 再問い合わせ</span></div>
+        </div>
+        <p style="margin-top:14px;">TTLが長いほど問い合わせが減って速くなりますが、そのあいだにサーバーを移転しても古いIPが返り続けます。逆に短いと変更はすぐ反映されますが、問い合わせが増えて負荷と遅延が増えます。<strong>速さと鮮度のトレードオフ</strong>です。</p>
+        <p>「DNSの変更が浸透するまで時間がかかる」と言われるのはこのためで、世界中のキャッシュがそれぞれのTTL切れを待っている状態です。移転の前日にTTLを短くしておく、という運用がよく行われます。</p>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>DNSのセキュリティ</h2>
+        <p>DNSはもともと暗号化も認証もない仕組みとして設計されました。「偽の答えを返される」攻撃と、それへの対策が3つあります。</p>
+      </div>
+      <div class="cards three">
+        <div class="card">
+          <h3>キャッシュポイズニング</h3>
+          <p>攻撃者が偽の応答をリゾルバに先回りして送りつけ、キャッシュに嘘のIPを覚え込ませる攻撃です。以後の利用者は、正しいドメイン名のまま偽サイトへ誘導されてしまいます。</p>
+        </div>
+        <div class="card">
+          <h3>DNSSEC</h3>
+          <p>レコードに電子署名を付け、リゾルバが「本物の権威サーバーが出した答えか」を検証できるようにする仕組みです。改ざん検出はできますが、通信自体は暗号化されません。</p>
+        </div>
+        <div class="card">
+          <h3>DoH / DoT</h3>
+          <p>ブラウザ⇔リゾルバ間の問い合わせを暗号化する方式です。DoHはHTTPS（443番）、DoTは専用ポート（853番）でTLSを使います。途中で盗み見・改ざんされにくくなりますが、権威サーバー側の区間は対象外です。</p>
+        </div>
+      </div>
+      <div class="note-box">
+        <strong>ポイント：</strong> DNSSECは「答えの真正性」、DoH/DoTは「問い合わせの秘匿性」を守るもので、役割が違います。両方あっても、最後に接続する先そのものの正しさはTLSの証明書検証が担います（ステップ8の続きです）。
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>用語解説</h2>
+      </div>
+      <dl class="glossary">
+        <div class="g-item">
+          <dt>FQDN<span class="mono">Fully Qualified Domain Name</span></dt>
+          <dd>省略なしで書いた完全なドメイン名。<span class="mono">www.example.com.</span> の末尾のドットが最上位のルートを表します。</dd>
+        </div>
+        <div class="g-item">
+          <dt>権威サーバー<span class="mono">authoritative</span></dt>
+          <dd>あるドメインのレコードを正式に保持し、最終的な答えを出せるサーバー。「紹介」ではなく答えそのものを返すのはここだけです。</dd>
+        </div>
+        <div class="g-item">
+          <dt>再帰リゾルバ<span class="mono">recursive resolver</span></dt>
+          <dd>代わりに名前解決を最後まで引き受けるサーバー。プロバイダや会社、パブリックDNS（1.1.1.1、8.8.8.8など）が提供します。キャッシュもここに溜まります。</dd>
+        </div>
+        <div class="g-item">
+          <dt>スタブリゾルバ<span class="mono">stub resolver</span></dt>
+          <dd>OSに組み込まれた小さな問い合わせ役。自分では辿らず、再帰リゾルバへ丸投げするのが仕事です。ブラウザのキャッシュとは別に、OS側のキャッシュも持ちます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>ゾーン<span class="mono">zone</span></dt>
+          <dd>1つの権威サーバー（の組）が管理するドメイン名の範囲。<span class="mono">example.com</span> ゾーン、<span class="mono">.com</span> ゾーンのように階層ごとに区切られます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>ネームサーバー<span class="mono">name server</span></dt>
+          <dd>DNSの問い合わせに応答するサーバーの総称。再帰リゾルバも権威サーバーもネームサーバーの一種で、文脈で指すものが変わります。</dd>
+        </div>
+      </dl>
+
+      <footer>
+        このページのIPアドレスや応答内容は、example.com を題材にした説明用の例です。実際の運用では、途中のプロキシやCDN、ブラウザ独自のキャッシュなどにより手順が省略されることがあります。
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+        var IP = "93.184.216.34";
+
+        var STEPS = [
+          {
+            title: "URLを入力する",
+            tag: "",
+            desc: "アドレスバーに <span class='mono'>www.example.com</span> と入力して Enter。でもブラウザが知っているのは「名前」だけです。実際に接続するには数字の住所＝IPアドレスが必要で、それはまだ分かりません。ここから名前解決（DNS）が始まります。",
+            route: "あなた → ブラウザ",
+            packet: "www.example.com を開きたい（IPアドレスは不明）",
+            actors: ["browser"],
+            cacheBrowser: false, cacheResolver: false
+          },
+          {
+            title: "ブラウザ・OSのキャッシュを確認する",
+            tag: "",
+            desc: "まず手元の記録を探します。ブラウザ自身のキャッシュ、次にOSのスタブリゾルバが持つキャッシュです。以前アクセスした記録がTTL内なら、外部へ聞きに行かずに即座に解決できます。今回は<strong>どちらにも無かった（ミス）</strong>ので、次へ進みます。",
+            route: "ブラウザ → OSのキャッシュ（自分の中を探す）",
+            packet: "www.example.com の記録ある？ → なし（cache miss）",
+            actors: ["browser"],
+            cacheBrowser: false, cacheResolver: false
+          },
+          {
+            title: "再帰リゾルバへ問い合わせる",
+            tag: "<span class='tag rec'>再帰問い合わせ</span>",
+            desc: "設定されている再帰リゾルバ（プロバイダやパブリックDNSのキャッシュDNSサーバー）へ、<span class='mono'>www.example.com の A レコードは？</span> と送ります。これは「分からなければ調べてきて、最終的な答えをください」という<strong>再帰問い合わせ</strong>です。リゾルバのキャッシュにも無いので、リゾルバが代わりに調べ始めます。",
+            route: "ブラウザ（スタブリゾルバ） → 再帰リゾルバ",
+            packet: "Q: www.example.com A ?（再帰要求フラグ RD=1）",
+            actors: ["browser", "resolver"],
+            cacheBrowser: false, cacheResolver: false
+          },
+          {
+            title: "ルートサーバーへ聞く → .com の紹介を受ける",
+            tag: "<span class='tag itr'>反復問い合わせ</span>",
+            desc: "リゾルバはまず最上位のルートサーバーへ聞きます。ルートは <span class='mono'>www.example.com</span> の答え自体は知りません。代わりに「<span class='mono'>.com</span> のことは、このTLDサーバーに聞いて」と、NSレコードによる<strong>紹介（リファーラル）</strong>だけを返します。ここからはリゾルバ自身が辿る<strong>反復問い合わせ</strong>です。",
+            route: "再帰リゾルバ → ルートサーバー →（紹介）→ 再帰リゾルバ",
+            packet: "Q: www.example.com A ? → Referral: .com は a.gtld-servers.net へ",
+            actors: ["resolver", "root"],
+            cacheBrowser: false, cacheResolver: false
+          },
+          {
+            title: "TLDサーバーへ聞く → 権威サーバーの紹介を受ける",
+            tag: "<span class='tag itr'>反復問い合わせ</span>",
+            desc: "紹介された <span class='mono'>.com</span> のTLDサーバーへ同じ質問をします。ここも答え自体は持っておらず、「<span class='mono'>example.com</span> のことは、この権威サーバーに聞いて」とNSレコードで紹介します。ドメインの階層を1段ずつ降りていくのがDNSの基本動作です。",
+            route: "再帰リゾルバ → TLDサーバー（.com） →（紹介）→ 再帰リゾルバ",
+            packet: "Q: www.example.com A ? → Referral: example.com は a.iana-servers.net へ",
+            actors: ["resolver", "tld"],
+            cacheBrowser: false, cacheResolver: false
+          },
+          {
+            title: "権威サーバーへ聞く → Aレコードが返る",
+            tag: "<span class='tag itr'>反復問い合わせ</span>",
+            desc: "最後に <span class='mono'>example.com</span> の権威サーバーへ聞きます。ここはレコードの正式な持ち主なので、紹介ではなく答えそのものが返ります。<span class='mono'>www.example.com A " + IP + "（TTL 300）</span>。名前解決の到達点です。",
+            route: "再帰リゾルバ → 権威サーバー →（回答）→ 再帰リゾルバ",
+            packet: "Q: www.example.com A ? → Answer: A " + IP + " TTL 300",
+            actors: ["resolver", "auth"],
+            cacheBrowser: false, cacheResolver: false
+          },
+          {
+            title: "リゾルバがキャッシュして、ブラウザへ返す",
+            tag: "",
+            desc: "再帰リゾルバは答えを自分のキャッシュに保存します（TTL 300秒＝5分間有効）。次に同じ名前を聞かれたら、外部を辿らずに返せるようにするためです。そしてブラウザへ最終回答を返し、ブラウザ／OS側にもキャッシュされます。",
+            route: "再帰リゾルバ → ブラウザ",
+            packet: "Answer: www.example.com A " + IP + "（残りTTL 300）",
+            actors: ["resolver", "browser"],
+            cacheBrowser: true, cacheResolver: true
+          },
+          {
+            title: "得たIPアドレスへ接続を開始する",
+            tag: "",
+            desc: "ブラウザはようやく <span class='mono'>" + IP + "</span> の443番ポートへTCP接続し、TLSハンドシェイクで証明書を確認してから、HTTPリクエストを送ります。DNSの仕事はここまで。<strong>「名前→住所」の変換が終わって、初めて通信が始まります。</strong>",
+            route: "ブラウザ → " + IP + "（Webサーバー）",
+            packet: "TCP接続 → TLSハンドシェイク → GET / HTTPリクエスト",
+            actors: ["browser"],
+            cacheBrowser: true, cacheResolver: true
+          },
+          {
+            title: "2回目のアクセス：キャッシュが効く",
+            tag: "",
+            desc: "しばらくして同じページを再び開くと、ブラウザ／OSのキャッシュに記録が残っているため、問い合わせは一切発生せず即座にIPが分かります。だから2回目は速いのです。ただし<strong>TTL（今回は300秒）が切れると記録は捨てられ</strong>、ステップ3からの再問い合わせが走ります。",
+            route: "ブラウザ → 自分のキャッシュ（外部への問い合わせなし）",
+            packet: "www.example.com → " + IP + "（cache hit, 残りTTL 212）",
+            actors: ["browser"],
+            cacheBrowser: true, cacheResolver: true
+          }
+        ];
+
+        /* browser mock states per step (1-indexed via idx+1) */
+        var VIEW = [
+          { url: "www.example.com", spin: false, status: "アドレスバーにURLが入力されました",
+            chips: "<span class='chip gray'>IPアドレス：不明</span>",
+            title: "まだ何も表示されません", text: "接続先のIPアドレスが分からないため、ブラウザはまだどこにも接続できません。", skeleton: false, loaded: false },
+          { url: "www.example.com", spin: true, status: "ブラウザとOSのキャッシュを確認中…",
+            chips: "<span class='chip gray'>キャッシュ：なし（miss）</span>",
+            title: "読み込み中…", text: "手元のキャッシュに記録がありませんでした。外部へ問い合わせます。", skeleton: true, loaded: false },
+          { url: "www.example.com", spin: true, status: "再帰リゾルバへ問い合わせ中…",
+            chips: "<span class='chip amber'>名前解決中</span>",
+            title: "読み込み中…", text: "再帰リゾルバが代わりに調べてくれるのを待っています。", skeleton: true, loaded: false },
+          { url: "www.example.com", spin: true, status: "リゾルバがルートサーバーへ問い合わせ中…",
+            chips: "<span class='chip amber'>名前解決中 · ルートに照会</span>",
+            title: "読み込み中…", text: "「.com はあのTLDサーバーへ」という紹介が返ってきました。", skeleton: true, loaded: false },
+          { url: "www.example.com", spin: true, status: "リゾルバがTLDサーバーへ問い合わせ中…",
+            chips: "<span class='chip amber'>名前解決中 · TLDに照会</span>",
+            title: "読み込み中…", text: "「example.com はあの権威サーバーへ」という紹介が返ってきました。", skeleton: true, loaded: false },
+          { url: "www.example.com", spin: true, status: "リゾルバが権威サーバーへ問い合わせ中…",
+            chips: "<span class='chip amber'>名前解決中 · 権威サーバーに照会</span>",
+            title: "読み込み中…", text: "Aレコードの答えが返ってきました。あとはブラウザへ届くのを待つだけです。", skeleton: true, loaded: false },
+          { url: "www.example.com", spin: true, status: "IPアドレスが返ってきました",
+            chips: "<span class='chip'>IPアドレス：" + IP + "</span> <span class='chip gray'>TTL 300秒でキャッシュ</span>",
+            title: "読み込み中…", text: "名前解決が完了しました。得たIPアドレスへの接続を始めます。", skeleton: true, loaded: false },
+          { url: "www.example.com", spin: false, status: "ページが表示されました（接続先：" + IP + "）",
+            chips: "<span class='chip'>IPアドレス：" + IP + "</span> <span class='chip'>TLSで暗号化接続</span>",
+            title: "Example Domain", text: "このドメインはドキュメント内の例示用に用意されたものです。ページの表示完了＝DNSの役目は終了です。", skeleton: false, loaded: true },
+          { url: "www.example.com", spin: false, status: "2回目のアクセス：キャッシュから即座に表示",
+            chips: "<span class='chip'>キャッシュヒット</span> <span class='chip gray'>問い合わせ 0回 · 残りTTL 212秒</span>",
+            title: "Example Domain", text: "キャッシュが効いて一瞬で表示されました。TTLが切れたら、またステップ3から問い合わせ直します。", skeleton: false, loaded: true }
+        ];
+
+        function digText(stepIdx) {
+          var head = "<span class='dim'>; &lt;&lt;&gt;&gt; DiG &lt;&lt;&gt;&gt; www.example.com\n;; global options: +cmd</span>\n";
+          if (stepIdx <= 1) {
+            return head + "\n<span class='dim'>（まだ問い合わせていません）</span>";
+          }
+          if (stepIdx === 2) {
+            return head + ";; -&gt;HEADER&lt;&lt;- opcode: QUERY, status: (送信中…)\n;; flags: rd; QUERY: 1\n\n;; QUESTION SECTION:\n;www.example.com.\t\tIN\tA\n\n<span class='dim'>再帰リゾルバの応答を待っています…</span>";
+          }
+          if (stepIdx >= 3 && stepIdx <= 5) {
+            var where = stepIdx === 3 ? "ルートサーバー" : (stepIdx === 4 ? "TLDサーバー" : "権威サーバー");
+            return head + ";; QUESTION SECTION:\n;www.example.com.\t\tIN\tA\n\n<span class='dim'>リゾルバが " + where + " へ反復問い合わせ中…</span>\n<span class='dim'>（dig の画面は最終結果だけが表示されます）</span>";
+          }
+          var time = stepIdx === 8 ? "0" : "48";
+          var server = stepIdx === 8 ? "（キャッシュ）" : "192.0.2.53#53";
+          return head +
+            ";; -&gt;HEADER&lt;&lt;- opcode: QUERY, status: NOERROR\n;; flags: qr rd ra; QUERY: 1, ANSWER: 1\n\n;; QUESTION SECTION:\n;www.example.com.\t\tIN\tA\n\n;; ANSWER SECTION:\nwww.example.com.\t300\tIN\tA\t" + IP + "\n\n<span class='dim'>;; Query time: " + time + " msec\n;; SERVER: " + server + "</span>";
+        }
+
+        var idx = 0;
+        var playing = false;
+        var speed = 1;
+        var timer = null;
+        var BASE_MS = 3000;
+
+        var els = {
+          label: document.querySelector("[data-progress-label]"),
+          fill: document.querySelector("[data-progress-fill]"),
+          dotsWrap: document.querySelector("[data-dots]"),
+          url: document.querySelector("[data-url]"),
+          lock: document.querySelector("[data-lock]"),
+          spinner: document.querySelector("[data-spinner]"),
+          status: document.querySelector("[data-status]"),
+          chips: document.querySelector("[data-chips]"),
+          skeleton: document.querySelector("[data-skeleton]"),
+          pageTitle: document.querySelector("[data-page-title]"),
+          pageText: document.querySelector("[data-page-text]"),
+          dig: document.querySelector("[data-dig]"),
+          route: document.querySelector("[data-packet-route]"),
+          packet: document.querySelector("[data-packet-body]"),
+          kicker: document.querySelector("[data-step-kicker]"),
+          stepTitle: document.querySelector("[data-step-title]"),
+          stepDesc: document.querySelector("[data-step-desc]")
+        };
+
+        /* build dots */
+        var dots = [];
+        for (var i = 0; i < STEPS.length; i++) {
+          (function (n) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "dot";
+            b.textContent = String(n + 1);
+            b.setAttribute("aria-label", "ステップ" + (n + 1) + "へ移動");
+            b.addEventListener("click", function () { pause(); goTo(n); });
+            els.dotsWrap.appendChild(b);
+            dots.push(b);
+          })(i);
+        }
+
+        var actorEls = {};
+        document.querySelectorAll("[data-actor]").forEach(function (el) {
+          actorEls[el.getAttribute("data-actor")] = el;
+        });
+
+        function render() {
+          var s = STEPS[idx];
+          var v = VIEW[idx];
+          els.label.textContent = "ステップ " + (idx + 1) + " / " + STEPS.length;
+          els.fill.style.width = ((idx + 1) / STEPS.length * 100) + "%";
+          dots.forEach(function (d, i) {
+            d.classList.toggle("now", i === idx);
+            d.classList.toggle("done", i < idx);
+          });
+          /* browser mock */
+          els.url.textContent = v.url;
+          els.lock.textContent = v.loaded ? "🔒" : "○";
+          els.spinner.classList.toggle("on", v.spin);
+          els.status.textContent = v.status;
+          els.chips.innerHTML = v.chips;
+          els.skeleton.style.display = v.skeleton ? "flex" : "none";
+          els.pageTitle.textContent = v.title;
+          els.pageText.textContent = v.text;
+          els.dig.innerHTML = digText(idx);
+          /* flow */
+          els.route.textContent = s.route;
+          els.packet.textContent = s.packet;
+          els.kicker.textContent = "STEP " + (idx + 1) + " / " + STEPS.length;
+          els.stepTitle.innerHTML = s.title + (s.tag || "");
+          els.stepDesc.innerHTML = s.desc;
+          Object.keys(actorEls).forEach(function (k) {
+            actorEls[k].classList.toggle("active", s.actors.indexOf(k) !== -1);
+          });
+          actorEls.browser.classList.toggle("cache-on", !!s.cacheBrowser);
+          actorEls.resolver.classList.toggle("cache-on", !!s.cacheResolver);
+          /* controls state */
+          document.querySelectorAll("[data-action='prev']").forEach(function (b) { b.disabled = idx === 0; });
+          document.querySelectorAll("[data-action='next']").forEach(function (b) { b.disabled = idx === STEPS.length - 1; });
+          document.querySelectorAll("[data-action='play']").forEach(function (b) {
+            b.textContent = playing ? "⏸ 一時停止" : (idx === STEPS.length - 1 ? "↺ もう一度" : "▶ 再生");
+          });
+        }
+
+        function goTo(n) {
+          idx = Math.max(0, Math.min(STEPS.length - 1, n));
+          render();
+        }
+        function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+        function startTimer() {
+          stopTimer();
+          timer = setInterval(function () {
+            if (idx >= STEPS.length - 1) { pause(); return; }
+            goTo(idx + 1);
+            if (idx >= STEPS.length - 1) { pause(); }
+          }, BASE_MS / speed);
+        }
+        function play() {
+          if (idx >= STEPS.length - 1) { goTo(0); }
+          playing = true;
+          render();
+          startTimer();
+        }
+        function pause() {
+          playing = false;
+          stopTimer();
+          render();
+        }
+
+        document.querySelectorAll("[data-controls]").forEach(function (bar) {
+          bar.addEventListener("click", function (e) {
+            var btn = e.target.closest("[data-action]");
+            if (!btn || btn.disabled) return;
+            var a = btn.getAttribute("data-action");
+            if (a === "prev") { pause(); goTo(idx - 1); }
+            else if (a === "next") { pause(); goTo(idx + 1); }
+            else if (a === "reset") { pause(); goTo(0); }
+            else if (a === "play") { playing ? pause() : play(); }
+          });
+        });
+        document.querySelectorAll("[data-speed]").forEach(function (sel) {
+          sel.addEventListener("change", function () {
+            speed = parseFloat(sel.value);
+            document.querySelectorAll("[data-speed]").forEach(function (o) { o.value = sel.value; });
+            if (playing) startTimer();
+          });
+        });
+
+        render();
+      })();
+    </script>
+  </body>
+</html>

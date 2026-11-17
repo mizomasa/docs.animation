@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>セッションとCookieの仕組みアニメーション</title>
+<style>
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --surface2:#eef1f4; --text:#17202a; --muted:#5b6b7a; --line:#dde3e8;
+  --accent:#0f766e; --accent2:#0e7490; --red:#dc2626; --red-bg:#fef2f2; --blue:#2563eb; --blue-bg:#eff6ff;
+  --green:#059669; --green-bg:#ecfdf5; --amber:#d97706; --amber-bg:#fffbeb;
+  --shadow:0 8px 30px rgba(15,23,42,.08); --radius:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f1419; --surface:#171e26; --surface2:#1e2833; --text:#e6edf3; --muted:#9aa8b5; --line:#2a3644; --red-bg:#2a1215; --blue-bg:#12233d; --green-bg:#0d2a22; --amber-bg:#2e2110; --shadow:0 8px 30px rgba(0,0,0,.35);}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;line-height:1.65}
+.wrap{max-width:1020px;margin:0 auto;padding:20px 16px 56px}
+h1{font-size:clamp(26px,5vw,38px);line-height:1.25;margin:6px 0 8px;letter-spacing:-.02em}
+.lead{color:var(--muted);font-size:15.5px;max-width:720px;margin:0}
+h2{font-size:20px;margin:0 0 6px} h3{font-size:16px;margin:0 0 6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-top:18px}
+.label{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:8px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls button{min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-weight:700;font-size:14px;cursor:pointer}
+.controls button.primary{background:var(--accent);color:#fff;border-color:var(--accent);min-width:92px}
+.controls button:active{transform:scale(.98)}
+.speed{display:flex;gap:4px;margin-left:auto;align-items:center}
+.speed span{font-size:12px;color:var(--muted);font-weight:700}
+.speed button{min-height:36px;padding:0 10px;font-size:13px}
+.speed button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+.progress{margin-top:12px}
+.progress-meta{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-weight:700}
+.progress-bar{height:8px;background:var(--surface2);border-radius:999px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;background:var(--accent);width:0%;transition:width .4s ease;border-radius:999px}
+.dots{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.dots button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:12px;font-weight:800;cursor:pointer;color:var(--muted)}
+.dots button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dots button.done{background:var(--surface2);color:var(--text)}
+/* browser mock */
+.browser{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.browser-bar{display:flex;align-items:center;gap:8px;background:var(--surface2);padding:10px 12px;border-bottom:1px solid var(--line)}
+.dot{width:11px;height:11px;border-radius:50%}
+.url{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.browser-body{padding:22px;min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.mock-app{width:100%;max-width:420px}
+.mock-app h3{font-size:20px}
+.field{text-align:left;margin:10px 0}
+.field label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px}
+.field div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface2);font-size:14px}
+.mock-btn{display:inline-block;margin-top:12px;background:var(--accent);color:#fff;font-weight:800;border-radius:999px;padding:10px 22px;font-size:14px}
+.avatar{width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 8px}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800}
+.badge.ok{background:var(--green-bg);color:var(--green)} .badge.err{background:var(--red-bg);color:var(--red)} .badge.info{background:var(--blue-bg);color:var(--blue)} .badge.warn{background:var(--amber-bg);color:var(--amber)}
+.data-table{width:100%;border-collapse:collapse;text-align:left;font-size:14px;margin-top:12px}
+.data-table th,.data-table td{border-bottom:1px solid var(--line);padding:8px 6px}
+/* devtools cookie panel */
+.devtools{border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:14px;background:var(--surface)}
+.devtools-bar{display:flex;align-items:center;gap:8px;background:var(--surface2);padding:8px 12px;border-bottom:1px solid var(--line);font-size:12.5px;font-weight:700;color:var(--muted)}
+.devtools-bar .tab{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:2px 10px;color:var(--text)}
+table.cookies{width:100%;border-collapse:collapse;font-size:12.5px}
+table.cookies th,table.cookies td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+table.cookies th{background:var(--surface2);font-size:11.5px;color:var(--muted)}
+table.cookies td.val{font-family:ui-monospace,monospace;word-break:break-all}
+table.cookies .attrs{color:var(--muted);font-size:12px}
+.cookie-empty{padding:16px;font-size:13px;color:var(--muted);text-align:center}
+tr.newrow td{background:var(--green-bg)}
+/* flow */
+.actors{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 6px}
+.actor{border:1px solid var(--line);border-radius:14px;padding:12px 8px;text-align:center;background:var(--surface2);transition:.3s}
+.actor .icon{font-size:26px;line-height:1}
+.actor .name{font-weight:800;font-size:13.5px;margin-top:4px}
+.actor .sub{font-size:11px;color:var(--muted)}
+.actor.active{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 2px var(--accent) inset}
+.track{position:relative;height:54px;margin:4px 0}
+.track-line{position:absolute;left:4%;right:4%;top:26px;height:2px;background:var(--line)}
+.packet{position:absolute;top:14px;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:999px;white-space:nowrap;transition:left .7s ease, background .3s;max-width:46%;overflow:hidden;text-overflow:ellipsis}
+.packet.bad{background:var(--red)} .packet.ok{background:var(--green)}
+.step-detail{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--surface)}
+.step-detail h3{font-size:17px}
+.step-detail p{margin:6px 0;color:var(--muted);font-size:14.5px}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.http-box{background:#0f172a;color:#e2e8f0;border-radius:12px;padding:14px;font-size:12.5px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin-top:10px;text-align:left}
+.http-box .k{color:#7dd3fc}.http-box .v-red{color:#fda4af}.http-box .v-blue{color:#93c5fd}.http-box .v-green{color:#6ee7b7}
+/* session store visual */
+.store-box{border:2px solid var(--accent2);border-radius:14px;padding:14px;margin-top:14px;background:var(--blue-bg)}
+.store-box .t{font-weight:900;font-size:13.5px;color:var(--accent2)}
+.store-rec{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:10px;font-size:13px}
+.store-rec .id{font-family:ui-monospace,monospace;font-weight:800;word-break:break-all}
+.store-rec table{width:100%;border-collapse:collapse;margin-top:6px}
+.store-rec td{padding:3px 6px 3px 0;color:var(--muted);font-size:13px}
+.store-rec td:first-child{font-weight:700;color:var(--text);white-space:nowrap;width:110px}
+.store-empty{margin-top:10px;font-size:13.5px;color:var(--muted);border:1px dashed var(--line);border-radius:10px;padding:12px;background:var(--surface);text-align:center}
+.store-box.dead{border-color:var(--red);background:var(--red-bg)}
+.store-box.dead .t{color:var(--red)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}.actors{grid-template-columns:repeat(2,1fr)}}
+.callout{border-radius:12px;padding:14px 16px;font-size:14.5px;margin-top:12px}
+.callout.warn{background:var(--amber-bg);border:1px solid #fde68a}
+.callout.info{background:var(--blue-bg);border:1px solid #bfdbfe}
+@media(prefers-color-scheme:dark){.callout.warn{border-color:#92400e}.callout.info{border-color:#1e40af}}
+table.cmp{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+table.cmp th,table.cmp td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}
+table.cmp th{background:var(--surface2)}
+ul.tight{margin:6px 0;padding-left:20px} ul.tight li{margin:4px 0;font-size:14.5px}
+.gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
+.gloss div{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--surface2)}
+.gloss b{display:block;margin-bottom:4px}.gloss p{margin:0;font-size:13.5px;color:var(--muted)}
+footer{color:var(--muted);font-size:12.5px;text-align:center;margin-top:28px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>セッションとCookieの仕組みアニメーション</h1>
+<p class="lead">Webは本来「誰がアクセスしているか」を覚えていません（ステートレス）。そこで使われるのがセッションとCookieです。ログイン情報そのものはサーバー側に保存し、ブラウザには「整理券の番号」にあたるセッションIDだけをCookieで持たせます。8ステップで、発行から自動送信、ログアウトでの破棄までを追ってみましょう。</p>
+</header>
+
+<!-- ① 操作ボタン（上） -->
+<section class="card" aria-label="操作">
+<div class="label">STEP CONTROLS</div>
+<div class="controls" data-controls>
+<button data-act="restart">最初から</button>
+<button data-act="prev">← 前へ</button>
+<button data-act="play" class="primary">▶ 再生</button>
+<button data-act="next">次へ →</button>
+<div class="speed"><span>速度</span>
+<button data-speed="0.5">0.5×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button>
+</div>
+</div>
+<div class="progress"><div class="progress-meta"><span data-step-label>ステップ 1 / 8</span><span data-step-title>初回アクセス</span></div>
+<div class="progress-bar"><div class="progress-fill" data-fill></div></div>
+<div class="dots" data-dots></div></div>
+</section>
+
+<!-- ② 画面でこう見える -->
+<section class="card" aria-label="画面モック">
+<div class="label">画面でこう見える</div>
+<h2>一般的なWebサービスの画面と、ブラウザの中のCookie</h2>
+<div class="browser" style="margin-top:12px">
+<div class="browser-bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="url" id="mockUrl">https://example-app.jp/</span></div>
+<div class="browser-body" id="mockBody"></div>
+</div>
+<div class="devtools" aria-label="Cookie一覧モック">
+<div class="devtools-bar"><span>開発者ツール風</span><span class="tab">Application ＞ Cookies</span><span>example-app.jp</span></div>
+<div id="cookiePanel"></div>
+</div>
+<p style="color:var(--muted);font-size:13px;margin:10px 2px 0">実際のブラウザでも、開発者ツールの「Application（アプリケーション）＞ Cookies」で同じように保存されたCookieを確認できます。</p>
+</section>
+
+<!-- ③ 操作ボタン（下・連動） -->
+<section class="card" aria-label="操作2">
+<div class="controls" data-controls>
+<button data-act="restart">最初から</button>
+<button data-act="prev">← 前へ</button>
+<button data-act="play" class="primary">▶ 再生</button>
+<button data-act="next">次へ →</button>
+<div class="speed"><span>速度</span>
+<button data-speed="0.5">0.5×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button>
+</div>
+</div>
+<div class="progress"><div class="progress-meta"><span data-step-label>ステップ 1 / 8</span><span data-step-title>初回アクセス</span></div>
+<div class="progress-bar"><div class="progress-fill" data-fill></div></div></div>
+</section>
+
+<!-- ④ 実際の中身のフロー -->
+<section class="card" aria-label="フロー">
+<div class="label">実際の中身</div>
+<h2>裏側では何が起きているか</h2>
+<div class="actors" id="actors">
+<div class="actor" data-actor="0"><div class="icon">🧑</div><div class="name">あなた</div><div class="sub">利用者</div></div>
+<div class="actor" data-actor="1"><div class="icon">🌐</div><div class="name">ブラウザ</div><div class="sub">Cookieを保存・自動送信</div></div>
+<div class="actor" data-actor="2"><div class="icon">🖥️</div><div class="name">Webサーバー</div><div class="sub">セッションの発行・照会</div></div>
+<div class="actor" data-actor="3"><div class="icon">🗄️</div><div class="name">セッションストア</div><div class="sub">サーバー側の保存場所</div></div>
+</div>
+<div class="track"><div class="track-line"></div><div class="packet" id="packet">GET /</div></div>
+<div class="step-detail" id="stepDetail"></div>
+<div id="storeView"></div>
+</section>
+
+<!-- ⑤ 補足 1：Cookieの属性 -->
+<section class="card">
+<div class="label">補足 1</div>
+<h2>Cookieの属性の役割</h2>
+<p style="color:var(--muted);font-size:14.5px">Set-Cookie で渡されるとき、値と一緒に「属性」が付きます。属性はCookieの送られ方・守られ方を決める、いわば取り扱い説明書です。</p>
+<div style="overflow-x:auto">
+<table class="cmp"><tr><th>属性</th><th>役割</th><th>守っているもの</th></tr>
+<tr><td><b>HttpOnly</b></td><td>JavaScript から <code>document.cookie</code> で読み取れなくする</td><td>悪意あるスクリプトがセッションIDを盗む <b>XSS（クロスサイトスクリプティング）</b> への対策。盗まれにくくなる</td></tr>
+<tr><td><b>Secure</b></td><td>HTTPS のときだけ送信する（平文HTTPでは送らない）</td><td>通信経路での盗聴・盗み見</td></tr>
+<tr><td><b>SameSite</b></td><td>他のサイトから来たリクエストにCookieを付けるかを制限する（Strict / Lax / None）</td><td>ログイン状態を悪用して勝手に操作させる <b>CSRF（クロスサイトリクエストフォージェリ）</b> への対策</td></tr>
+<tr><td><b>Expires / Max-Age</b></td><td>有効期限。指定がなければブラウザを閉じた時点で消える「セッションCookie」、指定すれば期限まで残る「永続Cookie」になる</td><td>「ログインしたまま」の期間のコントロール</td></tr>
+<tr><td><b>Domain / Path</b></td><td>Cookieを送る宛先の範囲（どのドメイン・どのパス宛てのリクエストに付けるか）</td><td>必要以上に広い範囲へIDが送られることを防ぐ</td></tr></table>
+</div>
+<div class="callout info"><b>セッションID用の定番の組み合わせ：</b><code>HttpOnly; Secure; SameSite=Lax</code> ＋ 適切な有効期限。ログインのたびに付いているか、開発者ツールで確認してみると実感が湧きます。</div>
+</section>
+
+<!-- 補足 2：セッションIDの性質 -->
+<section class="card">
+<div class="label">補足 2</div>
+<h2>セッションIDに求められる性質</h2>
+<p style="color:var(--muted);font-size:14.5px">セッションIDは「持っている人＝ログイン中の本人」とみなされる鍵です。だからこそ、IDそのものの作り方がセキュリティを左右します。</p>
+<div class="grid2">
+<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><h3>推測できないランダムさ</h3><ul class="tight">
+<li>連番や日時から作ると、他人のIDを推測されて乗っ取られる</li>
+<li>暗号学的に安全な乱数で、十分な長さ（目安として128ビット以上）を持たせる</li>
+<li>ID自体にユーザー情報などの意味を持たせない（ただのランダムな文字列）</li></ul></div>
+<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><h3>ログイン時の再発行</h3><ul class="tight">
+<li>ログインが成功したら、それまでのIDは捨てて<b>新しいIDを発行し直す</b></li>
+<li>これをしないと、攻撃者が先に用意したIDを被害者に使わせて乗っ取る<b>セッション固定攻撃（Session Fixation）</b>が成立してしまう</li>
+<li>権限が変わるタイミング（決済前など）でも再発行する実装が多い</li></ul></div>
+</div>
+<ul class="tight" style="margin-top:10px">
+<li>IDはURLに載せない（履歴・リンク共有・アクセスログから漏れるため）。Cookieで運ぶのが原則</li>
+<li>一定時間操作がなければサーバー側でセッションを失効させる（タイムアウト）</li>
+</ul>
+</section>
+
+<!-- 補足 3：JWT方式との比較 -->
+<section class="card">
+<div class="label">補足 3</div>
+<h2>セッション方式とJWT方式の比較</h2>
+<p style="color:var(--muted);font-size:14.5px">どちらも「ログイン状態を保つ」ための仕組みですが、状態（データ）の置き場所が正反対です。</p>
+<div style="overflow-x:auto">
+<table class="cmp"><tr><th></th><th>セッション方式（今回）</th><th>JWT方式</th></tr>
+<tr><th>状態の持ち場所</th><td>サーバー側（セッションストア）。ブラウザにはIDだけ</td><td>トークン自体の中に情報を入れてブラウザ側が持つ。サーバーは状態を持たない</td></tr>
+<tr><th>リクエストのたびに送るもの</th><td>短いセッションID（Cookieで自動送信）</td><td>情報入りのトークン全体（主に Authorization ヘッダー）</td></tr>
+<tr><th>検証の仕方</th><td>IDでストアを引いて中身を確認</td><td>署名を検証するだけ。DB照会は不要</td></tr>
+<tr><th>失効のしやすさ</th><td><b>簡単</b>。サーバー側のデータを消せば即座に無効化できる</td><td><b>難しい</b>。有効期限が切れるまで基本的に止められない</td></tr>
+<tr><th>スケール</th><td>サーバーを増やすとストアの共有（Redis等）が必要</td><td>どのサーバーでも検証できるので増やしやすい</td></tr>
+<tr><th>向いている場面</th><td>一般的なWebサービス全般。即時失効や細かい制御が要る場合</td><td>APIやマイクロサービスなど、サーバー間・複数サービスで検証したい場合</td></tr></table>
+</div>
+</section>
+
+<!-- 補足 4：Cookieの種類 -->
+<section class="card">
+<div class="label">補足 4</div>
+<h2>Cookieの種類：ファーストパーティとサードパーティ</h2>
+<div class="grid2">
+<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><h3>ファーストパーティCookie</h3><ul class="tight">
+<li>今見ているサイト自身が発行したCookie</li>
+<li>セッションIDや、表示設定・カートの中身の保持などに使われる</li>
+<li>今回の主役はこちら</li></ul></div>
+<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><h3>サードパーティCookie</h3><ul class="tight">
+<li>今見ているサイトとは別のドメイン（広告配信会社など）が発行したCookie</li>
+<li>サイトをまたいで行動を追跡（トラッキング）し、広告の出し分けに使われてきた</li>
+<li>埋め込み動画や「いいね」ボタン経由でも発行されることがある</li></ul></div>
+</div>
+<div class="callout warn"><b>規制とブラウザの動き：</b>プライバシー保護の流れで、サードパーティCookieは各ブラウザで制限・廃止の方向に進んでいます。SafariやFirefoxは早くから強く制限し、Chromeも段階的な見直しを進めています。EUのGDPRなどを受けて、Cookieへの同意バナーを見かけることが増えたのもこの流れです。なお、ログインに使うファーストパーティCookieはこの規制の対象とは別で、今後も使われ続けます。</div>
+</section>
+
+<!-- 補足 5：用語解説 -->
+<section class="card">
+<div class="label">補足 5</div>
+<h2>用語解説</h2>
+<div class="gloss">
+<div><b>ステートレス / ステートフル</b><p>ステートレスは「状態を覚えていない」、ステートフルは「状態を覚えている」という意味。HTTP自体はステートレスで、セッションの仕組みを足すことでサーバー側がステートフルに振る舞えるようになる。</p></div>
+<div><b>Set-Cookie</b><p>サーバーがレスポンスに付けるHTTPヘッダー。「この名前と値をCookieとして保存して」というブラウザへの指示。逆にブラウザからサーバーへ送るときのヘッダーは <code>Cookie</code>。</p></div>
+<div><b>セッションハイジャック</b><p>他人のセッションIDを盗んで、その人になりすます攻撃。XSSや盗聴でIDが漏れると成立する。対策は HttpOnly・Secure 属性、HTTPSの徹底、ログイン時のID再発行など。</p></div>
+<div><b>セッションストア</b><p>セッションの中身を保存しておくサーバー側の場所。Webサーバーのメモリ、データベース、Redisのような高速なストアなどが使われる。</p></div>
+</div>
+</section>
+
+<footer>セッションとCookieの仕組みアニメーション — 認証アニメーションシリーズ（パスキー / OIDC / OAuth 2.0 / JWT / TLS に続く1本）</footer>
+</div>
+
+<script>
+var SID = '9f86d081884c7d659a2feaa0c55ad015';
+var SID_SHORT = '9f86d081…ad015';
+var storeRecord = '<div class="store-rec"><div class="id">ID: '+SID+'</div><table>'
+  + '<tr><td>ユーザー</td><td>user_42</td></tr>'
+  + '<tr><td>ログイン時刻</td><td>10:02</td></tr>'
+  + '<tr><td>表示名</td><td>サンプル太郎</td></tr>'
+  + '<tr><td>カートの中身</td><td>商品A × 1</td></tr></table></div>';
+function storeHTML(state){
+  if(state==='live') return '<div class="store-box"><div class="t">🗄️ セッションストアの中身（サーバー側）</div>'+storeRecord+'<p style="font-size:13px;color:var(--muted);margin:8px 0 0">ログイン情報の実物はここにあります。ブラウザ側にはIDしか渡っていません。</p></div>';
+  if(state==='found') return '<div class="store-box"><div class="t">🗄️ セッションストアをIDで検索 → 見つかった</div>'+storeRecord+'<p style="font-size:13px;color:var(--muted);margin:8px 0 0">IDを手がかりにこのレコードが引けたので、サーバーは「ログイン中の user_42 さん」だと判断できます。</p></div>';
+  if(state==='dead') return '<div class="store-box dead"><div class="t">🗄️ セッションストアの中身（サーバー側）</div><div class="store-empty">セッションは破棄されました（レコードなし）</div><p style="font-size:13px;color:var(--muted);margin:8px 0 0">誰かがこのIDを覚えていても、引けるデータがもう無いので使えません。</p></div>';
+  return '';
+}
+var steps = [
+ {title:'初回アクセス（Cookieなし）', packet:'GET /', from:37, to:62, actors:[1,2], cls:'', cookie:'none', store:null,
+  detail:'<h3>STEP 1 — 初回アクセス：まだCookieを持っていない</h3><p>初めてサイトを開いたとき、ブラウザはこのサイトのCookieを何も持っていません。当然、セッションIDも付いていないので、サーバーからは「どなたか分からない訪問者」として見えます。画面モックの下にあるCookie一覧が空なのがその証拠です。</p><div class="http-box">GET / HTTP/1.1\nHost: example-app.jp\n<span class="v-red">（Cookieヘッダーなし — まだ何も保存されていない）</span></div>',
+  mock:'top', url:'https://example-app.jp/'},
+ {title:'ログイン（ID・パスワード送信）', packet:'ID・パスワード', from:12, to:62, actors:[0,1,2], cls:'', cookie:'none', store:null,
+  detail:'<h3>STEP 2 — ログイン：IDとパスワードを送る</h3><p>あなたが入力したIDとパスワードを、ブラウザがサーバーへ送ります。この通信はHTTPSで暗号化されるのが前提です。パスワードが送られるのは基本的にこのログインの瞬間だけ。以降はセッションIDが代わりを務めます。</p><div class="http-box">POST /login HTTP/1.1\nHost: example-app.jp\n\n{ "id": "user_42", "password": "••••••••" }</div>',
+  mock:'login', url:'https://example-app.jp/login'},
+ {title:'セッション作成とID発行', packet:'セッションを保存', from:62, to:87, actors:[2,3], cls:'', cookie:'none', store:'live',
+  detail:'<h3>STEP 3 — サーバーがセッションを作り、IDを発行する</h3><p>パスワードが正しければ、サーバーは「ログイン中のあなたのデータ（セッション）」を作成してセッションストアに保存します。そして、そのデータの整理番号として、推測できないランダムな<b>セッションID</b>を発行します。中身とIDはサーバー側で紐づいています。</p>',
+  mock:'auth', url:'https://example-app.jp/login'},
+ {title:'Set-CookieでIDが渡る', packet:'Set-Cookie: SESSIONID=…', from:62, to:37, actors:[1,2], cls:'', cookie:'set', store:'live',
+  detail:'<h3>STEP 4 — Set-Cookie ヘッダーでIDがブラウザに渡る</h3><p>サーバーはレスポンスの <code>Set-Cookie</code> ヘッダーにセッションIDを入れて返します。ブラウザはそれを受け取り、Cookieとして保存します（下のCookie一覧に SESSIONID が現れました）。渡されるのはIDだけで、ログイン情報そのものはブラウザに来ていません。</p><div class="http-box">HTTP/1.1 200 OK\n<span class="k">Set-Cookie:</span> SESSIONID=<span class="v-blue">'+SID+'</span>;\n  Path=/; HttpOnly; Secure; SameSite=Lax</div>',
+  mock:'home', url:'https://example-app.jp/home'},
+ {title:'次のリクエストで自動送信', packet:'Cookie: SESSIONID=…', from:37, to:62, actors:[1,2], cls:'', cookie:'set', store:'live',
+  detail:'<h3>STEP 5 — 次のリクエスト：ブラウザが自動でCookieを付ける</h3><p>別のページを開いたり再読み込みしたりすると、ブラウザは保存しておいたCookieを <code>Cookie</code> ヘッダーに入れて<b>自動で</b>送ります。あなたもプログラムも、毎回IDを意識する必要はありません。これが「ログインが続いている」正体の半分です。</p><div class="http-box">GET /mypage HTTP/1.1\nHost: example-app.jp\n<span class="k">Cookie:</span> SESSIONID=<span class="v-blue">'+SID+'</span></div>',
+  mock:'loading', url:'https://example-app.jp/mypage'},
+ {title:'IDでセッションを引く', packet:'IDでセッションを検索', from:62, to:87, actors:[2,3], cls:'ok', cookie:'set', store:'found',
+  detail:'<h3>STEP 6 — サーバーがIDでセッションを引く</h3><p>サーバーは届いたIDを鍵にしてセッションストアを検索します。レコードが見つかれば、その中身（ユーザーやログイン時刻）から「ログイン中のあなた」だと分かります。中身はサーバー側にあるので、ブラウザ側で書き換えてなりすますことはできません。</p>',
+  mock:'mypage', url:'https://example-app.jp/mypage'},
+ {title:'ページ遷移でもログイン継続', packet:'Cookie: SESSIONID=…', from:37, to:62, actors:[1,2], cls:'', cookie:'set', store:'live',
+  detail:'<h3>STEP 7 — ページ遷移や再読み込みでも状態が続く</h3><p>サイト内のどのページへ移動しても、ブラウザは同じCookieを送り続け、サーバーは同じセッションを引き続けます。だからページを移動するたびにログインし直す必要がありません。有効期限内なら、ブラウザを再起動しても続く場合があります（永続Cookieの場合）。</p><div class="http-box">GET /settings HTTP/1.1\nHost: example-app.jp\n<span class="k">Cookie:</span> SESSIONID=<span class="v-blue">'+SID+'</span></div>',
+  mock:'settings', url:'https://example-app.jp/settings'},
+ {title:'ログアウト（破棄と削除）', packet:'POST /logout', from:37, to:62, actors:[1,2,3], cls:'bad', cookie:'none', store:'dead',
+  detail:'<h3>STEP 8 — ログアウト：セッション破棄とCookie削除</h3><p>ログアウトすると、サーバーはセッションストアのレコードを<b>破棄</b>し、ブラウザにも「Cookieを削除して」という指示（有効期限を過去にした Set-Cookie）を返します。大事なのはサーバー側の破棄のほうで、たとえ誰かがIDの文字列を控えていても、引けるデータが無いため二度と使えません。</p><div class="http-box">HTTP/1.1 200 OK\n<span class="k">Set-Cookie:</span> SESSIONID=; Max-Age=0; Path=/ <span class="v-red">（削除指示）</span>\nセッションストア: <span class="v-red">レコードを削除済み</span></div>',
+  mock:'logout', url:'https://example-app.jp/'}
+];
+var mocks = {
+ top:'<div class="mock-app"><h3>サンプルWebアプリ</h3><p style="color:var(--muted);font-size:14px">トップページが表示されました</p><span class="badge warn">未ログイン</span><p style="color:var(--muted);font-size:13px;margin-top:12px">下のボタンからログインできます</p><span class="mock-btn">ログイン画面へ</span></div>',
+ login:'<div class="mock-app"><h3>ログイン</h3><p style="color:var(--muted);font-size:13.5px">サンプルWebアプリ</p><div class="field"><label>ID</label><div>user_42</div></div><div class="field"><label>パスワード</label><div>••••••••</div></div><span class="mock-btn">ログイン</span></div>',
+ auth:'<div class="mock-app"><div class="avatar">⏳</div><h3>認証中…</h3><p style="color:var(--muted);font-size:14px">サーバーが確認し、セッションを作成しています</p><span class="badge info">パスワード OK → セッション作成中</span></div>',
+ home:'<div class="mock-app"><div class="avatar">✓</div><h3>ログインしました</h3><p style="color:var(--muted);font-size:14px">ようこそ、サンプル太郎さん</p><span class="badge ok">セッションIDをCookieに保存しました</span><p style="color:var(--muted);font-size:12.5px;margin-top:10px">下のCookie一覧に SESSIONID が追加されています</p></div>',
+ loading:'<div class="mock-app"><div class="avatar">👤</div><h3>マイページ</h3><p style="color:var(--muted);font-size:14px">読み込んでいます…</p><span class="badge info">CookieのセッションIDを自動で送信中</span></div>',
+ mypage:'<div class="mock-app"><div class="avatar">👤</div><h3>マイページ</h3><span class="badge ok">ログイン中（セッション確認 OK）</span><table class="data-table"><tr><th>名前</th><td>サンプル太郎</td></tr><tr><th>ログイン時刻</th><td>10:02</td></tr><tr><th>カートの中身</th><td>商品A × 1</td></tr></table><p style="color:var(--muted);font-size:12.5px">これらの情報はサーバー側のセッションから取り出されました</p></div>',
+ settings:'<div class="mock-app"><div class="avatar">⚙️</div><h3>設定ページ</h3><p style="color:var(--muted);font-size:14px">ページを移動しても…</p><span class="badge ok">ログイン中が続いています</span><table class="data-table"><tr><th>表示名</th><td>サンプル太郎</td></tr><tr><th>メール通知</th><td>オン</td></tr></table></div>',
+ logout:'<div class="mock-app"><div class="avatar">👋</div><h3>ログアウトしました</h3><p style="color:var(--muted);font-size:14px">ご利用ありがとうございました</p><span class="badge err">セッション破棄・Cookie削除済み</span><p style="color:var(--muted);font-size:12.5px;margin-top:10px">Cookie一覧から SESSIONID が消えています</p><span class="mock-btn">トップへ戻る</span></div>'
+};
+function cookiePanelHTML(state, highlight){
+  if(state!=='set') return '<div class="cookie-empty">このサイトのCookieはまだありません</div>';
+  return '<table class="cookies"><tr><th>名前</th><th>値</th><th>属性</th></tr>'
+    + '<tr'+(highlight?' class="newrow"':'')+'><td><b>SESSIONID</b></td><td class="val">'+SID+'</td>'
+    + '<td class="attrs">Domain: example-app.jp<br>Path: /<br>Expires: セッション終了時<br>HttpOnly ✓ / Secure ✓<br>SameSite: Lax</td></tr></table>';
+}
+
+var cur=0, playing=false, timer=null, speed=1;
+var dotsWrap=document.querySelector('[data-dots]');
+steps.forEach(function(s,i){var b=document.createElement('button');b.textContent=i+1;b.setAttribute('aria-label','ステップ'+(i+1));b.addEventListener('click',function(){stop();go(i);});dotsWrap.appendChild(b);});
+
+function render(){
+  var s=steps[cur];
+  document.querySelectorAll('[data-step-label]').forEach(function(e){e.textContent='ステップ '+(cur+1)+' / '+steps.length;});
+  document.querySelectorAll('[data-step-title]').forEach(function(e){e.textContent=s.title;});
+  document.querySelectorAll('[data-fill]').forEach(function(e){e.style.width=((cur+1)/steps.length*100)+'%';});
+  Array.prototype.forEach.call(dotsWrap.children,function(b,i){b.className=i===cur?'on':(i<cur?'done':'');});
+  document.getElementById('mockBody').innerHTML=mocks[s.mock];
+  document.getElementById('mockUrl').textContent=s.url;
+  document.getElementById('cookiePanel').innerHTML=cookiePanelHTML(s.cookie, cur===3);
+  document.getElementById('stepDetail').innerHTML=s.detail;
+  document.getElementById('storeView').innerHTML=storeHTML(s.store);
+  var pk=document.getElementById('packet');
+  pk.textContent=s.packet; pk.className='packet'+(s.cls?' '+s.cls:'');
+  pk.style.left=s.from+'%';
+  requestAnimationFrame(function(){requestAnimationFrame(function(){pk.style.left=s.to+'%';});});
+  document.querySelectorAll('.actor').forEach(function(a){a.classList.toggle('active', s.actors.indexOf(+a.dataset.actor)>=0);});
+}
+function go(i){cur=Math.max(0,Math.min(steps.length-1,i));render();}
+function stop(){playing=false;if(timer){clearInterval(timer);timer=null;}syncPlay();}
+function syncPlay(){document.querySelectorAll('[data-act="play"]').forEach(function(b){b.textContent=playing?'⏸ 一時停止':'▶ 再生';});}
+function play(){
+  if(playing){stop();return;}
+  if(cur>=steps.length-1){cur=0;}
+  playing=true;syncPlay();render();
+  timer=setInterval(function(){ if(cur>=steps.length-1){stop();return;} cur++; render(); if(cur>=steps.length-1){stop();} }, 3400/speed);
+}
+document.querySelectorAll('[data-controls]').forEach(function(w){
+  w.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    if(b.dataset.act==='play')play();
+    else if(b.dataset.act==='next'){stop();go(cur+1);}
+    else if(b.dataset.act==='prev'){stop();go(cur-1);}
+    else if(b.dataset.act==='restart'){stop();go(0);}
+    else if(b.dataset.speed){speed=parseFloat(b.dataset.speed);document.querySelectorAll('[data-speed]').forEach(function(x){x.classList.toggle('on',x===b||x.dataset.speed===b.dataset.speed);}); if(playing){stop();play();}}
+  });
+});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){stop();go(cur+1);}if(e.key==='ArrowLeft'){stop();go(cur-1);}});
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>JWTの仕組みアニメーション</title>
+<style>
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --surface2:#eef1f4; --text:#17202a; --muted:#5b6b7a; --line:#dde3e8;
+  --accent:#0f766e; --accent2:#0e7490; --red:#dc2626; --red-bg:#fef2f2; --blue:#2563eb; --blue-bg:#eff6ff;
+  --green:#059669; --green-bg:#ecfdf5; --amber:#d97706; --amber-bg:#fffbeb; --header-c:#be123c; --payload-c:#1d4ed8; --sig-c:#047857;
+  --shadow:0 8px 30px rgba(15,23,42,.08); --radius:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f1419; --surface:#171e26; --surface2:#1e2833; --text:#e6edf3; --muted:#9aa8b5; --line:#2a3644; --red-bg:#2a1215; --blue-bg:#12233d; --green-bg:#0d2a22; --amber-bg:#2e2110; --shadow:0 8px 30px rgba(0,0,0,.35);}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;line-height:1.65}
+.wrap{max-width:1020px;margin:0 auto;padding:20px 16px 56px}
+h1{font-size:clamp(26px,5vw,38px);line-height:1.25;margin:6px 0 8px;letter-spacing:-.02em}
+.lead{color:var(--muted);font-size:15.5px;max-width:720px;margin:0}
+h2{font-size:20px;margin:0 0 6px} h3{font-size:16px;margin:0 0 6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-top:18px}
+.label{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:8px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls button{min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-weight:700;font-size:14px;cursor:pointer}
+.controls button.primary{background:var(--accent);color:#fff;border-color:var(--accent);min-width:92px}
+.controls button:active{transform:scale(.98)}
+.speed{display:flex;gap:4px;margin-left:auto;align-items:center}
+.speed span{font-size:12px;color:var(--muted);font-weight:700}
+.speed button{min-height:36px;padding:0 10px;font-size:13px}
+.speed button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+.progress{margin-top:12px}
+.progress-meta{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-weight:700}
+.progress-bar{height:8px;background:var(--surface2);border-radius:999px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;background:var(--accent);width:0%;transition:width .4s ease;border-radius:999px}
+.dots{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.dots button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:12px;font-weight:800;cursor:pointer;color:var(--muted)}
+.dots button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dots button.done{background:var(--surface2);color:var(--text)}
+/* browser mock */
+.browser{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.browser-bar{display:flex;align-items:center;gap:8px;background:var(--surface2);padding:10px 12px;border-bottom:1px solid var(--line)}
+.dot{width:11px;height:11px;border-radius:50%}
+.url{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.browser-body{padding:22px;min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.mock-app{width:100%;max-width:420px}
+.mock-app h3{font-size:20px}
+.field{text-align:left;margin:10px 0}
+.field label{font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:4px}
+.field div{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--surface2);font-size:14px}
+.mock-btn{display:inline-block;margin-top:12px;background:var(--accent);color:#fff;font-weight:800;border-radius:999px;padding:10px 22px;font-size:14px}
+.avatar{width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 8px}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800}
+.badge.ok{background:var(--green-bg);color:var(--green)} .badge.err{background:var(--red-bg);color:var(--red)} .badge.info{background:var(--blue-bg);color:var(--blue)} .badge.warn{background:var(--amber-bg);color:var(--amber)}
+.data-table{width:100%;border-collapse:collapse;text-align:left;font-size:14px;margin-top:12px}
+.data-table th,.data-table td{border-bottom:1px solid var(--line);padding:8px 6px}
+.token-chip{font-family:ui-monospace,monospace;font-size:11px;word-break:break-all;background:var(--surface2);border:1px dashed var(--line);border-radius:10px;padding:10px;margin-top:12px;text-align:left}
+.err-box{background:var(--red-bg);border:1px solid #fecaca;border-radius:12px;padding:16px}
+@media(prefers-color-scheme:dark){.err-box{border-color:#7f1d1d}}
+/* flow */
+.actors{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 6px}
+.actor{border:1px solid var(--line);border-radius:14px;padding:12px 8px;text-align:center;background:var(--surface2);transition:.3s}
+.actor .icon{font-size:26px;line-height:1}
+.actor .name{font-weight:800;font-size:13.5px;margin-top:4px}
+.actor .sub{font-size:11px;color:var(--muted)}
+.actor.active{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 2px var(--accent) inset}
+.track{position:relative;height:54px;margin:4px 0}
+.track-line{position:absolute;left:4%;right:4%;top:26px;height:2px;background:var(--line)}
+.packet{position:absolute;top:14px;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:999px;white-space:nowrap;transition:left .7s ease, background .3s;max-width:46%;overflow:hidden;text-overflow:ellipsis}
+.packet.bad{background:var(--red)} .packet.ok{background:var(--green)}
+.step-detail{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--surface)}
+.step-detail h3{font-size:17px}
+.step-detail p{margin:6px 0;color:var(--muted);font-size:14.5px}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.http-box{background:#0f172a;color:#e2e8f0;border-radius:12px;padding:14px;font-size:12.5px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin-top:10px;text-align:left}
+.http-box .k{color:#7dd3fc}.http-box .v-red{color:#fda4af}.http-box .v-blue{color:#93c5fd}.http-box .v-green{color:#6ee7b7}
+/* JWT assembly */
+.jwt-parts{display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;margin-top:12px}
+.part{flex:1;min-width:130px;border-radius:12px;padding:12px;border:2px solid}
+.part.h{border-color:var(--header-c);background:var(--red-bg)} .part.p{border-color:var(--payload-c);background:var(--blue-bg)} .part.s{border-color:var(--sig-c);background:var(--green-bg)}
+.part .t{font-weight:900;font-size:13px}.part pre{margin:6px 0 0;font-size:11.5px;white-space:pre-wrap;word-break:break-all}
+.plus{align-self:center;font-size:20px;font-weight:900;color:var(--muted)}
+.jwt-full{font-family:ui-monospace,monospace;font-size:13px;word-break:break-all;background:var(--surface2);border-radius:12px;padding:14px;margin-top:12px;line-height:1.9}
+.seg-h{color:var(--header-c);font-weight:800}.seg-p{color:var(--payload-c);font-weight:800}.seg-s{color:var(--sig-c);font-weight:800}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}.actors{grid-template-columns:repeat(2,1fr)}}
+pre.json{background:#0f172a;color:#e2e8f0;border-radius:12px;padding:14px;font-size:12.5px;overflow-x:auto;margin:8px 0 0}
+pre.json .key{color:#7dd3fc} pre.json .str{color:#fda4af} pre.json .num{color:#fbbf24}
+.callout{border-radius:12px;padding:14px 16px;font-size:14.5px;margin-top:12px}
+.callout.warn{background:var(--amber-bg);border:1px solid #fde68a}
+@media(prefers-color-scheme:dark){.callout.warn{border-color:#92400e}}
+table.cmp{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+table.cmp th,table.cmp td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}
+table.cmp th{background:var(--surface2)}
+ul.tight{margin:6px 0;padding-left:20px} ul.tight li{margin:4px 0;font-size:14.5px}
+.gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
+.gloss div{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--surface2)}
+.gloss b{display:block;margin-bottom:4px}.gloss p{margin:0;font-size:13.5px;color:var(--muted)}
+footer{color:var(--muted);font-size:12.5px;text-align:center;margin-top:28px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>JWTの仕組みアニメーション</h1>
+<p class="lead">JWT（JSON Web Token）は、ログイン後にサーバーが発行する「署名付きの身分証」のような文字列です。ブラウザがリクエストのたびに添えて送り、サーバーは署名を確かめるだけで「本物かどうか」が分かります。8ステップで発行から検証、改ざんが弾かれる様子まで追ってみましょう。</p>
+</header>
+
+<!-- ① 操作ボタン（上） -->
+<section class="card" aria-label="操作">
+<div class="label">STEP CONTROLS</div>
+<div class="controls" data-controls>
+<button data-act="restart">最初から</button>
+<button data-act="prev">← 前へ</button>
+<button data-act="play" class="primary">▶ 再生</button>
+<button data-act="next">次へ →</button>
+<div class="speed"><span>速度</span>
+<button data-speed="0.5">0.5×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button>
+</div>
+</div>
+<div class="progress"><div class="progress-meta"><span data-step-label>ステップ 1 / 8</span><span data-step-title>ログインする</span></div>
+<div class="progress-bar"><div class="progress-fill" data-fill></div></div>
+<div class="dots" data-dots></div></div>
+</section>
+
+<!-- ② 画面でこう見える -->
+<section class="card" aria-label="画面モック">
+<div class="label">画面でこう見える</div>
+<h2>一般的なWebアプリの画面</h2>
+<div class="browser" style="margin-top:12px">
+<div class="browser-bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="url" id="mockUrl">https://example-app.jp/login</span></div>
+<div class="browser-body" id="mockBody"></div>
+</div>
+</section>
+
+<!-- ③ 操作ボタン（下・連動） -->
+<section class="card" aria-label="操作2">
+<div class="controls" data-controls>
+<button data-act="restart">最初から</button>
+<button data-act="prev">← 前へ</button>
+<button data-act="play" class="primary">▶ 再生</button>
+<button data-act="next">次へ →</button>
+<div class="speed"><span>速度</span>
+<button data-speed="0.5">0.5×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button>
+</div>
+</div>
+<div class="progress"><div class="progress-meta"><span data-step-label>ステップ 1 / 8</span><span data-step-title>ログインする</span></div>
+<div class="progress-bar"><div class="progress-fill" data-fill></div></div></div>
+</section>
+
+<!-- ④ 実際の中身のフロー -->
+<section class="card" aria-label="フロー">
+<div class="label">実際の中身</div>
+<h2>裏側では何が起きているか</h2>
+<div class="actors" id="actors">
+<div class="actor" data-actor="0"><div class="icon">🧑</div><div class="name">あなた</div><div class="sub">利用者</div></div>
+<div class="actor" data-actor="1"><div class="icon">🌐</div><div class="name">ブラウザ</div><div class="sub">クライアント</div></div>
+<div class="actor" data-actor="2"><div class="icon">🔐</div><div class="name">認証サーバー</div><div class="sub">ログイン・JWT発行</div></div>
+<div class="actor" data-actor="3"><div class="icon">🗄️</div><div class="name">APIサーバー</div><div class="sub">データ提供・検証</div></div>
+</div>
+<div class="track"><div class="track-line"></div><div class="packet" id="packet">ID・パスワード</div></div>
+<div class="step-detail" id="stepDetail"></div>
+<div id="assembly"></div>
+</section>
+
+<!-- ⑤ 補足：分解図 -->
+<section class="card">
+<div class="label">補足 1</div>
+<h2>JWTの分解図 — 3つの部分</h2>
+<p style="color:var(--muted);font-size:14.5px">JWTはドットで区切られた3つの文字列です。各部分はJSONなどを Base64URL で符号化したもの。</p>
+<div class="jwt-full"><span class="seg-h">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9</span>.<span class="seg-p">eyJpc3MiOiJhdXRoLmV4YW1wbGUuanAiLCJzdWIiOiJ1c2VyXzQyIiwicm9sZSI6InVzZXIiLCJpYXQiOjE3NjMzNjQ4MDAsImV4cCI6MTc2MzM2ODQwMH0</span>.<span class="seg-s">SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c</span></div>
+<div class="grid2" style="margin-top:14px">
+<div><h3 style="color:var(--header-c)">① ヘッダー（赤）</h3><p style="font-size:13.5px;color:var(--muted);margin:4px 0">署名の方式などを書く部分。</p>
+<pre class="json">{
+  <span class="key">"alg"</span>: <span class="str">"HS256"</span>,
+  <span class="key">"typ"</span>: <span class="str">"JWT"</span>
+}</pre></div>
+<div><h3 style="color:var(--payload-c)">② ペイロード（青）</h3><p style="font-size:13.5px;color:var(--muted);margin:4px 0">ユーザー情報や有効期限（クレーム）を書く部分。</p>
+<pre class="json">{
+  <span class="key">"iss"</span>: <span class="str">"auth.example.jp"</span>,
+  <span class="key">"sub"</span>: <span class="str">"user_42"</span>,
+  <span class="key">"role"</span>: <span class="str">"user"</span>,
+  <span class="key">"iat"</span>: <span class="num">1763364800</span>,
+  <span class="key">"exp"</span>: <span class="num">1763368400</span>
+}</pre></div>
+</div>
+<h3 style="color:var(--sig-c);margin-top:14px">③ 署名（緑）</h3>
+<p style="font-size:14.5px;color:var(--muted);margin:4px 0">署名 = HMACSHA256( Base64URL(ヘッダー) + "." + Base64URL(ペイロード), 鍵 )。ヘッダーとペイロードを鍵で計算した結果で、1文字でも書き換えると一致しなくなります。</p>
+<div class="callout warn"><b>⚠ 大事な誤解ポイント：</b>ペイロードは<strong>暗号化されていません</strong>。Base64URLは「符号化（エンコード）」にすぎず、誰でもデコードして中身を読めます。署名の役割は「隠すこと」ではなく「<strong>改ざんを検知すること</strong>」。だからパスワードや個人情報など、見られて困る情報をペイロードに入れてはいけません。</div>
+</section>
+
+<section class="card">
+<div class="label">補足 2</div>
+<h2>署名方式の比較：HS256 と RS256</h2>
+<div style="overflow-x:auto">
+<table class="cmp"><tr><th></th><th>HS256（HMAC）</th><th>RS256（RSA署名）</th></tr>
+<tr><th>鍵</th><td>共通鍵（1つの秘密の文字列）</td><td>秘密鍵と公開鍵のペア</td></tr>
+<tr><th>署名する側</th><td>共通鍵を持つ認証サーバー</td><td>秘密鍵を持つ認証サーバーだけ</td></tr>
+<tr><th>検証する側</th><td>同じ共通鍵が必要</td><td>公開鍵で検証できる</td></tr>
+<tr><th>向いている場面</th><td>発行も検証も同じシステム内</td><td>検証するサーバーが複数ある／外部サービスと連携</td></tr>
+<tr><th>注意点</th><td>共通鍵が漏れると誰でも偽造できる。検証側にも鍵を配る必要がある</td><td>公開鍵は配っても安全。鍵管理の仕組みはやや複雑</td></tr></table>
+</div>
+</section>
+
+<section class="card">
+<div class="label">補足 3</div>
+<h2>セッション方式との違い</h2>
+<div class="grid2">
+<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><h3>セッション方式</h3><ul class="tight">
+<li>サーバー側にログイン状態（セッション）を保存する</li>
+<li>ブラウザにはランダムなセッションIDだけを渡す</li>
+<li>ログアウトや強制失効がすぐできる</li>
+<li>サーバーが増えるとセッションの共有が必要になる</li></ul></div>
+<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><h3>JWT方式</h3><ul class="tight">
+<li>サーバー側に状態を持たない（<b>ステートレス</b>）</li>
+<li>検証は署名チェックだけで完結し、DB照会が不要</li>
+<li>サーバーを増やしてもそのままスケールしやすい</li>
+<li>有効期限が切れるまで<strong>失効させにくい</strong>（盗まれたら期限まで有効）→ 対策として有効期限を短くし、リフレッシュトークンと組み合わせるのが定番</li></ul></div>
+</div>
+</section>
+
+<section class="card">
+<div class="label">補足 4</div>
+<h2>JWTの保管場所と注意点</h2>
+<table class="cmp"><tr><th>保管場所</th><th>特徴と注意</th></tr>
+<tr><td><b>localStorage</b></td><td>実装は簡単だが、JavaScriptから読み取れるため <b>XSS（クロスサイトスクリプティング）攻撃で盗まれやすい</b>。機密性の高い用途では避けるのが無難。</td></tr>
+<tr><td><b>HttpOnly Cookie</b></td><td>JavaScriptから読めないためXSSで盗まれにくい。一方でリクエストに自動送信されるため、<b>CSRF対策（SameSite属性やCSRFトークン）とセット</b>で使う。</td></tr>
+<tr><td><b>メモリ内（変数）</b></td><td>最も盗まれにくいが、ページを再読み込みすると消える。リフレッシュトークンで再取得する設計と組み合わせることが多い。</td></tr></table>
+<ul class="tight" style="margin-top:10px">
+<li>有効期限（exp）は短めに設定し、自動更新の仕組みを用意する</li>
+<li>HTTPSで送ることを前提にする（平文HTTPでは盗聴される）</li>
+<li>サーバー側は <code>alg</code> を鵜呑みにせず、想定した署名方式だけを許可する（<code>alg: none</code> 攻撃対策）</li>
+</ul>
+</section>
+
+<section class="card">
+<div class="label">補足 5</div>
+<h2>用語解説</h2>
+<div class="gloss">
+<div><b>クレーム（Claim）</b><p>ペイロードに書かれる情報の項目。iss（発行者）、sub（対象ユーザー）、exp（有効期限）、iat（発行時刻）など。カスタム項目（roleなど）も追加できる。</p></div>
+<div><b>Base64URL</b><p>データをURLに載せても安全な文字だけで表す符号化方式。通常のBase64の「+」「/」を「-」「_」に置き換え、末尾の「=」を省く。暗号化ではない。</p></div>
+<div><b>Bearerトークン</b><p>「持っている人（Bearer）が本人」とみなすタイプのトークン。だからこそ盗まれると悪用される。HTTPでは <code>Authorization: Bearer &lt;JWT&gt;</code> の形で送る。</p></div>
+<div><b>署名（Signature）</b><p>ヘッダーとペイロードを鍵で計算した値。中身が1文字でも変われば署名は一致しなくなり、改ざんを検知できる。</p></div>
+</div>
+</section>
+
+<footer>JWTの仕組みアニメーション — 認証アニメーションシリーズ（パスキー / OIDC / OAuth 2.0 に続く1本）</footer>
+</div>
+
+<script>
+var JWT_SHORT = '<span class="seg-h">eyJhbGciOiJIUzI1NiIs…</span>.<span class="seg-p">eyJpc3MiOiJhdXRo…</span>.<span class="seg-s">SflKxwRJSMeK…</span>';
+var steps = [
+ {title:'ログインする', packet:'ID・パスワード', from:12, to:62, actors:[0,1,2], cls:'',
+  detail:'<h3>STEP 1 — ログイン（ID・パスワードを認証サーバーへ）</h3><p>あなたが入力したIDとパスワードを、ブラウザが認証サーバーへ送ります。この通信はHTTPSで暗号化されるのが前提です。</p><div class="http-box">POST /login HTTP/1.1\nHost: auth.example.jp\n\n{ "id": "user_42", "password": "••••••••" }</div>',
+  mock:'login', url:'https://example-app.jp/login'},
+ {title:'JWTが組み立てられる', packet:'ヘッダー＋ペイロード＋署名', from:62, to:62, actors:[2], cls:'',
+  detail:'<h3>STEP 2 — 認証OK → JWTを組み立てる</h3><p>パスワードが正しければ、認証サーバーがJWTを発行します。ヘッダー（署名方式）とペイロード（ユーザー情報・有効期限）を Base64URL 化し、最後に鍵で計算した「署名」を付けます。3つが合体して1本の文字列になります。</p>',
+  mock:'issue', url:'https://example-app.jp/login', assembly:true},
+ {title:'JWTが返り、保存される', packet:'JWT', from:62, to:37, actors:[1,2], cls:'',
+  detail:'<h3>STEP 3 — JWTがクライアントに返り、保存される</h3><p>発行されたJWTはブラウザに返され、保存されます（保存先の選択肢と注意点は下の補足4参照）。以降、ログイン状態の証明はこのJWTが担います。サーバー側はセッションを保存しません。</p><div class="token-chip">'+JWT_SHORT+'</div>',
+  mock:'stored', url:'https://example-app.jp/home'},
+ {title:'APIリクエストにJWTを添える', packet:'Authorization: Bearer …', from:37, to:87, actors:[1,3], cls:'',
+  detail:'<h3>STEP 4 — APIリクエストに Bearer ヘッダーで添える</h3><p>データが欲しいとき、ブラウザは保存したJWTを <code>Authorization</code> ヘッダーに入れてAPIサーバーへ送ります。「Bearer」は「このトークンの持ち主です」という意味です。</p><div class="http-box">GET /api/profile HTTP/1.1\nHost: api.example.jp\n<span class="k">Authorization:</span> Bearer <span class="v-red">eyJhbGci…</span>.<span class="v-blue">eyJpc3Mi…</span>.<span class="v-green">SflKxwR…</span></div>',
+  mock:'request', url:'https://example-app.jp/home'},
+ {title:'署名を検証する', packet:'署名を再計算して照合', from:87, to:87, actors:[3], cls:'',
+  detail:'<h3>STEP 5 — APIサーバーが署名を検証する</h3><p>APIサーバーは、受け取ったヘッダーとペイロードに対して、発行時と同じ鍵・同じ計算を行い、署名を再計算します。届いた署名と一致すれば「発行後に書き換えられていない」ことが証明されます。DBへの問い合わせは不要です。</p>',
+  mock:'verify', url:'https://example-app.jp/home'},
+ {title:'有効期限などのクレーム確認', packet:'exp をチェック', from:87, to:87, actors:[3], cls:'',
+  detail:'<h3>STEP 6 — 有効期限（exp）などのクレームを確認する</h3><p>署名が正しくても、期限切れなら使えません。<code>exp</code>（有効期限）が現在時刻より後か、<code>iss</code>（発行者）が想定した認証サーバーか、などをペイロードのクレームで確認します。</p><div class="http-box">exp: 1763368400 （有効期限）\nnow: 1763365000 （現在時刻）\n→ exp &gt; now なので <span class="v-green">有効 ✓</span></div>',
+  mock:'verify', url:'https://example-app.jp/home'},
+ {title:'データを返す', packet:'プロフィールデータ', from:87, to:37, actors:[1,3], cls:'ok',
+  detail:'<h3>STEP 7 — 検証OK → データを返す</h3><p>署名も期限も問題なければ、APIサーバーは要求されたデータを返します。ブラウザはそれを画面に表示します。これがJWTを使ったAPI認可の基本の流れです。</p>',
+  mock:'data', url:'https://example-app.jp/home'},
+ {title:'改ざんデモ：書き換えると拒否', packet:'改ざんしたJWT', from:37, to:87, actors:[1,3], cls:'bad',
+  detail:'<h3>STEP 8 — 改ざんデモ：role を user → admin に書き換えたら？</h3><p>ペイロードは誰でも読めて書き換えられます。試しに <code>role</code> を <code>"user"</code> から <code>"admin"</code> に変えて送ってみます。でも署名は元の内容で計算されたものなので、サーバーが再計算した署名と<strong>一致せず</strong>、リクエストは 401 エラーで拒否されます。これが署名による改ざん検知です。</p><div class="http-box">再計算した署名: X9k2… ≠ 届いた署名: SflK…\n→ <span class="v-red">署名不一致につき拒否（401 Unauthorized）</span></div>',
+  mock:'error', url:'https://example-app.jp/home'}
+];
+var mocks = {
+ login:'<div class="mock-app"><h3>ログイン</h3><p style="color:var(--muted);font-size:13.5px">サンプルWebアプリ</p><div class="field"><label>ID</label><div>user_42</div></div><div class="field"><label>パスワード</label><div>••••••••</div></div><span class="mock-btn">ログイン</span></div>',
+ issue:'<div class="mock-app"><div class="avatar">⏳</div><h3>認証中…</h3><p style="color:var(--muted);font-size:14px">認証サーバーが確認しています</p><span class="badge info">認証 OK → JWTを発行中</span></div>',
+ stored:'<div class="mock-app"><div class="avatar">✓</div><h3>ログインしました</h3><p style="color:var(--muted);font-size:14px">ようこそ、user_42 さん</p><span class="badge ok">JWTを保存しました</span><div class="token-chip">'+JWT_SHORT+'</div></div>',
+ request:'<div class="mock-app"><div class="avatar">👤</div><h3>マイページ</h3><p style="color:var(--muted);font-size:14px">プロフィールを読み込んでいます…</p><span class="badge info">JWTを添えてAPIにリクエスト中</span></div>',
+ verify:'<div class="mock-app"><div class="avatar">🔍</div><h3>マイページ</h3><p style="color:var(--muted);font-size:14px">APIサーバーがJWTを検証しています…</p><span class="badge warn">署名と有効期限をチェック中</span></div>',
+ data:'<div class="mock-app"><div class="avatar">👤</div><h3>マイページ</h3><span class="badge ok">検証 OK</span><table class="data-table"><tr><th>名前</th><td>サンプル太郎</td></tr><tr><th>権限（role）</th><td>user</td></tr><tr><th>プラン</th><td>スタンダード</td></tr></table><p style="color:var(--muted);font-size:12.5px">APIから返ってきたデータが表示されました</p></div>',
+ error:'<div class="mock-app"><div class="err-box"><h3 style="color:var(--red)">⚠ アクセスが拒否されました</h3><p style="font-size:14px;margin:6px 0">401 Unauthorized — トークンの署名が一致しません</p><span class="badge err">改ざんを検知して拒否</span></div><p style="color:var(--muted);font-size:13px;margin-top:12px">role を admin に書き換えたJWTは使えませんでした</p></div>'
+};
+var assemblyHTML = '<div class="jwt-parts"><div class="part h"><div class="t">ヘッダー</div><pre>{"alg":"HS256","typ":"JWT"}</pre></div><span class="plus">+</span><div class="part p"><div class="t">ペイロード</div><pre>{"sub":"user_42","role":"user","exp":…}</pre></div><span class="plus">+</span><div class="part s"><div class="t">署名</div><pre>鍵で計算した値</pre></div></div><div class="jwt-full"><span class="seg-h">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9</span>.<span class="seg-p">eyJpc3MiOiJhdXRo…</span>.<span class="seg-s">SflKxwRJSMeK…</span><div style="font-size:12px;color:var(--muted);font-family:system-ui">↑ ドットでつながって1本のJWTになる</div></div>';
+
+var cur=0, playing=false, timer=null, speed=1;
+var dotsWrap=document.querySelector('[data-dots]');
+steps.forEach(function(s,i){var b=document.createElement('button');b.textContent=i+1;b.setAttribute('aria-label','ステップ'+(i+1));b.addEventListener('click',function(){stop();go(i);});dotsWrap.appendChild(b);});
+
+function render(){
+  var s=steps[cur];
+  document.querySelectorAll('[data-step-label]').forEach(function(e){e.textContent='ステップ '+(cur+1)+' / '+steps.length;});
+  document.querySelectorAll('[data-step-title]').forEach(function(e){e.textContent=s.title;});
+  document.querySelectorAll('[data-fill]').forEach(function(e){e.style.width=((cur+1)/steps.length*100)+'%';});
+  Array.prototype.forEach.call(dotsWrap.children,function(b,i){b.className=i===cur?'on':(i<cur?'done':'');});
+  document.getElementById('mockBody').innerHTML=mocks[s.mock];
+  document.getElementById('mockUrl').textContent=s.url;
+  document.getElementById('stepDetail').innerHTML=s.detail;
+  document.getElementById('assembly').innerHTML=s.assembly?assemblyHTML:'';
+  var pk=document.getElementById('packet');
+  pk.textContent=s.packet; pk.className='packet'+(s.cls?' '+s.cls:'');
+  pk.style.left=s.from+'%';
+  requestAnimationFrame(function(){requestAnimationFrame(function(){pk.style.left=s.to+'%';});});
+  document.querySelectorAll('.actor').forEach(function(a){a.classList.toggle('active', s.actors.indexOf(+a.dataset.actor)>=0);});
+}
+function go(i){cur=Math.max(0,Math.min(steps.length-1,i));render();}
+function stop(){playing=false;if(timer){clearInterval(timer);timer=null;}syncPlay();}
+function syncPlay(){document.querySelectorAll('[data-act="play"]').forEach(function(b){b.textContent=playing?'⏸ 一時停止':'▶ 再生';});}
+function play(){
+  if(playing){stop();return;}
+  if(cur>=steps.length-1){cur=0;}
+  playing=true;syncPlay();render();
+  timer=setInterval(function(){ if(cur>=steps.length-1){stop();return;} cur++; render(); if(cur>=steps.length-1){stop();} }, 3400/speed);
+}
+document.querySelectorAll('[data-controls]').forEach(function(w){
+  w.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    if(b.dataset.act==='play')play();
+    else if(b.dataset.act==='next'){stop();go(cur+1);}
+    else if(b.dataset.act==='prev'){stop();go(cur-1);}
+    else if(b.dataset.act==='restart'){stop();go(0);}
+    else if(b.dataset.speed){speed=parseFloat(b.dataset.speed);document.querySelectorAll('[data-speed]').forEach(function(x){x.classList.toggle('on',x===b||x.dataset.speed===b.dataset.speed);}); if(playing){stop();play();}}
+  });
+});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){stop();go(cur+1);}if(e.key==='ArrowLeft'){stop();go(cur-1);}});
+render();
+</script>
+</body>
+</html>

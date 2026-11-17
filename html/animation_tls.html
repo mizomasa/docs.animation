@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>TLS（HTTPS）の仕組みアニメーション</title>
+<style>
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --surface2:#eef1f4; --text:#17202a; --muted:#5b6b7a; --line:#dde3e8;
+  --accent:#0f766e; --accent2:#0e7490; --red:#dc2626; --red-bg:#fef2f2; --blue:#2563eb; --blue-bg:#eff6ff;
+  --green:#059669; --green-bg:#ecfdf5; --amber:#d97706; --amber-bg:#fffbeb;
+  --shadow:0 8px 30px rgba(15,23,42,.08); --radius:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f1419; --surface:#171e26; --surface2:#1e2833; --text:#e6edf3; --muted:#9aa8b5; --line:#2a3644; --red-bg:#2a1215; --blue-bg:#12233d; --green-bg:#0d2a22; --amber-bg:#2e2110; --shadow:0 8px 30px rgba(0,0,0,.35);}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;line-height:1.65}
+.wrap{max-width:1020px;margin:0 auto;padding:20px 16px 56px}
+h1{font-size:clamp(26px,5vw,38px);line-height:1.25;margin:6px 0 8px;letter-spacing:-.02em}
+.lead{color:var(--muted);font-size:15.5px;max-width:720px;margin:0}
+h2{font-size:20px;margin:0 0 6px} h3{font-size:16px;margin:0 0 6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-top:18px}
+.label{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:8px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls button{min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-weight:700;font-size:14px;cursor:pointer}
+.controls button.primary{background:var(--accent);color:#fff;border-color:var(--accent);min-width:92px}
+.controls button:active{transform:scale(.98)}
+.speed{display:flex;gap:4px;margin-left:auto;align-items:center}
+.speed span{font-size:12px;color:var(--muted);font-weight:700}
+.speed button{min-height:36px;padding:0 10px;font-size:13px}
+.speed button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+.progress{margin-top:12px}
+.progress-meta{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-weight:700}
+.progress-bar{height:8px;background:var(--surface2);border-radius:999px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;background:var(--accent);width:0%;transition:width .4s ease;border-radius:999px}
+.dots{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.dots button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:12px;font-weight:800;cursor:pointer;color:var(--muted)}
+.dots button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dots button.done{background:var(--surface2);color:var(--text)}
+/* browser mock */
+.browser{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.browser-bar{display:flex;align-items:center;gap:8px;background:var(--surface2);padding:10px 12px;border-bottom:1px solid var(--line)}
+.dot{width:11px;height:11px;border-radius:50%;flex:none}
+.url{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lock{font-size:13px;flex:none}
+.browser-body{padding:22px;min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.mock-app{width:100%;max-width:440px}
+.mock-app h3{font-size:20px}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800}
+.badge.ok{background:var(--green-bg);color:var(--green)} .badge.err{background:var(--red-bg);color:var(--red)} .badge.info{background:var(--blue-bg);color:var(--blue)} .badge.warn{background:var(--amber-bg);color:var(--amber)}
+.avatar{width:52px;height:52px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 8px}
+.cert-card{border:1px solid var(--line);border-radius:12px;padding:14px;text-align:left;background:var(--surface2);margin-top:12px;font-size:13.5px}
+.cert-card b.t{display:block;font-size:14px;margin-bottom:6px}
+.cert-card table{width:100%;border-collapse:collapse}
+.cert-card th,.cert-card td{padding:4px 4px;vertical-align:top}
+.cert-card th{color:var(--muted);font-weight:700;white-space:nowrap;padding-right:10px}
+.check-list{list-style:none;margin:12px 0 0;padding:0;text-align:left;font-size:14px}
+.check-list li{padding:6px 0;border-bottom:1px solid var(--line)}
+.err-box{background:var(--red-bg);border:1px solid #fecaca;border-radius:12px;padding:16px}
+@media(prefers-color-scheme:dark){.err-box{border-color:#7f1d1d}}
+.cipher{font-family:ui-monospace,monospace;font-size:11.5px;word-break:break-all;background:var(--surface2);border:1px dashed var(--line);border-radius:10px;padding:10px;margin-top:12px;text-align:left;color:var(--muted)}
+/* flow */
+.actors{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 6px}
+.actor{border:1px solid var(--line);border-radius:14px;padding:12px 8px;text-align:center;background:var(--surface2);transition:.3s}
+.actor .icon{font-size:26px;line-height:1}
+.actor .name{font-weight:800;font-size:13.5px;margin-top:4px}
+.actor .sub{font-size:11px;color:var(--muted)}
+.actor.active{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 2px var(--accent) inset}
+.track{position:relative;height:54px;margin:4px 0}
+.track-line{position:absolute;left:4%;right:4%;top:26px;height:2px;background:var(--line)}
+.packet{position:absolute;top:14px;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:999px;white-space:nowrap;transition:left .7s ease, background .3s;max-width:46%;overflow:hidden;text-overflow:ellipsis}
+.packet.bad{background:var(--red)} .packet.ok{background:var(--green)}
+.step-detail{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--surface)}
+.step-detail h3{font-size:17px}
+.step-detail p{margin:6px 0;color:var(--muted);font-size:14.5px}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.http-box{background:#0f172a;color:#e2e8f0;border-radius:12px;padding:14px;font-size:12.5px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin-top:10px;text-align:left}
+.http-box .k{color:#7dd3fc}.http-box .ok{color:#6ee7b7}.http-box .bad{color:#fda4af}.http-box .dim{color:#94a3b8}
+.key-visual{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.key-visual .kv{flex:1;min-width:150px;border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface2);font-size:13.5px}
+.key-visual .kv b{display:block;font-size:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}.actors{grid-template-columns:repeat(2,1fr)}}
+.callout{border-radius:12px;padding:14px 16px;font-size:14.5px;margin-top:12px}
+.callout.warn{background:var(--amber-bg);border:1px solid #fde68a}
+.callout.info{background:var(--blue-bg);border:1px solid #bfdbfe}
+@media(prefers-color-scheme:dark){.callout.warn{border-color:#92400e}.callout.info{border-color:#1e40af}}
+table.cmp{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+table.cmp th,table.cmp td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}
+table.cmp th{background:var(--surface2)}
+ul.tight{margin:6px 0;padding-left:20px} ul.tight li{margin:4px 0;font-size:14.5px}
+.gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
+.gloss div{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--surface2)}
+.gloss b{display:block;margin-bottom:4px}.gloss p{margin:0;font-size:13.5px;color:var(--muted)}
+.chain{display:flex;flex-direction:column;gap:0;margin-top:12px}
+.chain .node{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--surface2);font-size:14px}
+.chain .node b{font-size:15px}
+.chain .arrow{text-align:center;color:var(--muted);font-size:13px;padding:3px 0}
+footer{color:var(--muted);font-size:12.5px;text-align:center;margin-top:28px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>TLS（HTTPS）の仕組みアニメーション</h1>
+<p class="lead">アドレスバーの「🔒」の裏側では、ページが表示される前に「ハンドシェイク」という短い交渉が行われています。相手が本物か確かめ、盗聴できない暗号化の鍵を二人だけで作る——その流れを TLS 1.3 の9ステップで追ってみましょう。</p>
+</header>
+
+<!-- ① 操作ボタン（上） -->
+<section class="card" aria-label="操作">
+<div class="label">STEP CONTROLS</div>
+<div class="controls" data-controls>
+<button data-act="restart">最初から</button>
+<button data-act="prev">← 前へ</button>
+<button data-act="play" class="primary">▶ 再生</button>
+<button data-act="next">次へ →</button>
+<div class="speed"><span>速度</span>
+<button data-speed="0.5">0.5×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button>
+</div>
+</div>
+<div class="progress"><div class="progress-meta"><span data-step-label>ステップ 1 / 9</span><span data-step-title>https のURLへアクセス</span></div>
+<div class="progress-bar"><div class="progress-fill" data-fill></div></div>
+<div class="dots" data-dots></div></div>
+</section>
+
+<!-- ② 画面でこう見える -->
+<section class="card" aria-label="画面モック">
+<div class="label">画面でこう見える</div>
+<h2>ブラウザの画面</h2>
+<div class="browser" style="margin-top:12px">
+<div class="browser-bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="lock" id="mockLock">⏳</span><span class="url" id="mockUrl">https://shop.example.jp/</span></div>
+<div class="browser-body" id="mockBody"></div>
+</div>
+</section>
+
+<!-- ③ 操作ボタン（下・連動） -->
+<section class="card" aria-label="操作2">
+<div class="controls" data-controls>
+<button data-act="restart">最初から</button>
+<button data-act="prev">← 前へ</button>
+<button data-act="play" class="primary">▶ 再生</button>
+<button data-act="next">次へ →</button>
+<div class="speed"><span>速度</span>
+<button data-speed="0.5">0.5×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button>
+</div>
+</div>
+<div class="progress"><div class="progress-meta"><span data-step-label>ステップ 1 / 9</span><span data-step-title>https のURLへアクセス</span></div>
+<div class="progress-bar"><div class="progress-fill" data-fill></div></div></div>
+</section>
+
+<!-- ④ 実際の中身のフロー -->
+<section class="card" aria-label="フロー">
+<div class="label">実際の中身</div>
+<h2>裏側では何が起きているか（TLS 1.3 ハンドシェイク）</h2>
+<div class="actors" id="actors">
+<div class="actor" data-actor="0"><div class="icon">🧑</div><div class="name">あなた</div><div class="sub">利用者</div></div>
+<div class="actor" data-actor="1"><div class="icon">🌐</div><div class="name">ブラウザ</div><div class="sub">クライアント</div></div>
+<div class="actor" data-actor="2"><div class="icon">🖥️</div><div class="name">Webサーバー</div><div class="sub">shop.example.jp</div></div>
+<div class="actor" data-actor="3"><div class="icon">🏛️</div><div class="name">認証局（CA）</div><div class="sub">証明書を発行・署名</div></div>
+</div>
+<div class="track"><div class="track-line"></div><div class="packet" id="packet">https:// へ接続開始</div></div>
+<div class="step-detail" id="stepDetail"></div>
+<div id="extra"></div>
+</section>
+
+<!-- ⑤ 補足 -->
+<section class="card">
+<div class="label">補足 1</div>
+<h2>公開鍵暗号と共通鍵暗号の役割分担</h2>
+<p style="color:var(--muted);font-size:14.5px">TLSは2種類の暗号方式を「いいとこ取り」で組み合わせています。安全だけど遅い方式は最初の鍵作りだけに使い、速い方式で本文を運びます。</p>
+<table class="cmp"><tr><th></th><th>公開鍵方式（非対称暗号）</th><th>共通鍵方式（対称暗号）</th></tr>
+<tr><th>鍵</th><td>公開鍵と秘密鍵のペア。片方で暗号化／署名したものは、もう片方でしか復号／検証できない</td><td>暗号化と復号に同じ1つの鍵を使う</td></tr>
+<tr><th>速さ</th><td>遅い（大きなデータには不向き）</td><td>速い（動画や大きなファイルでも実用的）</td></tr>
+<tr><th>TLSでの役割</th><td>ハンドシェイク：証明書の署名検証と、鍵交換の材料の正しさの担保</td><td>本通信：作ったセッションキーでHTTPの中身を丸ごと暗号化</td></tr>
+<tr><th>たとえると</th><td>実印と印鑑証明（本人確認の仕組み）</td><td>合鍵（持っている者同士だけが開けられる）</td></tr></table>
+<div class="callout info"><b>ポイント：</b>TLS 1.3の鍵交換は「一時的な鍵ペア」をその場で作って使う方式（ECDHE）が必須です。だからサーバーの秘密鍵が将来漏れても、過去の通信は解読できません。これが<b>前方秘匿性（Forward Secrecy）</b>です（詳しくは用語解説）。</div>
+</section>
+
+<section class="card">
+<div class="label">補足 2</div>
+<h2>証明書の中身と「信頼の連鎖」</h2>
+<p style="color:var(--muted);font-size:14.5px">サーバー証明書は「このドメインの運営者は、この公開鍵の持ち主です」とCA（認証局）が署名したデータです。ブラウザは署名の連鎖をたどって、最終的に自分の持つルートCAまで行き着けば「信頼できる」と判断します。</p>
+<div class="chain">
+<div class="node"><b>🏛️ ルートCA証明書</b> — ブラウザ／OSに最初から組み込まれている「信頼の起点」。自己署名だが、配布元（ブラウザベンダー等）が審査して収録している。</div>
+<div class="arrow">⬇ ルートCAの秘密鍵で署名</div>
+<div class="node"><b>🏢 中間CA証明書</b> — 実務でサーバー証明書に署名するのは中間CA。ルートの鍵を普段使いしないことで、万一の漏えいリスクを下げる。</div>
+<div class="arrow">⬇ 中間CAの秘密鍵で署名</div>
+<div class="node"><b>🖥️ サーバー証明書</b> — ハンドシェイクで実際に送られてくるもの。ドメイン名・公開鍵・有効期限・発行したCAの署名が入っている。</div>
+</div>
+<h3 style="margin-top:16px">サーバー証明書の中身（例）</h3>
+<table class="cmp">
+<tr><th>コモンネーム／SAN</th><td>shop.example.jp（対象ドメイン。複数書ける欄が SAN）</td></tr>
+<tr><th>公開鍵</th><td>このサーバーの公開鍵（対応する秘密鍵はサーバーだけが持つ）</td></tr>
+<tr><th>有効期限</th><td>発行日〜失効日。期限切れは警告になる</td></tr>
+<tr><th>発行者（Issuer）</th><td>署名した中間CAの名前</td></tr>
+<tr><th>CAの署名</th><td>上記の内容をCAの秘密鍵で署名した値。改ざん検知と発行元の証明を兼ねる</td></tr>
+</table>
+</section>
+
+<section class="card">
+<div class="label">補足 3</div>
+<h2>TLS 1.2 と 1.3 の違い</h2>
+<table class="cmp"><tr><th></th><th>TLS 1.2</th><th>TLS 1.3</th></tr>
+<tr><th>ハンドシェイクの往復</th><td>2往復（2-RTT）してから本通信</td><td><b>1往復（1-RTT）</b>に短縮。ClientHelloの時点で鍵交換の材料を先送りする</td></tr>
+<tr><th>使える暗号</th><td>古くて弱い方式も交渉次第で選べてしまう</td><td>危ない方式は仕様から削除。前方秘匿性のある鍵交換が必須</td></tr>
+<tr><th>暗号化の開始</th><td>ハンドシェイクの後半は平文のまま</td><td>ServerHelloの直後から暗号化され、証明書も暗号化されて送られる</td></tr>
+<tr><th>再接続</th><td>セッション再開の仕組みが別途必要</td><td><b>0-RTT</b>：再接続時は最初の送信と同時にデータも送れる（下記の注意点あり）</td></tr></table>
+<div class="callout warn"><b>⚠ 0-RTTの注意点：</b>0-RTTで送ったデータには<b>リプレイ攻撃</b>への耐性がありません。盗聴者がそのデータをコピーして再送すると、サーバー側で二重に処理される恐れがあります。そのため0-RTTは「何度送られても困らないリクエスト（GETなど）」に限るのが原則です。</div>
+</section>
+
+<section class="card">
+<div class="label">補足 4</div>
+<h2>「暗号化・完全性・認証」— 何が何を守っているか</h2>
+<table class="cmp"><tr><th>守るもの</th><th>意味</th><th>TLSのどの仕組みか</th></tr>
+<tr><td><b>暗号化</b>（機密性）</td><td>途中で盗み見ても中身が分からない</td><td>セッションキーによる共通鍵暗号（AES-GCM / ChaCha20-Poly1305）</td></tr>
+<tr><td><b>完全性</b></td><td>途中で書き換えられたら検知できる</td><td>AEAD暗号に組み込まれた認証タグ（改ざんすると復号自体が失敗する）＋ Finished の検証値</td></tr>
+<tr><td><b>認証</b></td><td>相手が本物のサーバーだと確認できる</td><td>証明書とCAの署名チェーンの検証 ＋ 秘密鍵の保有証明（CertificateVerify）</td></tr></table>
+<p style="color:var(--muted);font-size:14.5px">この3つがそろって初めて「安全な通信」と言えます。暗号化だけでは、接続先が偽物でも気づけません。</p>
+</section>
+
+<section class="card">
+<div class="label">補足 5</div>
+<h2>用語解説</h2>
+<div class="gloss">
+<div><b>暗号スイート（Cipher Suite）</b><p>使う暗号方式の組み合わせの名前。TLS 1.3では <code>TLS_AES_128_GCM_SHA256</code> のように「共通鍵暗号＋ハッシュ関数」の組だけを指すようになった。</p></div>
+<div><b>前方秘匿性（Forward Secrecy）</b><p>サーバーの秘密鍵が将来漏れても、過去に録画された通信を解読できない性質。接続ごとに一時的な鍵ペアで鍵交換するために実現する。</p></div>
+<div><b>SNI（Server Name Indication）</b><p>1台のサーバー（1つのIPアドレス）で複数のドメインを運営している場合に、ClientHelloで「どのドメイン宛か」を伝える仕組み。証明書の選択に使う。平文で送られる点がプライバシー上の課題で、暗号化するECHという拡張も進んでいる。</p></div>
+<div><b>ハンドシェイク</b><p>本通信の前に、方式の交渉・相手の確認・鍵の材料交換を行う一連のやり取り。TLS 1.3では1往復で完了する。</p></div>
+<div><b>セッションキー（共通鍵）</b><p>ハンドシェイクの材料から両者が各自に計算して得る、その接続専用の一時的な鍵。鍵そのものがネットワークを流れることはない。</p></div>
+<div><b>自己署名証明書</b><p>CAではなくサーバー自身が自分の鍵で署名した証明書。信頼の連鎖がたどれないため、ブラウザは警告を出す。開発環境など限られた用途でのみ使う。</p></div>
+</div>
+</section>
+
+<footer>TLS（HTTPS）の仕組みアニメーション — 認証アニメーションシリーズ（パスキー / OIDC / OAuth 2.0 / JWT に続く1本）</footer>
+</div>
+
+<script>
+var steps = [
+ {title:'https のURLへアクセス', packet:'https:// へ接続開始', from:12, to:37, actors:[0,1], cls:'', lock:'⏳',
+  detail:'<h3>STEP 1 — https のURLへアクセスを開始する</h3><p>あなたがリンクをクリックしたり、アドレスバーに <code>https://shop.example.jp/</code> と入力したりすると、ブラウザはまずサーバーとの間にTCP接続を張り、続いてTLSの交渉（ハンドシェイク）を始めます。<code>https</code> の「s」は、このTLSによる保護を使うという指定です。</p><div class="http-box"><span class="dim"># まだ暗号化は始まっていない。これから交渉する</span>\n接続先: shop.example.jp : 443</div>',
+  mock:'start', url:'https://shop.example.jp/'},
+ {title:'ClientHello を送る', packet:'ClientHello', from:37, to:62, actors:[1,2], cls:'', lock:'⏳',
+  detail:'<h3>STEP 2 — ClientHello：ブラウザからの提案</h3><p>ブラウザが「私が話せる方式はこれです」とサーバーに名乗り出ます。対応するTLSバージョン、使える暗号スイートの候補、そして鍵交換のための材料（ブラウザがその場で作った一時的な公開鍵＝ key_share）を一緒に送ります。宛先ドメイン名（SNI）もここで伝えます。</p><div class="http-box">ClientHello\n  version:      TLS 1.3 対応\n  cipher_suites: TLS_AES_128_GCM_SHA256, TLS_CHACHA20_POLY1305_SHA256, …\n  key_share:    <span class="k">ブラウザの一時公開鍵（材料①）</span>\n  server_name:  shop.example.jp （SNI）</div>',
+  mock:'hello', url:'https://shop.example.jp/'},
+ {title:'ServerHello が返る', packet:'ServerHello', from:62, to:37, actors:[1,2], cls:'', lock:'⏳',
+  detail:'<h3>STEP 3 — ServerHello：使う方式が決まる</h3><p>サーバーは候補の中から使う暗号スイートを1つ選び、自分の鍵交換の材料（サーバー側の一時公開鍵）を返します。この時点で両者の手元に「材料①と材料②」がそろいました。TLS 1.3では、ここから先のハンドシェイクはすでに暗号化されて送られます。</p><div class="http-box">ServerHello\n  cipher_suite: TLS_AES_128_GCM_SHA256 （これに決定）\n  key_share:    <span class="k">サーバーの一時公開鍵（材料②）</span>\n<span class="dim"># 以降のハンドシェイクは暗号化される</span></div>',
+  mock:'hello', url:'https://shop.example.jp/'},
+ {title:'サーバーが証明書を送る', packet:'証明書（Certificate）', from:62, to:37, actors:[1,2,3], cls:'', lock:'⏳',
+  detail:'<h3>STEP 4 — サーバー証明書の提示</h3><p>サーバーは「私は確かに shop.example.jp です」という証明書を送ります。中にはドメイン名、サーバーの公開鍵、有効期限、そしてCA（認証局）の署名が入っています。あわせて、証明書に対応する秘密鍵を持っていることの証明（CertificateVerify）も送られます。</p>',
+  mock:'cert', url:'https://shop.example.jp/', extra:'cert'},
+ {title:'ブラウザが証明書を検証', packet:'署名チェーンを検証', from:37, to:87, actors:[1,3], cls:'', lock:'⏳',
+  detail:'<h3>STEP 5 — ブラウザが証明書を検証する</h3><p>ブラウザは3点をチェックします。<b>①署名の連鎖</b>：証明書の署名が、ブラウザの信頼するルートCAまでたどれるか。<b>②ドメイン名の一致</b>：証明書の宛先が、今つないでいる shop.example.jp と同じか。<b>③有効期限</b>：期限内か、失効していないか。どれか1つでも失敗すれば、接続は止まり警告画面になります（STEP 9）。</p><div class="http-box">検証結果\n  署名チェーン: 中間CA → ルートCA <span class="ok">✓ たどれた</span>\n  ドメイン名:   shop.example.jp <span class="ok">✓ 一致</span>\n  有効期限:     期限内 <span class="ok">✓</span></div>',
+  mock:'verify', url:'https://shop.example.jp/'},
+ {title:'共通鍵を各自で計算', packet:'鍵は流れない（各自で計算）', from:37, to:62, actors:[1,2], cls:'ok', lock:'⏳',
+  detail:'<h3>STEP 6 — セッションキーを「各自で」計算する</h3><p>ブラウザとサーバーは、交換した材料（互いの一時公開鍵と自分の秘密鍵）を組み合わせて、<strong>まったく同じ共通鍵（セッションキー）をそれぞれ自分の手元で計算</strong>します。鍵そのものは一度もネットワークを流れません。途中で通信を盗み見ても、材料の公開鍵だけからは共通鍵を再現できないのが鍵交換（ECDHE）の肝です。</p>',
+  mock:'key', url:'https://shop.example.jp/', extra:'keys'},
+ {title:'Finished で確認し合う', packet:'Finished（検証値）', from:62, to:37, actors:[1,2], cls:'ok', lock:'🔒',
+  detail:'<h3>STEP 7 — Finished：改ざんがなかったか確認</h3><p>両者は、ここまでのハンドシェイクの全内容から計算した検証値（Finished）を送り合います。もし途中で誰かがやり取りを書き換えていれば、相手の計算と合わず検証値が一致しません。一致すれば「交渉は正しく行われた」と確定し、ハンドシェイク完了です。アドレスバーの鍵マークもここで確定します。</p><div class="http-box">ブラウザの計算値 == サーバーの Finished <span class="ok">✓ 一致</span>\nサーバーの計算値 == ブラウザの Finished <span class="ok">✓ 一致</span>\n→ <span class="ok">ハンドシェイク完了</span></div>',
+  mock:'done', url:'https://shop.example.jp/'},
+ {title:'暗号化通信が始まる', packet:'暗号文（読めない）', from:37, to:62, actors:[1,2], cls:'ok', lock:'🔒',
+  detail:'<h3>STEP 8 — 以後は共通鍵で暗号化通信</h3><p>ここからが本通信です。HTTPリクエスト／レスポンスはセッションキーで暗号化されて流れます。途中で盗み見ても読めるのは意味不明なバイト列だけ。受け取った側だけが復号できます。改ざんされれば復号時のチェックで検知されます。</p><div class="http-box"><span class="dim"># ネットワークを流れるもの（盗聴者の視点）</span>\n9f 3a c1 07 …（暗号文）\n<span class="dim"># ブラウザ／サーバーが復号すると</span>\nGET /cart HTTP/1.1 → 200 OK（ページのHTML）</div>',
+  mock:'secure', url:'https://shop.example.jp/'},
+ {title:'なりすましデモ：警告画面', packet:'自己署名証明書', from:62, to:37, actors:[1,2], cls:'bad', lock:'⚠️',
+  detail:'<h3>STEP 9 — なりすましデモ：偽サーバーの証明書は通らない</h3><p>攻撃者が偽のサーバーを用意しても、正規のCAから shop.example.jp の証明書を発行してもらうことはできません（ドメインの管理権を確認されるため）。代わりに自分で署名した「自己署名証明書」を出すしかなく、ブラウザはSTEP 5の検証で「信頼の連鎖がたどれない」と判断し、<strong>接続を止めて警告画面</strong>を表示します。暗号化の前に「相手の本人確認」が効いているわけです。</p><div class="http-box">検証結果\n  署名チェーン: <span class="bad">✗ ルートCAまでたどれません（自己署名）</span>\n→ <span class="bad">接続を中断し、警告を表示</span></div>',
+  mock:'warn', url:'https://shop.example.jp/'}
+];
+var mocks = {
+ start:'<div class="mock-app"><div class="avatar">🖱️</div><h3>ページを開こうとしています</h3><p style="color:var(--muted);font-size:14px">https://shop.example.jp/ へ接続を開始…</p><span class="badge info">接続中（TCP接続 → TLS交渉へ）</span></div>',
+ hello:'<div class="mock-app"><div class="avatar">🤝</div><h3>安全な接続を交渉中…</h3><p style="color:var(--muted);font-size:14px">暗号の方式と鍵の材料を交換しています</p><span class="badge warn">ハンドシェイク中 — ページはまだ表示されません</span></div>',
+ cert:'<div class="mock-app"><div class="avatar">📜</div><h3>サーバーの証明書を確認中…</h3><div class="cert-card"><b class="t">サーバー証明書</b><table><tr><th>宛先</th><td>shop.example.jp</td></tr><tr><th>発行者</th><td>中間CA（Example CA）</td></tr><tr><th>有効期限</th><td>2026-10-01 〜 2027-01-15</td></tr><tr><th>署名</th><td>CAの秘密鍵による署名あり</td></tr></table></div></div>',
+ verify:'<div class="mock-app"><div class="avatar">🔍</div><h3>証明書を検証しています</h3><ul class="check-list"><li>✅ 署名の連鎖がルートCAまでたどれる</li><li>✅ ドメイン名が一致する</li><li>✅ 有効期限内である</li></ul><span class="badge ok">検証 OK — 相手は本物です</span></div>',
+ key:'<div class="mock-app"><div class="avatar">🔑</div><h3>暗号化の鍵を作っています</h3><p style="color:var(--muted);font-size:14px">ブラウザとサーバーが、それぞれ自分の手元で同じ共通鍵を計算中</p><span class="badge info">鍵そのものは送信されません</span></div>',
+ done:'<div class="mock-app"><div class="avatar">🔒</div><h3>安全な接続が確立しました</h3><p style="color:var(--muted);font-size:14px">アドレスバーに鍵マークが表示されました</p><span class="badge ok">ハンドシェイク完了</span></div>',
+ secure:'<div class="mock-app"><div class="avatar">🛒</div><h3>ショップのページ</h3><p style="color:var(--muted);font-size:14px">ページの内容が表示されました。以後の送受信はすべて暗号化されています。</p><span class="badge ok">🔒 暗号化通信中</span><div class="cipher">ネットワーク上の見え方： 9f 3a c1 07 5e b8 …（暗号文のみ）</div></div>',
+ warn:'<div class="mock-app"><div class="err-box"><h3 style="color:var(--red)">⚠ この接続ではプライバシーが保護されません</h3><p style="font-size:14px;margin:6px 0">shop.example.jp の証明書を検証できませんでした。攻撃者が通信を盗み見ようとしている可能性があります。</p><span class="badge err">NET::ERR_CERT_AUTHORITY_INVALID</span></div><p style="color:var(--muted);font-size:13px;margin-top:12px">ブラウザが接続を止めたため、偽サーバーに情報は送られていません</p></div>'
+};
+var extras = {
+ cert:'<div class="cert-card" style="background:var(--surface)"><b class="t">📜 証明書の中身（イメージ）</b><table><tr><th>ドメイン名</th><td>shop.example.jp</td></tr><tr><th>公開鍵</th><td>サーバーの公開鍵</td></tr><tr><th>有効期限</th><td>2026-10-01 〜 2027-01-15</td></tr><tr><th>発行者</th><td>中間CA</td></tr><tr><th>CAの署名</th><td>上記全体に対するCAの署名</td></tr></table></div>',
+ keys:'<div class="key-visual"><div class="kv"><b>🌐 ブラウザ側</b>自分の秘密材料 ＋ サーバーの公開材料<br>→ セッションキー <span class="mono">a3f9…c21e</span></div><div class="kv"><b>🖥️ サーバー側</b>自分の秘密材料 ＋ ブラウザの公開材料<br>→ セッションキー <span class="mono">a3f9…c21e</span>（一致！）</div></div>'
+};
+
+var cur=0, playing=false, timer=null, speed=1;
+var dotsWrap=document.querySelector('[data-dots]');
+steps.forEach(function(s,i){var b=document.createElement('button');b.textContent=i+1;b.setAttribute('aria-label','ステップ'+(i+1));b.addEventListener('click',function(){stop();go(i);});dotsWrap.appendChild(b);});
+
+function render(){
+  var s=steps[cur];
+  document.querySelectorAll('[data-step-label]').forEach(function(e){e.textContent='ステップ '+(cur+1)+' / '+steps.length;});
+  document.querySelectorAll('[data-step-title]').forEach(function(e){e.textContent=s.title;});
+  document.querySelectorAll('[data-fill]').forEach(function(e){e.style.width=((cur+1)/steps.length*100)+'%';});
+  Array.prototype.forEach.call(dotsWrap.children,function(b,i){b.className=i===cur?'on':(i<cur?'done':'');});
+  document.getElementById('mockBody').innerHTML=mocks[s.mock];
+  document.getElementById('mockUrl').textContent=s.url;
+  document.getElementById('mockLock').textContent=s.lock;
+  document.getElementById('stepDetail').innerHTML=s.detail;
+  document.getElementById('extra').innerHTML=s.extra?extras[s.extra]:'';
+  var pk=document.getElementById('packet');
+  pk.textContent=s.packet; pk.className='packet'+(s.cls?' '+s.cls:'');
+  pk.style.left=s.from+'%';
+  requestAnimationFrame(function(){requestAnimationFrame(function(){pk.style.left=s.to+'%';});});
+  document.querySelectorAll('.actor').forEach(function(a){a.classList.toggle('active', s.actors.indexOf(+a.dataset.actor)>=0);});
+}
+function go(i){cur=Math.max(0,Math.min(steps.length-1,i));render();}
+function stop(){playing=false;if(timer){clearInterval(timer);timer=null;}syncPlay();}
+function syncPlay(){document.querySelectorAll('[data-act="play"]').forEach(function(b){b.textContent=playing?'⏸ 一時停止':'▶ 再生';});}
+function play(){
+  if(playing){stop();return;}
+  if(cur>=steps.length-1){cur=0;}
+  playing=true;syncPlay();render();
+  timer=setInterval(function(){ if(cur>=steps.length-1){stop();return;} cur++; render(); if(cur>=steps.length-1){stop();} }, 3400/speed);
+}
+document.querySelectorAll('[data-controls]').forEach(function(w){
+  w.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    if(b.dataset.act==='play')play();
+    else if(b.dataset.act==='next'){stop();go(cur+1);}
+    else if(b.dataset.act==='prev'){stop();go(cur-1);}
+    else if(b.dataset.act==='restart'){stop();go(0);}
+    else if(b.dataset.speed){speed=parseFloat(b.dataset.speed);document.querySelectorAll('[data-speed]').forEach(function(x){x.classList.toggle('on',x===b||x.dataset.speed===b.dataset.speed);}); if(playing){stop();play();}}
+  });
+});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){stop();go(cur+1);}if(e.key==='ArrowLeft'){stop();go(cur-1);}});
+render();
+</script>
+</body>
+</html>
