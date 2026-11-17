@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>CQRSパターンの仕組みアニメーション</title>
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2rem; }
+    </style>
+    <style>
+      :root{
+        --bg:#f3f4f1;
+        --panel:#ffffff;
+        --panel-2:#eceee9;
+        --ink:#1d2431;
+        --ink-soft:#4c5665;
+        --line:#d7dbd2;
+        --write:#d2691e;
+        --write-strong:#b9550f;
+        --write-soft:#fdeede;
+        --read:#1f6fd0;
+        --read-strong:#175da9;
+        --read-soft:#e4effc;
+        --event:#1d9e6c;
+        --event-soft:#e2f5ec;
+        --warn:#c2410c;
+        --warn-soft:#fde8dd;
+        --ok:#178a52;
+        --shadow:0 1px 2px rgba(20,26,38,.06),0 8px 24px rgba(20,26,38,.06);
+      }
+      @media (prefers-color-scheme: dark){
+        :root{
+          --bg:#10141b;
+          --panel:#1a2029;
+          --panel-2:#232b37;
+          --ink:#e9edf3;
+          --ink-soft:#a7b1c0;
+          --line:#333d4c;
+          --write:#f28c3c;
+          --write-strong:#f6a55c;
+          --write-soft:#3a2a1a;
+          --read:#63a5ef;
+          --read-strong:#8dbcf5;
+          --read-soft:#1d2f47;
+          --event:#43cf92;
+          --event-soft:#173528;
+          --warn:#fb9a6a;
+          --warn-soft:#3d2417;
+          --ok:#4ade80;
+          --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
+        }
+      }
+      *{ box-sizing:border-box; }
+      html{ -webkit-text-size-adjust:100%; }
+      body{
+        margin:0;
+        background:var(--bg);
+        color:var(--ink);
+        font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic UI","Yu Gothic",Meiryo,system-ui,sans-serif;
+        line-height:1.75;
+        font-size:16px;
+      }
+      .wrap{ max-width:1060px; margin:0 auto; padding:28px 18px 64px; }
+      h1{
+        font-size:clamp(26px,4.6vw,40px);
+        line-height:1.3;
+        margin:6px 0 10px;
+        letter-spacing:.01em;
+      }
+      .lead{ color:var(--ink-soft); font-size:clamp(15px,2.4vw,17px); margin:0 0 8px; max-width:46em; }
+      .lead strong{ color:var(--ink); }
+      .abbr{
+        display:inline-block; font-weight:700; color:var(--ink);
+        border-bottom:3px solid var(--write);
+      }
+      section{ margin-top:44px; }
+      h2{
+        font-size:clamp(20px,3.4vw,26px);
+        margin:0 0 6px;
+        display:flex; align-items:center; gap:10px;
+      }
+      h2 .no{
+        flex:none; width:30px; height:30px; border-radius:9px;
+        background:var(--ink); color:var(--bg);
+        display:inline-flex; align-items:center; justify-content:center;
+        font-size:15px; font-weight:800;
+      }
+      .sec-lead{ color:var(--ink-soft); margin:0 0 16px; max-width:48em; }
+
+      /* ---------- diagram card ---------- */
+      .diagram-card{
+        background:var(--panel);
+        border:1px solid var(--line);
+        border-radius:18px;
+        box-shadow:var(--shadow);
+        padding:18px 18px 14px;
+        margin-top:22px;
+      }
+      .legend{ display:flex; flex-wrap:wrap; gap:8px 18px; font-size:13.5px; color:var(--ink-soft); margin-bottom:6px; }
+      .legend span{ display:inline-flex; align-items:center; gap:7px; }
+      .dot{ width:12px; height:12px; border-radius:50%; flex:none; }
+      .dot.w{ background:var(--write); } .dot.r{ background:var(--read); } .dot.e{ background:var(--event); }
+      .diagram{ width:100%; height:auto; display:block; }
+      .diagram-narrow{ display:none; }
+      @media (max-width:660px){
+        .diagram-wide{ display:none; }
+        .diagram-narrow{ display:block; }
+      }
+
+      /* SVG internals */
+      .lane{ rx:16; }
+      .lane-w{ fill:var(--write-soft); opacity:.55; }
+      .lane-r{ fill:var(--read-soft); opacity:.55; }
+      .lane-label{ font-size:15px; font-weight:800; }
+      .lane-label.w{ fill:var(--write-strong); } .lane-label.r{ fill:var(--read-strong); }
+      .pth{ fill:none; stroke-width:2.4; opacity:.5; stroke-linecap:round; stroke-linejoin:round; transition:opacity .25s, stroke-width .25s; }
+      .pth.w{ stroke:var(--write); } .pth.r{ stroke:var(--read); } .pth.e{ stroke:var(--event); }
+      .pth.dash{ stroke-dasharray:7 6; }
+      .pth.on{ opacity:1; stroke-width:3.6; }
+      .nd .body{
+        fill:var(--panel); stroke-width:2;
+        transition:filter .25s, stroke-width .25s;
+      }
+      .nd[data-side="write"] .body{ stroke:var(--write); }
+      .nd[data-side="read"] .body{ stroke:var(--read); }
+      .nd[data-side="neutral"] .body{ stroke:var(--ink-soft); }
+      .nd.on .body{ stroke-width:3.4; }
+      .nd[data-side="write"].on .body{ filter:drop-shadow(0 0 7px rgba(210,105,30,.75)); }
+      .nd[data-side="read"].on .body{ filter:drop-shadow(0 0 7px rgba(31,111,208,.75)); }
+      .nd[data-side="neutral"].on .body{ filter:drop-shadow(0 0 7px rgba(90,100,115,.7)); }
+      .nd.warn .body{ stroke:var(--warn); stroke-dasharray:8 5; }
+      .nd .t{ font-size:16.5px; font-weight:800; fill:var(--ink); text-anchor:middle; }
+      .nd .s{ font-size:11.5px; fill:var(--ink-soft); text-anchor:middle; }
+      .nd.pill .t{ font-size:14.5px; }
+      .entry rect{ stroke-width:1.2; }
+      .entry text{ font-size:11.5px; }
+      .entry.old rect{ fill:var(--panel-2); stroke:var(--line); }
+      .entry.old text{ fill:var(--ink-soft); }
+      .entry.new rect{ fill:var(--event-soft); stroke:var(--event); }
+      .entry.new text{ fill:var(--ink); font-weight:700; }
+      .entry.ph rect{ fill:none; stroke:var(--warn); stroke-dasharray:5 4; }
+      .entry.ph text{ fill:var(--warn); font-weight:700; }
+      .chip rect{ fill:var(--ok); }
+      .chip text{ fill:#fff; font-size:12px; font-weight:800; text-anchor:middle; }
+      @media (prefers-color-scheme: dark){ .chip rect{ fill:#166534; } }
+      .tag rect{ stroke-width:1.4; }
+      .tag text{ font-size:11.5px; font-weight:800; text-anchor:middle; }
+      .tag.stale rect{ fill:var(--warn-soft); stroke:var(--warn); }
+      .tag.stale text{ fill:var(--warn); }
+      .tag.synced rect{ fill:var(--event-soft); stroke:var(--event); }
+      .tag.synced text{ fill:var(--ok); }
+      .tag.result rect{ fill:var(--read-soft); stroke:var(--read); }
+      .tag.result text{ fill:var(--read-strong); }
+      .cond{ display:none; }
+      .cond.vis{ display:block; }
+      .pkt{ filter:drop-shadow(0 0 6px rgba(0,0,0,.35)); }
+
+      /* controls */
+      .controls{
+        display:flex; flex-wrap:wrap; align-items:center; gap:10px;
+        margin-top:14px;
+      }
+      .controls button, .controls select{
+        font:inherit; font-size:15px; font-weight:700;
+        color:var(--ink); background:var(--panel-2);
+        border:1px solid var(--line); border-radius:10px;
+        padding:8px 16px; cursor:pointer; min-height:44px;
+      }
+      .controls button:hover:not(:disabled){ border-color:var(--ink-soft); }
+      .controls button:disabled{ opacity:.38; cursor:default; }
+      .controls button.primary{ background:var(--ink); color:var(--bg); border-color:var(--ink); min-width:118px; }
+      .controls .spacer{ flex:1; }
+      .step-count{ font-weight:800; font-size:15px; white-space:nowrap; }
+      .step-chips{ display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+      .step-chips button{
+        font:inherit; font-size:13px; font-weight:700;
+        width:40px; height:40px; border-radius:50%;
+        border:1.6px solid var(--line); background:var(--panel); color:var(--ink-soft);
+        cursor:pointer; padding:0;
+      }
+      .step-chips button.cur{ background:var(--ink); color:var(--bg); border-color:var(--ink); }
+      .step-chips button.done{ border-color:var(--ink-soft); color:var(--ink); }
+      .caption{
+        margin-top:14px; border-top:1px solid var(--line); padding-top:14px;
+        min-height:118px;
+      }
+      .caption h3{ margin:0 0 4px; font-size:19px; }
+      .caption p{ margin:0; color:var(--ink-soft); max-width:52em; }
+      .caption p strong{ color:var(--ink); }
+
+      /* ---------- generic cards / grids ---------- */
+      .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+      @media (max-width:700px){ .grid2{ grid-template-columns:1fr; } }
+      .card{
+        background:var(--panel); border:1px solid var(--line); border-radius:16px;
+        padding:18px 20px; box-shadow:var(--shadow);
+      }
+      .card h3{ margin:0 0 8px; font-size:17px; }
+      .card p{ margin:0 0 8px; color:var(--ink-soft); }
+      .card p:last-child{ margin-bottom:0; }
+      .card ul{ margin:6px 0 0; padding-left:1.25em; color:var(--ink-soft); }
+      .card li{ margin:3px 0; }
+      .card li strong, .card p strong{ color:var(--ink); }
+      .card.w{ border-top:5px solid var(--write); }
+      .card.r{ border-top:5px solid var(--read); }
+      .tagline{ font-size:12.5px; font-weight:800; letter-spacing:.06em; }
+      .tagline.w{ color:var(--write-strong); } .tagline.r{ color:var(--read-strong); }
+
+      /* mini diagrams */
+      .mini{ width:100%; height:auto; display:block; margin-top:6px; }
+      .mb{ stroke-width:1.8; }
+      .mb-w{ fill:var(--write-soft); stroke:var(--write); }
+      .mb-r{ fill:var(--read-soft); stroke:var(--read); }
+      .mb-n{ fill:var(--panel-2); stroke:var(--ink-soft); }
+      .mb-t{ font-size:13.5px; font-weight:800; fill:var(--ink); text-anchor:middle; }
+      .mb-s{ font-size:10.5px; fill:var(--ink-soft); text-anchor:middle; }
+      .ma{ fill:none; stroke-width:2.2; }
+      .ma-w{ stroke:var(--write); } .ma-r{ stroke:var(--read); } .ma-e{ stroke:var(--event); stroke-dasharray:6 5; }
+      .ma-l{ font-size:11px; font-weight:700; text-anchor:middle; }
+      .ma-l.w{ fill:var(--write-strong); } .ma-l.r{ fill:var(--read-strong); } .ma-l.e{ fill:var(--event); }
+
+      /* eventual consistency mini */
+      .ec{ display:grid; grid-template-columns:1fr auto 1fr; gap:14px; align-items:stretch; }
+      @media (max-width:700px){ .ec{ grid-template-columns:1fr; } .ec-arrow{ transform:rotate(90deg); justify-self:center; } }
+      .ec-state{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:16px 18px; box-shadow:var(--shadow); }
+      .ec-state h3{ margin:0 0 10px; font-size:16px; }
+      .ec-row{ display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px dashed var(--line); font-size:14.5px; }
+      .ec-row:first-of-type{ border-top:none; }
+      .ec-row .side{ flex:none; width:86px; font-weight:800; font-size:13px; }
+      .ec-row .side.w{ color:var(--write-strong); } .ec-row .side.r{ color:var(--read-strong); }
+      .badge{ margin-left:auto; flex:none; font-size:12.5px; font-weight:800; border-radius:999px; padding:3px 11px; }
+      .badge.yes{ background:var(--event-soft); color:var(--ok); }
+      .badge.no{ background:var(--warn-soft); color:var(--warn); }
+      .ec-verdict{ margin-top:10px; font-weight:800; font-size:14.5px; }
+      .ec-verdict.bad{ color:var(--warn); } .ec-verdict.good{ color:var(--ok); }
+      .ec-arrow{ align-self:center; font-size:13px; font-weight:800; color:var(--event); text-align:center; line-height:1.5; }
+      .ec-arrow .arr{ font-size:26px; display:block; }
+
+      /* glossary */
+      .glossary{ display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+      .term{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 18px; box-shadow:var(--shadow); }
+      .term dt{ font-weight:800; font-size:16px; margin-bottom:2px; }
+      .term dt .en{ font-size:12px; color:var(--ink-soft); font-weight:700; margin-left:6px; }
+      .term dd{ margin:0; color:var(--ink-soft); font-size:14.5px; }
+      footer{ margin-top:52px; color:var(--ink-soft); font-size:13.5px; border-top:1px solid var(--line); padding-top:14px; }
+      @media (prefers-reduced-motion: reduce){
+        .pth, .nd .body{ transition:none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>CQRSパターンの仕組み</h1>
+        <p class="lead">
+          <span class="abbr">CQRS</span>（Command Query Responsibility Segregation）は、
+          <strong>書き込み（コマンド）と読み取り（クエリ）の役割を分ける</strong>設計パターンです。
+          下のフロー図で、一般的な「注文」の流れをステップ再生しながら追ってみましょう。
+          書き込み側（オレンジ）と読み取り側（青）の2レーン構成です。
+        </p>
+      </header>
+
+      <div class="diagram-card">
+        <div class="legend" aria-hidden="true">
+          <span><span class="dot w"></span>書き込みの流れ（コマンド）</span>
+          <span><span class="dot e"></span>イベントの流れ（投影）</span>
+          <span><span class="dot r"></span>読み取りの流れ（クエリ）</span>
+        </div>
+        <svg class="diagram diagram-wide" id="svgWide" role="img" aria-label="CQRSのフロー図（横長レイアウト）"></svg>
+        <svg class="diagram diagram-narrow" id="svgNarrow" role="img" aria-label="CQRSのフロー図（縦長レイアウト）"></svg>
+
+        <div class="controls">
+          <button type="button" id="btnReset">最初から</button>
+          <button type="button" id="btnPrev">← 前へ</button>
+          <button type="button" id="btnPlay" class="primary">▶ 再生</button>
+          <button type="button" id="btnNext">次へ →</button>
+          <span class="spacer"></span>
+          <label class="step-count" for="speedSel">速度
+            <select id="speedSel">
+              <option value="0.7">ゆっくり</option>
+              <option value="1" selected>標準</option>
+              <option value="1.6">速い</option>
+            </select>
+          </label>
+          <span class="step-count" id="stepCount">ステップ 0 / 8</span>
+        </div>
+        <div class="step-chips" id="stepChips" role="group" aria-label="ステップへ移動"></div>
+
+        <div class="caption" aria-live="polite">
+          <h3 id="capTitle"></h3>
+          <p id="capBody"></p>
+        </div>
+      </div>
+
+      <section>
+        <h2><span class="no">1</span>従来の単一モデル（CRUD型）と比べる</h2>
+        <p class="sec-lead">ふつうのCRUD型アプリは、読みも書きも同じモデル・同じデータベースを使います。CQRSはここを2つに割るのが出発点です。</p>
+        <div class="grid2">
+          <div class="card">
+            <h3>従来型：モデルは1つ</h3>
+            <svg class="mini" viewBox="0 0 360 168" role="img" aria-label="CRUD型の図：読み書きが同じモデルとDBを使う">
+              <rect class="mb mb-n" x="18" y="59" width="86" height="50" rx="10"></rect>
+              <text class="mb-t" x="61" y="89">ユーザー</text>
+              <rect class="mb mb-n" x="196" y="42" width="146" height="84" rx="12"></rect>
+              <text class="mb-t" x="269" y="76">モデル ＋ DB</text>
+              <text class="mb-s" x="269" y="96">読みも書きも同じ1つ</text>
+              <path class="ma ma-w" d="M106 72 L192 72" marker-end="url(#ahW)"></path>
+              <text class="ma-l w" x="149" y="62">書き込み</text>
+              <path class="ma ma-r" d="M192 100 L106 100" marker-end="url(#ahB)"></path>
+              <text class="ma-l r" x="149" y="120">読み取り</text>
+              <defs>
+                <marker id="ahW" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#d2691e"></path></marker>
+                <marker id="ahB" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#1f6fd0"></path></marker>
+              </defs>
+            </svg>
+            <p>シンプルで分かりやすい反面、書き込みのルール検証と、画面表示のための読み取り都合を、<strong>1つのモデルが両方背負う</strong>ことになります。</p>
+          </div>
+          <div class="card">
+            <h3>CQRS：モデルを2つに分ける</h3>
+            <svg class="mini" viewBox="0 0 360 208" role="img" aria-label="CQRSの図：書き込みモデルとリードモデルに分かれ、間を投影がつなぐ">
+              <rect class="mb mb-n" x="130" y="6" width="100" height="38" rx="10"></rect>
+              <text class="mb-t" x="180" y="30">ユーザー</text>
+              <rect class="mb mb-w" x="16" y="76" width="140" height="46" rx="10"></rect>
+              <text class="mb-t" x="86" y="96">書き込みモデル</text>
+              <text class="mb-s" x="86" y="113">集約・ルール検証</text>
+              <rect class="mb mb-r" x="204" y="76" width="140" height="46" rx="10"></rect>
+              <text class="mb-t" x="274" y="96">リードモデル</text>
+              <text class="mb-s" x="274" y="113">表示用に最適化</text>
+              <rect class="mb mb-w" x="16" y="152" width="140" height="40" rx="10"></rect>
+              <text class="mb-t" x="86" y="177">書き込みDB</text>
+              <rect class="mb mb-r" x="204" y="152" width="140" height="40" rx="10"></rect>
+              <text class="mb-t" x="274" y="177">読み取りDB</text>
+              <path class="ma ma-w" d="M148 44 C120 58 100 62 90 72" marker-end="url(#ahW2)"></path>
+              <text class="ma-l w" x="86" y="60">コマンド</text>
+              <path class="ma ma-r" d="M212 44 C240 58 260 62 270 72" marker-end="url(#ahB2)"></path>
+              <text class="ma-l r" x="278" y="60">クエリ</text>
+              <path class="ma ma-w" d="M86 122 L86 148"></path>
+              <path class="ma ma-r" d="M274 148 L274 122" marker-end="url(#ahB2)"></path>
+              <path class="ma ma-e" d="M158 172 L200 172" marker-end="url(#ahE2)"></path>
+              <text class="ma-l e" x="180" y="140">投影</text>
+              <defs>
+                <marker id="ahW2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#d2691e"></path></marker>
+                <marker id="ahB2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#1f6fd0"></path></marker>
+                <marker id="ahE2" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#1d9e6c"></path></marker>
+              </defs>
+            </svg>
+            <p>書き込みは書き込み専用のモデルで厳密に、読み取りは表示に都合のよい形で。<strong>間をつなぐのがプロジェクション（投影）</strong>です。</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="no">2</span>結果整合性：「一瞬だけズレる」を受け入れる</h2>
+        <p class="sec-lead">読みと書きを分けると、書き込みが読み取り側に届くまで時間差が生まれます。最終的には一致するけれど、瞬間的にはズレる——これが<strong>結果整合性（eventual consistency）</strong>です。上のアニメーションのステップ5〜6がまさにこの状態です。</p>
+        <div class="ec">
+          <div class="ec-state">
+            <h3>書き込み直後</h3>
+            <div class="ec-row"><span class="side w">書き込み側</span>注文 #1002<span class="badge yes">あり</span></div>
+            <div class="ec-row"><span class="side r">読み取り側</span>注文 #1002<span class="badge no">まだない</span></div>
+            <p class="ec-verdict bad">← この瞬間だけ、両側がズレている</p>
+          </div>
+          <div class="ec-arrow"><span class="arr">→</span>プロジェクションが<br>少し遅れて反映</div>
+          <div class="ec-state">
+            <h3>投影のあと</h3>
+            <div class="ec-row"><span class="side w">書き込み側</span>注文 #1002<span class="badge yes">あり</span></div>
+            <div class="ec-row"><span class="side r">読み取り側</span>注文 #1002<span class="badge yes">あり</span></div>
+            <p class="ec-verdict good">← 最終的には一致する（結果整合性）</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="no">3</span>なぜ分けるのか</h2>
+        <p class="sec-lead">読みと書きでは、求められることがそもそも違います。1つのモデルで両方を最適化しようとすると、どちらかが犠牲になります。</p>
+        <div class="grid2">
+          <div class="card w">
+            <p class="tagline w">書き込み側（コマンド）に必要なこと</p>
+            <ul>
+              <li><strong>整合性</strong>：二重注文や在庫の食い違いを絶対に起こさない</li>
+              <li><strong>ルール検証</strong>：「在庫があるときだけ注文できる」のような業務ルールを厳密に守る</li>
+              <li>データの形は、ルールを表現しやすい形がよい</li>
+            </ul>
+          </div>
+          <div class="card r">
+            <p class="tagline r">読み取り側（クエリ）に必要なこと</p>
+            <ul>
+              <li><strong>速度</strong>：一覧や検索を大量アクセスでも速く返す</li>
+              <li><strong>表示都合の形</strong>：画面がそのまま使える形にあらかじめ整えておく</li>
+              <li>多少の時間差（結果整合性）が許される場面が多い</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <p>分けてしまえば、<strong>それぞれを別々に最適化でき、別々にスケールもできます</strong>。たとえば読み取りのアクセスが書き込みの100倍あるなら、読み取り側だけを増強すればよい、という具合です。</p>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="no">4</span>イベントソーシングとの関係</h2>
+        <div class="card">
+          <p>CQRSとしばしばセットで語られるのが<strong>イベントソーシング</strong>です。これは「現在の状態」ではなく「起きた出来事（イベント）の履歴」を保存する方式で、今回のフロー図のイベントストアがそれにあたります。イベントから現在の状態をいつでも再構築でき、履歴そのものが監査ログにもなるのが利点です。</p>
+          <p>ただし<strong>イベントソーシングはCQRSの必須条件ではありません</strong>。書き込み側はふつうのリレーショナルDBに状態を保存し、その変更をプロジェクションでリードモデルに反映する「イベントストアなしのCQRS」もよくあります。CQRS＝読み書きの分離、イベントソーシング＝保存の仕方、と別々の軸として考えると整理しやすくなります。</p>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="no">5</span>代償と向いていないケース</h2>
+        <div class="card">
+          <ul>
+            <li><strong>構成が複雑になる</strong>：モデルも保存先も2系統になり、投影の仕組みや障害時の再実行まで面倒を見る必要がある</li>
+            <li><strong>結果整合性の遅延への対処</strong>：「注文したのに一覧に出てこない」瞬間があるため、画面側の工夫（送信直後は楽観的に表示する等）が要ることがある</li>
+            <li><strong>学習・運用コスト</strong>：チーム全員が「読みは古いことがある」前提で設計する文化が要る</li>
+            <li><strong>単純なCRUDアプリには過剰</strong>：登録・参照・更新・削除が素直に回る小規模なシステムでは、単一モデルのほうが速く作れて保守も楽。CQRSは「読みと書きの要求が大きく食い違う」場面で効く道具です</li>
+          </ul>
+        </div>
+      </section>
+
+      <section>
+        <h2><span class="no">6</span>用語解説</h2>
+        <dl class="glossary">
+          <div class="term"><dt>コマンド<span class="en">Command</span></dt><dd>「注文する」「住所を変更する」のような、状態を変えてほしいという依頼。過去形ではなく命令形で表すのが特徴。</dd></div>
+          <div class="term"><dt>クエリ<span class="en">Query</span></dt><dd>「注文一覧を見せて」のような、状態を変えずにデータを問い合わせる操作。CQRSではリードモデルに直接聞く。</dd></div>
+          <div class="term"><dt>集約<span class="en">Aggregate</span></dt><dd>関連するデータをひとまとまりとして扱い、その内部のルール（整合性）を守る単位。例：「注文」集約は注文明細ごと在庫ルールを検証する。</dd></div>
+          <div class="term"><dt>プロジェクション<span class="en">Projection</span></dt><dd>イベントや書き込み側の変更を受け取り、読み取り用に形を変えてリードモデルへ反映する仕組み。「投影」とも呼ばれる。</dd></div>
+          <div class="term"><dt>結果整合性<span class="en">Eventual Consistency</span></dt><dd>書き込み直後は読み取り側とズレていても、やがて（最終的には）一致する性質。強い整合性と引き換えに、分けやすさと速さを得る考え方。</dd></div>
+          <div class="term"><dt>リードモデル<span class="en">Read Model</span></dt><dd>読み取り専用に最適化されたデータの形。画面表示に必要な項目をあらかじめ揃えておくことで、クエリを高速に返せる。</dd></div>
+        </dl>
+      </section>
+
+      <footer>
+        <p>題材は一般的な注文・在庫管理システムを想定した解説用の例です。実際の設計では、結果整合性の許容範囲や投影の方式（同期的／非同期的）によって構成が変わります。</p>
+      </footer>
+    </div>
+
+    <script>
+      (function(){
+        "use strict";
+        var NS = "http://www.w3.org/2000/svg";
+
+        /* ---------- node / layout data ---------- */
+        var META = {
+          user:    { t:"ユーザー",                 s:"注文する・一覧を見る人",       side:"neutral" },
+          cmd:     { t:"コマンド「注文する」",      s:"状態を変えてほしいという依頼", side:"write", pill:true },
+          handler: { t:"コマンドハンドラ",          s:"受け取って集約に渡す",         side:"write" },
+          agg:     { t:"ドメインモデル（集約）",    s:"ルールを守る書き込みの本体",   side:"write" },
+          store:   { t:"イベントストア",            s:"起きた出来事を時系列で保存",   side:"write" },
+          proj:    { t:"プロジェクション（投影）",  s:"イベントを読み取り用に変換",   side:"read" },
+          read:    { t:"リードモデル",              s:"表示用に整えた読み取り専用データ", side:"read" },
+          query:   { t:"クエリ「注文一覧を見せて」", s:"状態を変えない問い合わせ",     side:"read", pill:true }
+        };
+
+        var LAYOUTS = {
+          wide: {
+            vb: "0 0 1000 620",
+            lanes: [
+              { x:16,  y:92, w:452, h:512, label:"書き込み側（コマンド側）", side:"write", lx:38 },
+              { x:532, y:92, w:452, h:512, label:"読み取り側（クエリ側）",   side:"read",  lx:554 }
+            ],
+            nodes: {
+              user:[390,12,220,58],  cmd:[126,140,232,46], handler:[134,216,216,66],
+              agg:[134,312,216,96],  store:[124,444,236,140],
+              proj:[650,436,216,66], read:[640,252,236,140], query:[642,140,232,46]
+            },
+            paths: {
+              p_user_cmd:   "M470 72 C420 108 320 118 242 136",
+              p_cmd_handler:"M242 188 L242 212",
+              p_handler_agg:"M242 284 L242 308",
+              p_agg_store:  "M242 410 L242 440",
+              p_store_proj: "M364 514 L604 514 Q650 514 650 476",
+              p_proj_read:  "M758 432 L758 396",
+              p_user_query: "M530 72 C580 108 680 118 758 136",
+              p_query_read: "M758 188 L758 248",
+              p_read_user:  "M712 248 C712 120 700 44 616 40"
+            }
+          },
+          narrow: {
+            vb: "0 0 440 1060",
+            lanes: [
+              { x:12, y:96,  w:416, h:470, label:"書き込み側（コマンド側）", side:"write", lx:30 },
+              { x:12, y:582, w:416, h:452, label:"読み取り側（クエリ側）",   side:"read",  lx:30 }
+            ],
+            nodes: {
+              user:[110,12,220,56],  cmd:[104,140,232,46], handler:[112,208,216,62],
+              agg:[112,300,216,96],  store:[102,424,236,134],
+              proj:[112,640,216,64], read:[102,736,236,134], query:[104,902,232,46]
+            },
+            paths: {
+              p_user_cmd:   "M180 70 C165 100 195 112 218 136",
+              p_cmd_handler:"M220 188 L220 204",
+              p_handler_agg:"M220 272 L220 296",
+              p_agg_store:  "M220 398 L220 420",
+              p_store_proj: "M220 560 L220 636",
+              p_proj_read:  "M220 706 L220 732",
+              p_user_query: "M332 42 L402 42 L402 872 Q402 900 340 900",
+              p_query_read: "M180 900 L180 874",
+              p_read_user:  "M140 732 L32 732 L32 72 L104 72"
+            }
+          }
+        };
+
+        var PATH_SIDE = {
+          p_user_cmd:"w", p_cmd_handler:"w", p_handler_agg:"w", p_agg_store:"w",
+          p_store_proj:"e", p_proj_read:"e",
+          p_user_query:"r", p_query_read:"r", p_read_user:"r"
+        };
+        var SIDE_COLOR = { w:"#e07b2a", e:"#1d9e6c", r:"#2f7fe0" };
+
+        function el(name, attrs, parent){
+          var n = document.createElementNS(NS, name);
+          for (var k in attrs) n.setAttribute(k, attrs[k]);
+          if (parent) parent.appendChild(n);
+          return n;
+        }
+        function txt(parent, x, y, str, cls){
+          var t = el("text", { x:x, y:y, "class":cls }, parent);
+          t.textContent = str;
+          return t;
+        }
+
+        function buildDiagram(svg, L){
+          svg.setAttribute("viewBox", L.vb);
+          var defs = el("defs", {}, svg);
+          [["mkW","#d2691e"],["mkR","#1f6fd0"],["mkE","#1d9e6c"],["mkN","#8a94a3"]].forEach(function(m){
+            var mk = el("marker", { id: svg.id + "-" + m[0], markerWidth:8, markerHeight:8, refX:7, refY:4, orient:"auto" }, defs);
+            el("path", { d:"M0 0 L8 4 L0 8 z", fill:m[1] }, mk);
+          });
+          var markerFor = { w:"mkW", r:"mkR", e:"mkE" };
+
+          L.lanes.forEach(function(lane){
+            el("rect", { x:lane.x, y:lane.y, width:lane.w, height:lane.h, rx:16, "class":"lane " + (lane.side === "write" ? "lane-w" : "lane-r") }, svg);
+            txt(svg, lane.lx, lane.y + 30, lane.label, "lane-label " + (lane.side === "write" ? "w" : "r"));
+          });
+
+          Object.keys(L.paths).forEach(function(pid){
+            var side = PATH_SIDE[pid];
+            el("path", {
+              d: L.paths[pid],
+              "class": "pth " + side + (pid === "p_read_user" ? " dash" : ""),
+              "data-path": pid,
+              "marker-end": "url(#" + svg.id + "-" + markerFor[side] + ")"
+            }, svg);
+          });
+
+          Object.keys(L.nodes).forEach(function(id){
+            var b = L.nodes[id], meta = META[id];
+            var g = el("g", { "class":"nd" + (meta.pill ? " pill" : ""), "data-node":id, "data-side":meta.side }, svg);
+            el("rect", { x:b[0], y:b[1], width:b[2], height:b[3], rx: meta.pill ? 23 : 13, "class":"body" }, g);
+            var cx = b[0] + b[2] / 2;
+            if (meta.pill){
+              txt(g, cx, b[1] + b[3] / 2 + 5.5, meta.t, "t");
+            } else {
+              txt(g, cx, b[1] + 27, meta.t, "t");
+              txt(g, cx, b[1] + 48, meta.s, "s");
+            }
+
+            if (id === "agg"){
+              var chip = el("g", { "class":"chip cond", "data-cond":"chip" }, g);
+              el("rect", { x:b[0]+12, y:b[1]+60, width:b[2]-24, height:27, rx:13.5 }, chip);
+              txt(chip, cx, b[1]+78, "✓ 在庫チェック OK", "");
+            }
+            if (id === "store"){
+              entry(g, b, 64, "注文確定イベント #1001（既存）", "old", null);
+              entry(g, b, 92, "注文確定イベント #1002", "new", "event2");
+            }
+            if (id === "read"){
+              entry(g, b, 64, "注文 #1001（注文確定・既存）", "old", null);
+              entry(g, b, 92, "注文 #1002 はまだ入っていない", "ph", "placeholder");
+              entry(g, b, 92, "注文 #1002（注文確定）", "new", "order2");
+              tag(g, b, 128, "⚠ まだ古いまま", "stale", "staleTag");
+              tag(g, b, 104, "✓ 反映済み", "synced", "syncedTag");
+            }
+            if (id === "user"){
+              tag(g, b, 158, "✓ 一覧に #1002 が見える", "result", "resultTag");
+            }
+          });
+
+          var pkt = el("circle", { r:9, cx:-40, cy:-40, "class":"pkt", fill:"#e07b2a" }, svg);
+          pkt.style.display = "none";
+
+          function entry(g, b, dy, str, cls, cond){
+            var e = el("g", { "class":"entry " + cls + (cond ? " cond" : ""), "data-cond": cond || "" }, g);
+            el("rect", { x:b[0]+12, y:b[1]+dy, width:b[2]-24, height:23, rx:7 }, e);
+            var t = txt(e, b[0]+22, b[1]+dy+16, str, "");
+            t.setAttribute("text-anchor", "start");
+          }
+          function tag(g, b, w, str, cls, cond){
+            var tg = el("g", { "class":"tag " + cls + " cond", "data-cond":cond }, g);
+            el("rect", { x:b[0]+b[2]-w+14, y:b[1]-13, width:w, height:26, rx:13 }, tg);
+            txt(tg, b[0]+b[2]-w/2+14, b[1]+4.5, str, "");
+          }
+        }
+
+        var svgWide = document.getElementById("svgWide");
+        var svgNarrow = document.getElementById("svgNarrow");
+        buildDiagram(svgWide, LAYOUTS.wide);
+        buildDiagram(svgNarrow, LAYOUTS.narrow);
+
+        /* ---------- steps ---------- */
+        var STEPS = [
+          { t:"全体像：読みと書きを分ける",
+            b:"<strong>書き込み側</strong>は「注文を受け付け、ルールを守って記録する」側、<strong>読み取り側</strong>は「画面表示用に整えたデータを速く返す」側です。両者は直接つながっておらず、イベントとプロジェクションを介して連携します。既存の注文 #1001 はすでに両側にそろった状態から始まります。「次へ」で新しい注文 #1002 の流れを追ってみましょう。",
+            active:[], paths:[] },
+          { t:"ステップ1：ユーザーがコマンドを送る",
+            b:"ユーザーが「注文する」ボタンを押し、<strong>コマンド</strong>（＝状態を変えてほしいという依頼）が送られます。コマンドは「注文が確定した」という事実ではなく、あくまで「注文したい」という意思表示です。",
+            active:["user","cmd","handler"], paths:["p_user_cmd"] },
+          { t:"ステップ2：ハンドラが集約に処理を渡す",
+            b:"<strong>コマンドハンドラ</strong>がコマンドを受け取り、対象の<strong>ドメインモデル（集約）</strong>を取り出して処理を任せます。ハンドラ自身はルールを知らず、橋渡しに徹します。",
+            active:["handler","agg"], paths:["p_cmd_handler","p_handler_agg"] },
+          { t:"ステップ3：集約がルールを検証する",
+            b:"集約は「在庫があるか」「注文条件を満たすか」といった<strong>業務ルールを検証</strong>します。ここで問題があればコマンドは<strong>拒否され、何も保存されません</strong>。不正な状態が記録側に入らないのは、この関門のおかげです。",
+            active:["agg"], paths:[] },
+          { t:"ステップ4：イベントが発行され、保存される",
+            b:"検証OKなら、集約は「<strong>注文が確定した</strong>」という<strong>イベント</strong>（起きた事実）を発行し、<strong>イベントストア</strong>に時系列で保存します。ここまでが書き込み側の仕事で、ユーザーへの応答はこの時点で返せます。",
+            active:["agg","store"], paths:["p_agg_store"] },
+          { t:"ステップ5：読み取り側は、まだ古いまま",
+            b:"ところがこの時点では、<strong>リードモデルには新しい注文 #1002 がまだ入っていません</strong>（既存の #1001 だけが見える状態です）。書き込みと読み取りの間に生じるこの一時的なズレこそが<strong>結果整合性</strong>——「最終的には一致するが、瞬間的には古いことがある」という性質です。",
+            active:["read"], paths:[] },
+          { t:"ステップ6：プロジェクションが少し遅れて反映する",
+            b:"<strong>プロジェクション</strong>がイベントを受け取り、表示用に形を整えて<strong>リードモデルを更新</strong>します。玉の流れが少しゆっくりなのは、この「遅れて届く」感じを表しています。これで両側が一致しました。",
+            active:["store","proj","read"], paths:["p_store_proj","p_proj_read"], slow:true },
+          { t:"ステップ7：ユーザーがクエリを送る",
+            b:"ユーザーが注文一覧の画面を開くと、<strong>クエリ</strong>（問い合わせ）が読み取り側に送られます。クエリは状態を一切変えません。",
+            active:["user","query","read"], paths:["p_user_query","p_query_read"] },
+          { t:"ステップ8：リードモデルから直接・高速に返る",
+            b:"答えは<strong>リードモデルから直接</strong>返ります。<strong>ドメインモデルを通らない</strong>のでルール検証のような重い処理は走らず、データも画面に合わせた形になっているため、そのまま高速に表示できます。新しい注文 #1002 も見えています。",
+            active:["read","user"], paths:["p_read_user"] }
+        ];
+        var COND_RULES = {
+          chip:        function(s){ return s === 3 || s === 4; },
+          event2:      function(s){ return s >= 4; },
+          placeholder: function(s){ return s >= 4 && s < 6; },
+          staleTag:    function(s){ return s >= 4 && s < 6; },
+          order2:      function(s){ return s >= 6; },
+          syncedTag:   function(s){ return s >= 6; },
+          resultTag:   function(s){ return s === 8; }
+        };
+
+        var cur = 0;
+        var token = 0;
+        var playing = false;
+        var playSeq = 0;
+
+        var capTitle = document.getElementById("capTitle");
+        var capBody  = document.getElementById("capBody");
+        var stepCount = document.getElementById("stepCount");
+        var btnPrev = document.getElementById("btnPrev");
+        var btnNext = document.getElementById("btnNext");
+        var btnPlay = document.getElementById("btnPlay");
+        var btnReset = document.getElementById("btnReset");
+        var speedSel = document.getElementById("speedSel");
+        var chipsBox = document.getElementById("stepChips");
+
+        var chipBtns = [];
+        for (var i = 0; i < STEPS.length; i++){
+          (function(idx){
+            var b = document.createElement("button");
+            b.type = "button";
+            b.textContent = idx === 0 ? "全" : String(idx);
+            b.setAttribute("aria-label", idx === 0 ? "全体像へ" : "ステップ" + idx + "へ");
+            b.addEventListener("click", function(){ stopPlay(); goTo(idx, true); });
+            chipsBox.appendChild(b);
+            chipBtns.push(b);
+          })(i);
+        }
+
+        function speed(){ return parseFloat(speedSel.value) || 1; }
+        function wait(ms){
+          return new Promise(function(res){ setTimeout(res, ms); });
+        }
+        function activeSvg(){
+          return window.matchMedia("(max-width: 660px)").matches ? svgNarrow : svgWide;
+        }
+
+        function render(step){
+          var def = STEPS[step];
+          [svgWide, svgNarrow].forEach(function(svg){
+            svg.querySelectorAll("[data-node]").forEach(function(n){
+              n.classList.toggle("on", def.active.indexOf(n.getAttribute("data-node")) >= 0);
+              if (n.getAttribute("data-node") === "read"){
+                n.classList.toggle("warn", step >= 4 && step < 6);
+              }
+            });
+            svg.querySelectorAll("[data-path]").forEach(function(p){
+              p.classList.toggle("on", def.paths.indexOf(p.getAttribute("data-path")) >= 0);
+            });
+            svg.querySelectorAll("[data-cond]").forEach(function(c){
+              var rule = COND_RULES[c.getAttribute("data-cond")];
+              if (rule) c.classList.toggle("vis", !!rule(step));
+            });
+          });
+          capTitle.textContent = def.t;
+          capBody.innerHTML = def.b;
+          stepCount.textContent = "ステップ " + step + " / " + (STEPS.length - 1);
+          btnPrev.disabled = step <= 0;
+          btnNext.disabled = step >= STEPS.length - 1;
+          chipBtns.forEach(function(b, idx){
+            b.classList.toggle("cur", idx === step);
+            b.classList.toggle("done", idx < step);
+          });
+        }
+
+        function animatePaths(def, tk){
+          var svg = activeSvg();
+          var pkt = svg.querySelector(".pkt");
+          var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          if (!def.paths.length || reduce) return Promise.resolve();
+          var chain = Promise.resolve();
+          def.paths.forEach(function(pid, idx){
+            chain = chain.then(function(){
+              if (tk !== token) return;
+              var p = svg.querySelector('[data-path="' + pid + '"]');
+              if (!p) return;
+              var pre = (def.slow && idx === 0) ? 500 / speed() : 0;
+              var dur = (def.slow ? 1150 : 720) / speed();
+              return wait(pre).then(function(){
+                if (tk !== token) return;
+                return new Promise(function(res){
+                  var len = p.getTotalLength();
+                  pkt.setAttribute("fill", SIDE_COLOR[PATH_SIDE[pid]] || "#888");
+                  pkt.style.display = "block";
+                  var t0 = null;
+                  function frame(ts){
+                    if (tk !== token){ res(); return; }
+                    if (t0 === null) t0 = ts;
+                    var k = Math.min(1, (ts - t0) / dur);
+                    var pt = p.getPointAtLength(k * len);
+                    pkt.setAttribute("cx", pt.x);
+                    pkt.setAttribute("cy", pt.y);
+                    if (k < 1) requestAnimationFrame(frame);
+                    else res();
+                  }
+                  requestAnimationFrame(frame);
+                });
+              });
+            });
+          });
+          return chain.then(function(){
+            if (tk === token) pkt.style.display = "none";
+          });
+        }
+
+        function goTo(step, animate){
+          cur = Math.max(0, Math.min(STEPS.length - 1, step));
+          var tk = ++token;
+          render(cur);
+          if (animate) return animatePaths(STEPS[cur], tk);
+          return Promise.resolve();
+        }
+
+        function stopPlay(){
+          playing = false;
+          playSeq++;
+          token++;
+          btnPlay.textContent = "▶ 再生";
+          [svgWide, svgNarrow].forEach(function(svg){ svg.querySelector(".pkt").style.display = "none"; });
+        }
+
+        function playLoop(){
+          if (playing){ stopPlay(); return; }
+          if (cur >= STEPS.length - 1) goTo(0, false);
+          playing = true;
+          var seq = ++playSeq;
+          btnPlay.textContent = "⏸ 一時停止";
+          (function next(){
+            if (!playing || seq !== playSeq) return;
+            if (cur >= STEPS.length - 1){ stopPlay(); return; }
+            goTo(cur + 1, true).then(function(){
+              if (!playing || seq !== playSeq) return;
+              return wait(1500 / speed());
+            }).then(function(){
+              if (playing && seq === playSeq) next();
+            });
+          })();
+        }
+
+        btnNext.addEventListener("click", function(){ stopPlay(); goTo(cur + 1, true); });
+        btnPrev.addEventListener("click", function(){ stopPlay(); goTo(cur - 1, false); });
+        btnReset.addEventListener("click", function(){ stopPlay(); goTo(0, false); });
+        btnPlay.addEventListener("click", playLoop);
+        document.addEventListener("keydown", function(e){
+          if (e.target && (e.target.tagName === "SELECT" || e.target.tagName === "INPUT")) return;
+          if (e.key === "ArrowRight"){ stopPlay(); goTo(cur + 1, true); }
+          if (e.key === "ArrowLeft"){ stopPlay(); goTo(cur - 1, false); }
+        });
+
+        render(0);
+      })();
+    </script>
+  </body>
+</html>

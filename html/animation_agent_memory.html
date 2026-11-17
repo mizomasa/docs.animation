@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>エージェントのメモリの仕組みアニメーション</title>
+<style>
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --surface2:#eef1f4; --text:#17202a; --muted:#5b6b7a; --line:#dde3e8;
+  --accent:#0f766e; --accent2:#0e7490; --red:#dc2626; --red-bg:#fef2f2; --blue:#2563eb; --blue-bg:#eff6ff;
+  --green:#059669; --green-bg:#ecfdf5; --amber:#d97706; --amber-bg:#fffbeb;
+  --shadow:0 8px 30px rgba(15,23,42,.08); --radius:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f1419; --surface:#171e26; --surface2:#1e2833; --text:#e6edf3; --muted:#9aa8b5; --line:#2a3644; --red-bg:#2a1215; --blue-bg:#12233d; --green-bg:#0d2a22; --amber-bg:#2e2110; --shadow:0 8px 30px rgba(0,0,0,.35);}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;line-height:1.65}
+.wrap{max-width:1020px;margin:0 auto;padding:20px 16px 56px}
+h1{font-size:clamp(26px,5vw,38px);line-height:1.25;margin:6px 0 8px;letter-spacing:-.02em}
+.lead{color:var(--muted);font-size:15.5px;max-width:720px;margin:0}
+h2{font-size:20px;margin:0 0 6px} h3{font-size:16px;margin:0 0 6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-top:18px}
+.label{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:8px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls button{min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-weight:700;font-size:14px;cursor:pointer}
+.controls button.primary{background:var(--accent);color:#fff;border-color:var(--accent);min-width:92px}
+.controls button:active{transform:scale(.98)}
+.speed{display:flex;gap:4px;margin-left:auto;align-items:center}
+.speed span{font-size:12px;color:var(--muted);font-weight:700}
+.speed button{min-height:36px;padding:0 10px;font-size:13px}
+.speed button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+.progress{margin-top:12px}
+.progress-meta{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-weight:700}
+.progress-bar{height:8px;background:var(--surface2);border-radius:999px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;background:var(--accent);width:0%;transition:width .4s ease;border-radius:999px}
+.dots{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.dots button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:12px;font-weight:800;cursor:pointer;color:var(--muted)}
+.dots button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dots button.done{background:var(--surface2);color:var(--text)}
+/* chat mock */
+.chat{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.chat-bar{display:flex;align-items:center;gap:8px;background:var(--surface2);padding:10px 12px;border-bottom:1px solid var(--line)}
+.chat-bar .who{font-size:13px;font-weight:800}
+.chat-bar .st{margin-left:auto;font-size:12px;color:var(--muted);font-weight:700}
+.chat-body{padding:16px;min-height:300px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:82%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.55}
+.msg .nm{font-size:11px;font-weight:800;color:var(--muted);margin-bottom:2px}
+.msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+.msg.agent{align-self:flex-start;background:var(--surface2);border-bottom-left-radius:4px}
+.msg.fact{outline:2px solid var(--amber);outline-offset:1px}
+.sys{align-self:center;font-size:12px;color:var(--muted);background:var(--surface2);border:1px dashed var(--line);border-radius:999px;padding:4px 14px;text-align:center}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800}
+.badge.ok{background:var(--green-bg);color:var(--green)} .badge.err{background:var(--red-bg);color:var(--red)} .badge.info{background:var(--blue-bg);color:var(--blue)} .badge.warn{background:var(--amber-bg);color:var(--amber)}
+.chat-note{font-size:12px;color:var(--muted);align-self:center}
+/* flow */
+.actors{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 6px}
+.actor{border:1px solid var(--line);border-radius:14px;padding:12px 8px;text-align:center;background:var(--surface2);transition:.3s}
+.actor .icon{font-size:26px;line-height:1}
+.actor .name{font-weight:800;font-size:13.5px;margin-top:4px}
+.actor .sub{font-size:11px;color:var(--muted)}
+.actor.active{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 2px var(--accent) inset}
+.track{position:relative;height:54px;margin:4px 0}
+.track-line{position:absolute;left:4%;right:4%;top:26px;height:2px;background:var(--line)}
+.packet{position:absolute;top:14px;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:999px;white-space:nowrap;transition:left .7s ease, background .3s;max-width:46%;overflow:hidden;text-overflow:ellipsis}
+.packet.bad{background:var(--red)} .packet.ok{background:var(--green)} .packet.info{background:var(--blue)}
+.step-detail{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--surface)}
+.step-detail h3{font-size:17px}
+.step-detail p{margin:6px 0;color:var(--muted);font-size:14.5px}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.code-box{background:#0f172a;color:#e2e8f0;border-radius:12px;padding:14px;font-size:12.5px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin-top:10px;text-align:left}
+.code-box .k{color:#7dd3fc}.code-box .v-red{color:#fda4af}.code-box .v-blue{color:#93c5fd}.code-box .v-green{color:#6ee7b7}.code-box .v-amber{color:#fcd34d}
+/* memory diagram */
+.mem-wrap{display:grid;grid-template-columns:1fr 120px 1fr;gap:10px;align-items:stretch;margin-top:16px}
+@media(max-width:700px){.mem-wrap{grid-template-columns:1fr}.mem-arrows{flex-direction:row!important;justify-content:center}}
+.mem-box{border-radius:14px;padding:14px;min-height:150px}
+.mem-box.short{border:2px dashed var(--amber);background:var(--amber-bg)}
+.mem-box.long{border:2px solid var(--accent2);background:var(--blue-bg)}
+.mem-box .t{font-weight:900;font-size:14px}
+.mem-box.short .t{color:var(--amber)} .mem-box.long .t{color:var(--accent2)}
+.mem-box .d{font-size:12px;color:var(--muted);margin-top:2px}
+.mem-item{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:8px;font-size:13px}
+.mem-item small{display:block;color:var(--muted);font-size:11.5px}
+.mem-item.new{border-color:var(--green);background:var(--green-bg)}
+.mem-item.upd{border-color:var(--amber);background:var(--amber-bg)}
+.mem-item.loaded{border-color:var(--blue);background:var(--blue-bg)}
+.mem-empty{margin-top:10px;font-size:13px;color:var(--muted);border:1px dashed var(--line);border-radius:10px;padding:12px;background:var(--surface);text-align:center}
+.mem-box.wiped{opacity:.55}
+.mem-arrows{display:flex;flex-direction:column;justify-content:center;gap:10px}
+.arrow{border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center;font-size:12px;font-weight:800;color:var(--muted);background:var(--surface2);transition:.3s}
+.arrow .dir{font-size:17px;line-height:1.2}
+.arrow small{display:block;font-weight:600;font-size:11px}
+.arrow.on-write{background:var(--green);color:#fff;border-color:var(--green)}
+.arrow.on-read{background:var(--blue);color:#fff;border-color:var(--blue)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}.actors{grid-template-columns:repeat(2,1fr)}}
+.callout{border-radius:12px;padding:14px 16px;font-size:14.5px;margin-top:12px}
+.callout.warn{background:var(--amber-bg);border:1px solid #fde68a}
+.callout.info{background:var(--blue-bg);border:1px solid #bfdbfe}
+@media(prefers-color-scheme:dark){.callout.warn{border-color:#92400e}.callout.info{border-color:#1e40af}}
+table.cmp{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+table.cmp th,table.cmp td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}
+table.cmp th{background:var(--surface2)}
+ul.tight{margin:6px 0;padding-left:20px} ul.tight li{margin:4px 0;font-size:14.5px}
+.gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
+.gloss div{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--surface2)}
+.gloss b{display:block;margin-bottom:4px}.gloss p{margin:0;font-size:13.5px;color:var(--muted)}
+footer{color:var(--muted);font-size:12.5px;text-align:center;margin-top:28px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>エージェントのメモリの仕組みアニメーション</h1>
+<p class="lead">LLMそのものは、会話が終われば何も覚えていません。「前回の好みを覚えている」ように見えるのは、アプリ側が<b>短期記憶（その会話のコンテキスト）</b>と<b>長期記憶（ファイルやDBに残る保管庫）</b>を使い分けているからです。9ステップで、覚える → しまう → 次の会話で思い出す、の往復を追ってみましょう。</p>
+</header>
+
+<!-- ① 操作ボタン（上） -->
+<section class="card" aria-label="操作">
+<div class="label">STEP CONTROLS</div>
+<div class="controls" data-controls>
+<button data-act="restart">最初から</button>
+<button data-act="prev">← 前へ</button>
+<button data-act="play" class="primary">▶ 再生</button>
+<button data-act="next">次へ →</button>
+<div class="speed"><span>速度</span>
+<button data-speed="0.5">0.5×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button>
+</div>
+</div>
+<div class="progress"><div class="progress-meta"><span data-step-label>ステップ 1 / 9</span><span data-step-title>会話が始まる</span></div>
+<div class="progress-bar"><div class="progress-fill" data-fill></div></div>
+<div class="dots" data-dots></div></div>
+</section>
+
+<!-- ② 画面でこう見える -->
+<section class="card" aria-label="画面モック">
+<div class="label">画面でこう見える</div>
+<h2>チャット画面：2つの会話をまたぐ様子</h2>
+<div class="chat" style="margin-top:12px">
+<div class="chat-bar"><span style="font-size:18px">🤖</span><span class="who">アシスタント</span><span class="st" id="chatState">会話 1 ・ 1日目</span></div>
+<div class="chat-body" id="chatBody"></div>
+</div>
+<p style="color:var(--muted);font-size:13px;margin:10px 2px 0">利用者から見えるのは普通のチャットだけです。「覚えている」かどうかは、裏側のメモリの出し入れで決まります。</p>
+</section>
+
+<!-- ③ 操作ボタン（下・連動） -->
+<section class="card" aria-label="操作2">
+<div class="controls" data-controls>
+<button data-act="restart">最初から</button>
+<button data-act="prev">← 前へ</button>
+<button data-act="play" class="primary">▶ 再生</button>
+<button data-act="next">次へ →</button>
+<div class="speed"><span>速度</span>
+<button data-speed="0.5">0.5×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button>
+</div>
+</div>
+<div class="progress"><div class="progress-meta"><span data-step-label>ステップ 1 / 9</span><span data-step-title>会話が始まる</span></div>
+<div class="progress-bar"><div class="progress-fill" data-fill></div></div></div>
+</section>
+
+<!-- ④ 実際の中身のフロー -->
+<section class="card" aria-label="フロー">
+<div class="label">実際の中身</div>
+<h2>裏側では何が起きているか</h2>
+<div class="actors" id="actors">
+<div class="actor" data-actor="0"><div class="icon">🧑</div><div class="name">あなた</div><div class="sub">利用者</div></div>
+<div class="actor" data-actor="1"><div class="icon">🤖</div><div class="name">エージェント</div><div class="sub">LLM ＋ アプリ</div></div>
+<div class="actor" data-actor="2"><div class="icon">💭</div><div class="name">短期記憶</div><div class="sub">会話のコンテキスト（揮発）</div></div>
+<div class="actor" data-actor="3"><div class="icon">🗄️</div><div class="name">長期記憶</div><div class="sub">ファイル / DB の保管庫（永続）</div></div>
+</div>
+<div class="track"><div class="track-line"></div><div class="packet" id="packet">新しい会話</div></div>
+<div class="step-detail" id="stepDetail"></div>
+<div class="mem-wrap" aria-label="メモリの図解">
+<div class="mem-box short" id="shortBox">
+<div class="t">💭 短期記憶（コンテキスト）</div>
+<div class="d">今の会話だけの作業机。会話が終わると片付けられて消える</div>
+<div id="shortItems"></div>
+</div>
+<div class="mem-arrows">
+<div class="arrow" id="arrowWrite"><span class="dir">──▶</span>書き込み<small>覚える価値のある事実だけ</small></div>
+<div class="arrow" id="arrowRead"><span class="dir">◀──</span>読み込み（想起）<small>次の会話の冒頭で</small></div>
+</div>
+<div class="mem-box long" id="longBox">
+<div class="t">🗄️ 長期記憶（保管庫）</div>
+<div class="d">ファイルやDBに保存され、会話をまたいで残り続ける</div>
+<div id="longItems"></div>
+</div>
+</div>
+</section>
+<!-- ⑤ 補足 1：記憶の種類 -->
+<section class="card">
+<div class="label">補足 1</div>
+<h2>記憶の種類：短期と長期、そして長期の中の分類</h2>
+<p style="color:var(--muted);font-size:14.5px">まず大きく2つに分かれます。短期記憶は「今の会話の中だけ」、長期記憶は「会話をまたいで残る」ものです。長期記憶の中身も、性質によっていくつかに分けて考えることがあります（人間の記憶の分類からの借用です）。</p>
+<div style="overflow-x:auto">
+<table class="cmp"><tr><th>種類</th><th>残る期間</th><th>中身の例</th></tr>
+<tr><td><b>短期記憶</b>（ワーキングメモリ）</td><td>その会話の間だけ</td><td>今の会話のやり取り全体、直前に決めた条件、途中経過</td></tr>
+<tr><td><b>長期記憶：意味記憶</b></td><td>会話をまたいで残る</td><td>事実や好み。「コーヒーはブラック派」「甘いものは控えめに」といった、知識として取り出せる情報</td></tr>
+<tr><td><b>長期記憶：エピソード記憶</b></td><td>会話をまたいで残る</td><td>出来事の記録。「前回は旅行の相談をした」「先月この条件で決めた」といった、いつ・何があったかという文脈つきの情報</td></tr>
+<tr><td><b>長期記憶：決めごと・手順</b></td><td>会話をまたいで残る</td><td>ルールや進め方の約束。「回答は短めに」「見積もりは税込で」といった、今後の振る舞いを決める情報</td></tr></table>
+</div>
+<div class="callout info"><b>ポイント：</b>LLMのモデル自体が学習し直して覚えるわけではありません。長期記憶はアプリ側のファイルやDBに置かれ、必要なときにコンテキストへ「読み戻す」ことで、モデルが覚えているように振る舞います。</div>
+</section>
+
+<!-- 補足 2：何を覚えるかの判断 -->
+<section class="card">
+<div class="label">補足 2</div>
+<h2>何を覚えるかの判断：全部は覚えない</h2>
+<p style="color:var(--muted);font-size:14.5px">会話のすべてを長期記憶に入れると、保管庫はすぐにノイズだらけになり、思い出すときにも邪魔になります。そこで「覚える価値があるもの」だけを選ぶ判断が入ります。</p>
+<div class="grid2">
+<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><h3>覚える候補になるもの</h3><ul class="tight">
+<li>本人の<b>好み</b>（味・文体・進め方など、今後も効くもの）</li>
+<li>変わりにくい<b>事実</b>（所属、条件、持ち物など）</li>
+<li>明示された<b>決めごと</b>（「今後はこうして」という約束）</li>
+<li>繰り返し出てくる話題や、次回に引き継ぐべき途中経過</li></ul></div>
+<div style="border:1px solid var(--line);border-radius:12px;padding:14px"><h3>覚えないほうがよいもの</h3><ul class="tight">
+<li>その場限りの雑談や、一度きりの用件</li>
+<li>推測でしかないこと（本人が言っていない属性や事情）</li>
+<li>時間が経てば無効になる一時的な状態</li>
+<li>パスワードなど、保存すべきでない機密情報</li></ul></div>
+</div>
+<p style="color:var(--muted);font-size:14.5px;margin-top:10px">判断の担い手は実装によってさまざまです。モデル自身が「これは保存すべき」と判断して書き込む方式もあれば、アプリ側のルール（特定の形式の発言だけ拾う等）で機械的に選ぶ方式もあります。</p>
+</section>
+
+<!-- 補足 3：想起の仕組み -->
+<section class="card">
+<div class="label">補足 3</div>
+<h2>想起の仕組み：いつ、どうやって思い出すか</h2>
+<ul class="tight">
+<li><b>会話の冒頭でまとめて読み込む：</b>新しい会話の開始時に、保管庫の主要な記憶をコンテキストの先頭へ入れておく方式。シンプルで確実ですが、記憶が増えるとコンテキストを圧迫します</li>
+<li><b>必要になったら検索して引く：</b>会話の内容に応じて保管庫を検索し、関連する記憶だけを取り出す方式。大量の記憶を持てる反面、検索で拾い損ねると「覚えていない」状態になります</li>
+<li><b>ツールとして読みに行く：</b>エージェントが「記憶を検索するツール」を自分で呼ぶ方式。モデルが判断して取りに行くので柔軟ですが、呼ばなければ思い出しません</li>
+</ul>
+<div class="callout info"><b>RAGとの関係：</b>「検索して関連情報を引き、コンテキストに入れてから答える」という骨格は、文書検索の <b>RAG（検索拡張生成）</b> と同じです。違いは検索対象で、RAGが外部の文書コレクションを引くのに対し、メモリの想起は「その人についての蓄積」を引きます。技術的には同じ仕組みの応用と言えます。</div>
+</section>
+
+<!-- 補足 4：訂正と忘却 -->
+<section class="card">
+<div class="label">補足 4</div>
+<h2>訂正と忘却：記憶は放っておくと古くなる</h2>
+<ul class="tight">
+<li><b>上書き・訂正：</b>好みや状況は変わります。新しい事実が出たら、古い記憶を残したままにせず上書きするのが原則です（今回のステップ8）。古い記憶と新しい記憶が両方残ると、どちらを信じるかで回答がぶれます</li>
+<li><b>削除への対応：</b>「それは忘れて」と言われたら、保管庫から実際に消す必要があります。消したつもりで要約や別の場所に残っていると、削除したことになりません</li>
+<li><b>間違った記憶のリスク：</b>聞き間違いや推測を事実として保存すると、その後の会話すべてに誤りが伝播します。出典（いつ・どの発言から覚えたか）を一緒に残しておくと、後から検証・訂正がしやすくなります</li>
+<li><b>鮮度の管理：</b>記憶に日付を持たせ、「古いものは確認し直す」「長く使われていないものは棚卸しする」といった運用を入れる実装もあります</li>
+</ul>
+</section>
+
+<!-- 補足 5：プライバシーの観点 -->
+<section class="card">
+<div class="label">補足 5</div>
+<h2>プライバシーの観点：本人が見て、直せること</h2>
+<p style="color:var(--muted);font-size:14.5px">長期記憶は「その人についての記録」です。便利さの裏側で、何が保存されているか分からないまま蓄積されるのは望ましくありません。</p>
+<ul class="tight">
+<li><b>確認できること：</b>保存されている記憶を本人が一覧で見られる設計が大切です。「何を覚えられているか」が見えれば、誤りや不要な記録に気づけます</li>
+<li><b>編集・削除できること：</b>間違った記憶の訂正や、覚えてほしくないことの削除を、本人の操作で完結できること</li>
+<li><b>保存範囲の明示：</b>何を・どこに・どれくらいの期間保存するのかが説明されていること。端末内だけなのか、サーバーに送られるのかで意味が大きく変わります</li>
+<li><b>覚えない選択肢：</b>メモリ機能自体をオフにできる、あるいは「この会話は覚えないで」という指定ができることも、設計上の重要な要素です</li>
+</ul>
+</section>
+
+<!-- 補足 6：用語解説 -->
+<section class="card">
+<div class="label">補足 6</div>
+<h2>用語解説</h2>
+<div class="gloss">
+<div><b>コンテキスト</b><p>モデルが一度に読める入力の全体（会話履歴や読み込んだ記憶など）。モデルが「見えている」のはこの範囲だけで、ここに入っていないことは知らないのと同じになる。</p></div>
+<div><b>永続化</b><p>データをファイルやDBに書き出し、プログラムや会話が終わっても残るようにすること。長期記憶は永続化されたデータであり、短期記憶（コンテキスト）は永続化されていない。</p></div>
+<div><b>想起（リコール）</b><p>長期記憶から関連する内容を取り出して、コンテキストへ読み戻すこと。「思い出す」にあたる処理。冒頭でまとめて行う方式と、検索して都度行う方式がある。</p></div>
+<div><b>エピソード記憶</b><p>「いつ・何があったか」という出来事の記憶。事実そのもの（意味記憶）と違い、文脈つきで残るため、「前回の続き」として会話をつなぐのに効く。</p></div>
+<div><b>意味記憶</b><p>出来事から切り離された、事実や知識としての記憶。「好み」「条件」「決めごとの内容」など。長期記憶の中心になることが多い。</p></div>
+<div><b>ステートレス</b><p>過去のやり取りを保持しない性質。LLMのモデル自体はステートレスで、会話の継続も記憶も、アプリ側がコンテキストと保管庫を管理することで実現している。</p></div>
+</div>
+</section>
+
+<footer>エージェントのメモリの仕組みアニメーション — 技術アニメーションシリーズ（Agent SDK / MCP / マルチエージェント に続く1本）</footer>
+</div>
+
+<script>
+var FACT_SWEET_OLD = {t:'好み：甘いものが好き', s:'会話1での発言から'};
+var FACT_SWEET_NEW = {t:'好み：甘いものは控えめにしている', s:'会話2で訂正（新しい事実が優先）'};
+var FACT_COFFEE = {t:'好み：コーヒーはブラック派', s:'会話1での発言から'};
+var ST_TALK = [
+ {t:'やり取り：週末のおでかけ相談', s:'会話1'},
+ {t:'やり取り：おすすめのカフェの話', s:'会話1'}
+];
+var ST_FACT = {t:'発言：「甘いものが大好き。コーヒーはブラック派」', s:'覚える価値のある事実として検出'};
+var ST_LOADED = [
+ {t:'読み込んだ記憶：甘いものが好き', s:'長期記憶から想起', cls:'loaded'},
+ {t:'読み込んだ記憶：コーヒーはブラック派', s:'長期記憶から想起', cls:'loaded'}
+];
+var steps = [
+ {title:'会話が始まる（短期記憶は空）', packet:'新しい会話を開始', from:12, to:37, actors:[0,1], cls:'',
+  chat:'s1', chatState:'会話 1 ・ 1日目',
+  mem:{short:[], long:[], arrow:null, wiped:false},
+  detail:'<h3>STEP 1 — 会話が始まる：エージェントの頭の中は空っぽ</h3><p>新しい会話が始まった瞬間、エージェントが読めるのは<b>短期記憶（コンテキスト）</b>だけです。そこはまだ空っぽ。LLMのモデル自体には「前回の会話」が内蔵されているわけではないので、この時点では相手が誰で、何が好きかも分かりません。下の図で、短期記憶の箱が空なのを確認してください。</p><div class="code-box">コンテキスト（短期記憶）: <span class="v-red">［ 空 ］</span>\n長期記憶（保管庫）: この会話ではまだ何も入っていない</div>'},
+ {title:'やり取りが短期記憶に積み上がる', packet:'発言と返答', from:12, to:62, actors:[0,1,2], cls:'',
+  chat:'s2', chatState:'会話 1 ・ 1日目',
+  mem:{short:ST_TALK, long:[], arrow:null, wiped:false},
+  detail:'<h3>STEP 2 — やり取りは短期記憶に積み上がっていく</h3><p>会話が進むと、発言と返答がそのまま<b>コンテキスト</b>に積み上がります。エージェントが「さっきの話」を踏まえて答えられるのは、この積み上がりを毎回読み直しているからです。ただしこれは短期記憶の中だけの話で、会話が終われば消えてしまいます。</p><div class="code-box">コンテキスト（短期記憶）:\n  あなた: 週末にカフェに行きたいな\n  エージェント: いいですね、どんな雰囲気が…\n  <span class="v-blue">（やり取りが増えるたびに下へ積み上がる）</span></div>'},
+ {title:'「覚える価値のある事実」が出てくる', packet:'好みの発言', from:12, to:37, actors:[0,1], cls:'',
+  chat:'s3', chatState:'会話 1 ・ 1日目',
+  mem:{short:ST_TALK.concat([ST_FACT]), long:[], arrow:null, wiped:false},
+  detail:'<h3>STEP 3 — 覚えておく価値のある事実が現れる</h3><p>会話の中で「甘いものが大好き」「コーヒーはブラック派」という発言が出てきました。これは今回の会話が終わっても次回に役立つ<b>好み</b>です。こうした「将来も効く事実・好み・決めごと」が、長期記憶に残す候補になります。逆に、その場限りの雑談は候補になりません（補足2）。</p>'},
+ {title:'長期記憶に書き込む', packet:'記憶を書き込み', from:37, to:87, actors:[1,3], cls:'ok',
+  chat:'s4', chatState:'会話 1 ・ 1日目',
+  mem:{short:ST_TALK.concat([ST_FACT]), long:[FACT_SWEET_OLD, FACT_COFFEE], longCls:'new', arrow:'write', wiped:false},
+  detail:'<h3>STEP 4 — エージェントが長期記憶に書き込む</h3><p>エージェント（またはアプリ側の仕組み）が、候補になった事実を<b>長期記憶の保管庫</b>に書き込みます。保管庫はファイルやDBなので、会話が終わっても残ります（<b>永続化</b>）。書き込むのは会話の全文ではなく、抽出された事実だけです。下の図で「書き込み」の矢印と、保管庫に2件入った様子を見てください。</p><div class="code-box"><span class="k">長期記憶へ保存:</span>\n  - 好み：甘いものが好き <span class="v-green">← 追加</span>\n  - 好み：コーヒーはブラック派 <span class="v-green">← 追加</span></div>'},
+ {title:'会話が終わる：短期記憶はリセット', packet:'会話を終了', from:37, to:62, actors:[1,2], cls:'bad',
+  chat:'s5', chatState:'会話 1 ・ 終了',
+  mem:{short:[], long:[FACT_SWEET_OLD, FACT_COFFEE], arrow:null, wiped:true},
+  detail:'<h3>STEP 5 — 会話が終わる：短期記憶はリセットされる</h3><p>会話が終わると、短期記憶（コンテキスト）は<b>片付けられて消えます</b>。週末の相談のやり取りも、カフェの話も、もうエージェントからは見えません。残っているのは、ステップ4で書き込んだ長期記憶の2件だけです。ここが「短期＝揮発、長期＝永続」の分かれ目です。</p><div class="code-box">コンテキスト（短期記憶）: <span class="v-red">リセット（全消去）</span>\n長期記憶（保管庫）: <span class="v-green">2件そのまま残っている</span></div>'},
+ {title:'新しい会話の冒頭で想起する', packet:'記憶を読み込み（想起）', from:87, to:37, actors:[1,3], cls:'info',
+  chat:'s6', chatState:'会話 2 ・ 後日',
+  mem:{short:[], long:[FACT_SWEET_OLD, FACT_COFFEE], arrow:'read', wiped:false},
+  detail:'<h3>STEP 6 — 新しい会話の冒頭：長期記憶を読み込む（想起）</h3><p>後日、新しい会話が始まります。短期記憶はまっさらですが、エージェントは冒頭で<b>長期記憶から関連する記憶を読み込み</b>ます。これを<b>想起</b>と呼びます。下の図で「読み込み（想起）」の矢印が光っているのがその瞬間です。読み込み方は、冒頭でまとめて入れる方式と、検索して引く方式があります（補足3）。</p>'},
+ {title:'記憶がコンテキストに入り「覚えている」状態に', packet:'記憶をコンテキストへ', from:87, to:62, actors:[1,2,3], cls:'info',
+  chat:'s7', chatState:'会話 2 ・ 後日',
+  mem:{short:ST_LOADED, long:[FACT_SWEET_OLD, FACT_COFFEE], arrow:'read', wiped:false},
+  detail:'<h3>STEP 7 — 読み込んだ記憶がコンテキストに入る</h3><p>想起した記憶は、新しい会話の<b>コンテキストに読み戻され</b>ます。モデルから見れば「会話の最初から知っていた情報」として扱えるので、挨拶から前回の好みを踏まえた話し方ができます。「覚えている」の正体はこれで、モデルが学習し直したわけではありません。</p><div class="code-box">コンテキスト（短期記憶）:\n  <span class="v-blue">［想起した記憶］好み：甘いものが好き／コーヒーはブラック派</span>\n  あなた: おはよう、今日もカフェの相談いい？\n  <span class="v-blue">（記憶を踏まえて会話が始まる）</span></div>'},
+ {title:'記憶が古くなったら上書き・訂正', packet:'訂正の発言', from:12, to:87, actors:[0,1,3], cls:'ok',
+  chat:'s8', chatState:'会話 2 ・ 後日',
+  mem:{short:ST_LOADED.concat([{t:'発言：「最近は甘いものを控えている」', s:'訂正のきっかけ'}]), long:[{t:FACT_SWEET_NEW.t, s:FACT_SWEET_NEW.s, cls:'upd'}, FACT_COFFEE], arrow:'write', wiped:false},
+  detail:'<h3>STEP 8 — 古い記憶は上書き・訂正する（新しい事実が優先）</h3><p>「最近は甘いものを控えている」という新しい発言が出ました。好みは変わるものなので、古い記憶「甘いものが大好き」を残したままにせず、<b>新しい事実で上書き</b>します。両方が残ると、どちらの好みに合わせるべきか回答がぶれてしまいます（補足4）。下の図で、保管庫の1件目が書き換わった様子を確認してください。</p><div class="code-box"><span class="k">長期記憶を更新:</span>\n  - 好み：甘いものが好き → <span class="v-amber">甘いものは控えめにしている（上書き）</span>\n  - 好み：コーヒーはブラック派（変更なし）</div>'},
+ {title:'記憶を使って回答する', packet:'好みを踏まえた回答', from:37, to:12, actors:[0,1,2], cls:'ok',
+  chat:'s9', chatState:'会話 2 ・ 後日',
+  mem:{short:ST_LOADED.concat([{t:'やり取り：今日のおすすめ相談', s:'会話2'}]), long:[FACT_SWEET_NEW, FACT_COFFEE], arrow:null, wiped:false},
+  detail:'<h3>STEP 9 — 記憶を使って回答する</h3><p>おすすめを聞かれたエージェントは、コンテキストにある記憶（控えめな甘さ＋ブラックコーヒー）を使って答えます。<b>もし記憶がなければ</b>、好みが分からないので「一般的なおすすめ」を出すしかなく、毎回ゼロから聞き直すことになります。記憶の仕組みは、この「聞き直しをなくす」ためのものだと言えます。</p><div class="code-box">記憶あり: <span class="v-green">「控えめな甘さのもの＋ブラックでどうでしょう」</span>\n記憶なし: <span class="v-red">「甘いものはお好きですか？」から聞き直し</span></div>'}
+];
+var chats = {
+ s1:'<div class="sys">新しい会話が始まりました</div><p class="chat-note">まだ何もやり取りがありません。短期記憶（コンテキスト）は空です。</p>',
+ s2:'<div class="msg user"><div class="nm">あなた</div>週末にカフェに行きたいな。おすすめある？</div><div class="msg agent"><div class="nm">エージェント</div>いいですね。どんな雰囲気のお店がいいですか？</div><div class="msg user"><div class="nm">あなた</div>静かめで、スイーツが美味しいところがいいな</div><div class="msg agent"><div class="nm">エージェント</div>では、スイーツに力を入れているカフェをいくつか挙げますね。</div>',
+ s3:'<div class="msg user"><div class="nm">あなた</div>週末にカフェに行きたいな。おすすめある？</div><div class="msg agent"><div class="nm">エージェント</div>いいですね。どんな雰囲気のお店がいいですか？</div><div class="msg user fact"><div class="nm">あなた</div>実は甘いものが大好きでね。あと、コーヒーはブラック派なんだ <span class="badge warn">覚える価値のある事実</span></div><div class="msg agent"><div class="nm">エージェント</div>承知しました。その好みに合わせて探しますね。</div>',
+ s4:'<div class="msg user fact"><div class="nm">あなた</div>実は甘いものが大好きでね。あと、コーヒーはブラック派なんだ</div><div class="msg agent"><div class="nm">エージェント</div>承知しました。その好みに合わせて探しますね。</div><div class="sys">🧠 長期記憶に保存しました：甘いものが好き／コーヒーはブラック派</div>',
+ s5:'<div class="sys">会話 1 が終了しました</div><p class="chat-note">画面の履歴は残っていても、エージェントの短期記憶（コンテキスト）はリセット済みです。<br>残っているのは長期記憶の2件だけです。</p><div class="sys">── 後日 ──</div>',
+ s6:'<div class="sys">新しい会話が始まりました</div><div class="sys">🧠 長期記憶から関連する記憶を読み込んでいます…（想起）</div><p class="chat-note">会話が始まる裏側で、保管庫から記憶が読み込まれています。</p>',
+ s7:'<div class="sys">新しい会話が始まりました</div><div class="msg user"><div class="nm">あなた</div>おはよう、今日もカフェの相談いい？</div><div class="msg agent"><div class="nm">エージェント</div>おはようございます。もちろんです。前回は甘いものがお好きで、コーヒーはブラック派でしたね。今日もその線で探しましょうか？ <span class="badge info">記憶を踏まえた発言</span></div>',
+ s8:'<div class="msg user"><div class="nm">あなた</div>おはよう、今日もカフェの相談いい？</div><div class="msg agent"><div class="nm">エージェント</div>もちろんです。前回は甘いものがお好きで、コーヒーはブラック派でしたね。</div><div class="msg user fact"><div class="nm">あなた</div>あ、そういえば最近は甘いものを控えているんだ <span class="badge warn">訂正のもとになる発言</span></div><div class="msg agent"><div class="nm">エージェント</div>承知しました。記憶を「甘いものは控えめにしている」に更新しておきますね。</div><div class="sys">🧠 長期記憶を上書きしました（古い好み → 新しい好み）</div>',
+ s9:'<div class="msg user"><div class="nm">あなた</div>じゃあ、今日のおすすめは？</div><div class="msg agent"><div class="nm">エージェント</div>では、甘さ控えめのスイーツがあるお店にしましょう。コーヒーはブラックに合う、すっきりした味のところがおすすめです。 <span class="badge ok">更新後の記憶で回答</span></div><p class="chat-note">※ もし記憶がなければ：「甘いものはお好きですか？」と毎回ゼロから聞き直すことになります。</p>'
+};
+function memItemsHTML(list, emptyText, cls){
+  if(!list.length) return '<div class="mem-empty">'+emptyText+'</div>';
+  return list.map(function(it){
+    var c = it.cls || cls || '';
+    return '<div class="mem-item'+(c?' '+c:'')+'">'+it.t+'<small>'+it.s+'</small></div>';
+  }).join('');
+}
+var cur=0, playing=false, timer=null, speed=1;
+var dotsWrap=document.querySelector('[data-dots]');
+steps.forEach(function(s,i){var b=document.createElement('button');b.textContent=i+1;b.setAttribute('aria-label','ステップ'+(i+1));b.addEventListener('click',function(){stop();go(i);});dotsWrap.appendChild(b);});
+
+function render(){
+  var s=steps[cur];
+  document.querySelectorAll('[data-step-label]').forEach(function(e){e.textContent='ステップ '+(cur+1)+' / '+steps.length;});
+  document.querySelectorAll('[data-step-title]').forEach(function(e){e.textContent=s.title;});
+  document.querySelectorAll('[data-fill]').forEach(function(e){e.style.width=((cur+1)/steps.length*100)+'%';});
+  Array.prototype.forEach.call(dotsWrap.children,function(b,i){b.className=i===cur?'on':(i<cur?'done':'');});
+  document.getElementById('chatBody').innerHTML=chats[s.chat];
+  document.getElementById('chatState').textContent=s.chatState;
+  document.getElementById('stepDetail').innerHTML=s.detail;
+  document.getElementById('shortItems').innerHTML=memItemsHTML(s.mem.short, s.mem.wiped?'リセットされました（空）':'まだ空っぽです', '');
+  document.getElementById('longItems').innerHTML=memItemsHTML(s.mem.long, 'まだ何も保存されていません', s.mem.longCls||'');
+  document.getElementById('shortBox').classList.toggle('wiped', !!s.mem.wiped);
+  document.getElementById('arrowWrite').className='arrow'+(s.mem.arrow==='write'?' on-write':'');
+  document.getElementById('arrowRead').className='arrow'+(s.mem.arrow==='read'?' on-read':'');
+  var pk=document.getElementById('packet');
+  pk.textContent=s.packet; pk.className='packet'+(s.cls?' '+s.cls:'');
+  pk.style.left=s.from+'%';
+  requestAnimationFrame(function(){requestAnimationFrame(function(){pk.style.left=s.to+'%';});});
+  document.querySelectorAll('.actor').forEach(function(a){a.classList.toggle('active', s.actors.indexOf(+a.dataset.actor)>=0);});
+}
+function go(i){cur=Math.max(0,Math.min(steps.length-1,i));render();}
+function stop(){playing=false;if(timer){clearInterval(timer);timer=null;}syncPlay();}
+function syncPlay(){document.querySelectorAll('[data-act="play"]').forEach(function(b){b.textContent=playing?'⏸ 一時停止':'▶ 再生';});}
+function play(){
+  if(playing){stop();return;}
+  if(cur>=steps.length-1){cur=0;}
+  playing=true;syncPlay();render();
+  timer=setInterval(function(){ if(cur>=steps.length-1){stop();return;} cur++; render(); if(cur>=steps.length-1){stop();} }, 3400/speed);
+}
+document.querySelectorAll('[data-controls]').forEach(function(w){
+  w.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    if(b.dataset.act==='play')play();
+    else if(b.dataset.act==='next'){stop();go(cur+1);}
+    else if(b.dataset.act==='prev'){stop();go(cur-1);}
+    else if(b.dataset.act==='restart'){stop();go(0);}
+    else if(b.dataset.speed){speed=parseFloat(b.dataset.speed);document.querySelectorAll('[data-speed]').forEach(function(x){x.classList.toggle('on',x===b||x.dataset.speed===b.dataset.speed);}); if(playing){stop();play();}}
+  });
+});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){stop();go(cur+1);}if(e.key==='ArrowLeft'){stop();go(cur-1);}});
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>RAGの仕組みアニメーション</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
+      * { box-sizing: border-box; }
+      :root {
+        --bg: #f3f6f7;
+        --surface: #ffffff;
+        --surface-2: #ebf1f3;
+        --ink: #152228;
+        --ink-2: #40545e;
+        --ink-3: #687f89;
+        --line: #d2dee2;
+        --accent: #0e7490;
+        --accent-ink: #ffffff;
+        --accent-soft: #dcf0f5;
+        --packet: #b45309;
+        --packet-soft: #fdf0dd;
+        --danger: #b3261e;
+        --danger-soft: #fbe9e7;
+        --term-bg: #0d161a;
+        --term-ink: #c8e4ec;
+        --term-dim: #74909c;
+        --radius: 10px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0c1214;
+          --surface: #151d20;
+          --surface-2: #1c272b;
+          --ink: #e4edef;
+          --ink-2: #aec0c7;
+          --ink-3: #7f959e;
+          --line: #2a383d;
+          --accent: #38b6d3;
+          --accent-ink: #052730;
+          --accent-soft: #12333d;
+          --packet: #f0a832;
+          --packet-soft: #3a2c12;
+          --danger: #f0867e;
+          --danger-soft: #3d1d1a;
+          --term-bg: #060a0b;
+          --term-ink: #c8e4ec;
+          --term-dim: #68828d;
+          color-scheme: dark;
+        }
+      }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "IBM Plex Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        line-height: 1.75;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { max-width: 960px; margin: 0 auto; padding: 28px 18px 72px; }
+      h1 { font-size: clamp(26px, 5.4vw, 38px); line-height: 1.3; margin: 0 0 10px; letter-spacing: .01em; }
+      .lede { color: var(--ink-2); font-size: 16px; margin: 0 0 6px; max-width: 42em; }
+      .lede .mono { color: var(--accent); font-weight: 600; }
+      h2 { font-size: 21px; margin: 0 0 6px; line-height: 1.4; }
+      h3 { font-size: 16px; margin: 0 0 6px; }
+      .sec-head { margin: 40px 0 14px; }
+      .sec-head p { margin: 0; color: var(--ink-2); font-size: 14.5px; max-width: 44em; }
+      .sec-num { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 1px 10px; margin-bottom: 8px; letter-spacing: .08em; }
+
+      /* ---------- controls ---------- */
+      .controls {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 10px 12px; margin: 18px 0;
+      }
+      .controls .btn {
+        appearance: none; border: 1px solid var(--line); background: var(--surface-2);
+        color: var(--ink); border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 14.5px; font-weight: 600;
+        cursor: pointer; min-width: 44px;
+      }
+      .controls .btn:hover { border-color: var(--accent); }
+      .controls .btn:focus-visible, .speedsel:focus-visible, .dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .controls .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 92px; }
+      .controls .btn:disabled { opacity: .38; cursor: default; }
+      .controls .btn:disabled:hover { border-color: var(--line); }
+      .controls .btn.primary:disabled:hover { border-color: var(--accent); }
+      .speedwrap { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13.5px; color: var(--ink-2); }
+      .speedsel { font: inherit; font-size: 14px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+      .progress-line { display: flex; align-items: center; gap: 12px; margin: 4px 2px 0; flex-wrap: wrap; }
+      .progress-label { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+      .progress-track { flex: 1 1 140px; height: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+      .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .45s ease; }
+      .dots { display: flex; gap: 6px; flex-wrap: wrap; }
+      .dot { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+      .dot.done { border-color: var(--accent); color: var(--accent); }
+      .dot.now { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+      /* ---------- chat mock + vector map ---------- */
+      .stage-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      @media (min-width: 820px) { .stage-grid { grid-template-columns: 1fr 1fr; } }
+      .browser, .vpanel {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+      }
+      .browser-bar {
+        display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+        background: var(--surface-2); border-bottom: 1px solid var(--line);
+      }
+      .traffic { display: flex; gap: 6px; flex: none; }
+      .traffic i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+      .traffic i:nth-child(1) { background: #e0655f; } .traffic i:nth-child(2) { background: #e8b23f; } .traffic i:nth-child(3) { background: #58b368; }
+      .win-title { font-size: 13.5px; font-weight: 700; color: var(--ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .spinner {
+        width: 16px; height: 16px; border-radius: 50%; flex: none; margin-left: auto;
+        border: 2.5px solid var(--line); border-top-color: var(--accent);
+        animation: spin .8s linear infinite; display: none;
+      }
+      .spinner.on { display: block; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .chat-body { padding: 16px 16px 18px; min-height: 342px; display: flex; flex-direction: column; gap: 10px; }
+      .idx-panel { border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; background: var(--surface-2); }
+      .idx-panel .idx-head { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; color: var(--ink-3); margin-bottom: 4px; }
+      .idx-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13.5px; flex-wrap: wrap; }
+      .idx-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); flex: none; }
+      .idx-dot.on { background: var(--accent); }
+      .idx-dot.busy { background: var(--packet); }
+      .idx-name { font-weight: 700; }
+      .idx-meta { color: var(--ink-3); font-size: 12px; }
+      .idx-state { margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+      .idx-state.ok { color: var(--accent); }
+      .idx-state.busy { color: var(--packet); }
+      .chat-msgs { display: flex; flex-direction: column; gap: 9px; flex: 1; }
+      .chat-empty { color: var(--ink-3); font-size: 13.5px; text-align: center; padding: 14px 8px; border: 1px dashed var(--line); border-radius: 8px; }
+      .msg { max-width: 92%; padding: 9px 13px; border-radius: 12px; font-size: 14px; line-height: 1.65; }
+      .msg .who { display: block; font-size: 11px; font-weight: 700; opacity: .7; margin-bottom: 1px; }
+      .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px; }
+      .msg.ai { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+      .msg.ai .src-list { display: block; margin-top: 8px; padding-top: 7px; border-top: 1px dashed var(--line); font-size: 12px; color: var(--ink-2); line-height: 1.7; }
+      .cite {
+        display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600;
+        color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent);
+        border-radius: 5px; padding: 0 5px; margin: 0 1px; vertical-align: 2px; line-height: 1.5;
+      }
+      .tool-line {
+        align-self: stretch; display: flex; align-items: center; gap: 8px;
+        font-family: "IBM Plex Mono", monospace; font-size: 12.5px; line-height: 1.55;
+        border: 1.5px dashed var(--packet); color: var(--packet); background: var(--packet-soft);
+        border-radius: 8px; padding: 7px 12px; word-break: break-all;
+      }
+      .tool-line.done { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+      .fig-cap { font-size: 12.5px; color: var(--ink-3); margin: 8px 2px 0; }
+
+      /* vector map */
+      .vmap-head { padding: 8px 14px; font-size: 12.5px; font-weight: 700; color: var(--ink-2); background: var(--surface-2); border-bottom: 1px solid var(--line); }
+      .vmap { display: block; width: 100%; height: auto; background: var(--surface); }
+      .vmap .grid-dot { fill: var(--line); }
+      .vmap .axis-label { font-size: 10.5px; fill: var(--ink-3); font-family: "IBM Plex Sans JP", sans-serif; }
+      .vmap .pt circle { fill: var(--surface-2); stroke: var(--ink-3); stroke-width: 1.5; transition: fill .3s, stroke .3s; }
+      .vmap .pt text { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; font-weight: 600; fill: var(--ink-2); text-anchor: middle; }
+      .vmap .pt .vec-label { font-size: 9.5px; font-weight: 400; fill: var(--ink-3); opacity: 0; transition: opacity .3s; }
+      .vmap .pt .ring { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 3 3; opacity: 0; transition: opacity .3s; }
+      .vmap.show-vec .pt .vec-label { opacity: 1; }
+      .vmap.stored .pt .ring { opacity: 1; }
+      .vmap .qpt { opacity: 0; transition: opacity .3s; }
+      .vmap .qpt polygon { fill: var(--packet); stroke: var(--packet); }
+      .vmap .qpt text { font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 700; fill: var(--packet); text-anchor: middle; }
+      .vmap.show-query .qpt { opacity: 1; }
+      .vmap .sim-line { stroke: var(--packet); stroke-width: 1.5; stroke-dasharray: 5 4; opacity: 0; transition: opacity .3s; }
+      .vmap .sim-score { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; font-weight: 700; fill: var(--packet); opacity: 0; transition: opacity .3s; }
+      .vmap.searched .sim-line, .vmap.searched .sim-score { opacity: 1; }
+      .vmap.searched .pt.hit circle { fill: var(--packet-soft); stroke: var(--packet); stroke-width: 2.5; }
+      .vmap.grounded .pt.hit circle { fill: var(--accent-soft); stroke: var(--accent); }
+      .vmap .ground-badge { opacity: 0; transition: opacity .3s; }
+      .vmap .ground-badge rect { fill: var(--accent); }
+      .vmap .ground-badge text { fill: var(--accent-ink); font-size: 9.5px; font-weight: 700; text-anchor: middle; font-family: "IBM Plex Sans JP", sans-serif; }
+      .vmap.grounded .ground-badge { opacity: 1; }
+      .chunk-list { border-top: 1px solid var(--line); padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+      .chunk-list .cl-head { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; color: var(--ink-3); }
+      .chunk-row {
+        display: flex; align-items: center; gap: 8px; font-size: 12.5px; line-height: 1.5;
+        border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; background: var(--surface);
+      }
+      .chunk-row .cid { font-family: "IBM Plex Mono", monospace; font-weight: 700; color: var(--ink-2); flex: none; }
+      .chunk-row .ctext { flex: 1; min-width: 0; }
+      .chunk-row .csrc { color: var(--ink-3); font-size: 11px; white-space: nowrap; }
+      .chunk-row .cvec { font-family: "IBM Plex Mono", monospace; font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+      .chunk-row .cbadge {
+        flex: none; font-size: 11px; font-weight: 700; border-radius: 999px; padding: 0 8px;
+        border: 1px solid var(--line); color: var(--ink-2); background: var(--surface-2); white-space: nowrap;
+      }
+      .chunk-row .cbadge.score { border-color: var(--packet); color: var(--packet); background: var(--packet-soft); font-family: "IBM Plex Mono", monospace; }
+      .chunk-row .cbadge.ground { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+      .chunk-row.hit { border-color: var(--packet); }
+      .chunk-row.grounded { border-color: var(--accent); background: var(--accent-soft); }
+      .chunk-row.dim { opacity: .45; }
+
+      /* ---------- flow diagram ---------- */
+      .flow-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 16px 16px; }
+      .actors { display: flex; align-items: stretch; gap: 0; }
+      .actor {
+        flex: 1 1 0; min-width: 0; text-align: center; padding: 12px 6px 10px; border: 1.5px solid var(--line);
+        border-radius: var(--radius); background: var(--surface-2); transition: border-color .3s, background .3s, box-shadow .3s;
+      }
+      .actor .a-icon { font-size: 24px; line-height: 1.2; display: block; }
+      .actor .a-name { font-weight: 700; font-size: 13.5px; display: block; margin-top: 4px; line-height: 1.45; }
+      .actor .a-sub { font-size: 11.5px; color: var(--ink-3); display: block; line-height: 1.5; }
+      .actor.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .link-arrow { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 15px; }
+      @media (max-width: 640px) {
+        .actors { flex-direction: column; gap: 0; }
+        .link-arrow { transform: rotate(90deg); height: 22px; flex-basis: 22px; margin: 0 auto; }
+      }
+      .packet-bar {
+        margin-top: 16px; border: 1.5px solid var(--packet); background: var(--packet-soft); border-radius: var(--radius);
+        padding: 12px 16px; min-height: 76px;
+      }
+      .packet-bar .p-label { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; color: var(--packet); margin-bottom: 2px; }
+      .packet-bar .p-route { font-weight: 700; font-size: 15px; }
+      .packet-bar .p-body { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; margin-top: 2px; word-break: break-all; }
+      .step-card { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px; }
+      .step-card .s-kicker { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent); font-weight: 600; letter-spacing: .06em; }
+      .step-card h3 { font-size: 19px; margin: 4px 0 8px; }
+      .step-card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+      .step-card p .mono { color: var(--ink); font-weight: 600; font-size: .94em; }
+      .tag { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 1px 10px; margin-left: 8px; vertical-align: 2px; }
+      .tag.prep { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+      .tag.ask { background: var(--packet-soft); color: var(--packet); border: 1px solid var(--packet); }
+
+      /* ---------- supplements ---------- */
+      .cards { display: grid; grid-template-columns: 1fr; gap: 14px; }
+      @media (min-width: 720px) { .cards.two { grid-template-columns: 1fr 1fr; } .cards.three { grid-template-columns: repeat(3, 1fr); } }
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+      .card p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+      .card p + p { margin-top: 8px; }
+      .card .mono { color: var(--ink); font-weight: 600; }
+      .vs-route { font-family: "IBM Plex Mono", monospace; font-size: 13px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; line-height: 1.9; word-break: break-all; }
+      dl.glossary { display: grid; grid-template-columns: 1fr; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 0; }
+      @media (min-width: 720px) { dl.glossary { grid-template-columns: 1fr 1fr; } }
+      .glossary .g-item { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+      .glossary dt { font-weight: 700; font-size: 15px; }
+      .glossary dt .mono { font-size: 13px; color: var(--accent); font-weight: 600; margin-left: 6px; }
+      .glossary dd { margin: 4px 0 0; font-size: 14px; color: var(--ink-2); }
+      .note-box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 6px; padding: 14px 18px; font-size: 14.5px; color: var(--ink-2); margin-top: 14px; }
+      .note-box strong { color: var(--ink); }
+      footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .spinner { animation: none; }
+        .progress-fill { transition: none; }
+        .actor { transition: none; }
+        .vmap .pt circle, .vmap .pt .vec-label, .vmap .pt .ring, .vmap .qpt, .vmap .sim-line, .vmap .sim-score, .vmap .ground-badge { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>RAGの仕組みアニメーション</h1>
+      <p class="lede">
+        <span class="mono">RAG（Retrieval-Augmented Generation／検索拡張生成）</span>は、LLMが答える前に「関係する文書を検索して、その内容を根拠として渡す」仕組みです。
+        モデルが知らないはずの社内マニュアルにも答えられるのは、この一手間があるから。文書の登録（準備フェーズ）から質問への回答（質問フェーズ）まで、9ステップで再生できます。
+      </p>
+
+      <!-- 1. 操作ボタン -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+      <div class="progress-line">
+        <span class="progress-label" data-progress-label>ステップ 1 / 9</span>
+        <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+        <div class="dots" data-dots aria-label="ステップ一覧"></div>
+      </div>
+
+      <!-- 2. 画面でこう見える -->
+      <div class="sec-head">
+        <span class="sec-num">VIEW</span>
+        <h2>画面でこう見える</h2>
+        <p>左は社内マニュアルに答える質問チャット、右は文書と質問を点として置いた「ベクトルの地図」です。どちらもステップに連動して変化します。</p>
+      </div>
+      <div class="stage-grid">
+        <div>
+          <div class="browser" aria-label="社内マニュアル質問チャットのモック">
+            <div class="browser-bar">
+              <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="win-title">社内マニュアルQ&amp;Aチャット</div>
+              <span class="spinner" data-spinner aria-hidden="true"></span>
+            </div>
+            <div class="chat-body">
+              <div class="idx-panel" aria-label="インデックスの状態">
+                <div class="idx-head">検索インデックス（ベクトルDB）</div>
+                <div data-index></div>
+              </div>
+              <div class="chat-msgs" data-msgs aria-live="polite"></div>
+            </div>
+          </div>
+          <p class="fig-cap">チャット画面のモック。準備フェーズは裏側で進み、質問フェーズでは回答に出典が付きます。</p>
+        </div>
+        <div>
+          <div class="vpanel" aria-label="ベクトル空間の地図とチャンク一覧">
+            <div class="vmap-head">ベクトル空間 — 意味の近さの地図（2次元のイメージ）</div>
+            <svg class="vmap" data-vmap viewBox="0 0 400 252" role="img" aria-label="チャンクと質問を点で表したベクトル空間の図。意味が近い点同士が近くに集まる">
+              <!-- grid dots -->
+              <g aria-hidden="true">
+                <circle class="grid-dot" cx="40" cy="36" r="1.6"/><circle class="grid-dot" cx="100" cy="36" r="1.6"/><circle class="grid-dot" cx="160" cy="36" r="1.6"/><circle class="grid-dot" cx="220" cy="36" r="1.6"/><circle class="grid-dot" cx="280" cy="36" r="1.6"/><circle class="grid-dot" cx="340" cy="36" r="1.6"/>
+                <circle class="grid-dot" cx="40" cy="92" r="1.6"/><circle class="grid-dot" cx="100" cy="92" r="1.6"/><circle class="grid-dot" cx="160" cy="92" r="1.6"/><circle class="grid-dot" cx="220" cy="92" r="1.6"/><circle class="grid-dot" cx="280" cy="92" r="1.6"/><circle class="grid-dot" cx="340" cy="92" r="1.6"/>
+                <circle class="grid-dot" cx="40" cy="148" r="1.6"/><circle class="grid-dot" cx="100" cy="148" r="1.6"/><circle class="grid-dot" cx="160" cy="148" r="1.6"/><circle class="grid-dot" cx="220" cy="148" r="1.6"/><circle class="grid-dot" cx="280" cy="148" r="1.6"/><circle class="grid-dot" cx="340" cy="148" r="1.6"/>
+                <circle class="grid-dot" cx="40" cy="204" r="1.6"/><circle class="grid-dot" cx="100" cy="204" r="1.6"/><circle class="grid-dot" cx="160" cy="204" r="1.6"/><circle class="grid-dot" cx="220" cy="204" r="1.6"/><circle class="grid-dot" cx="280" cy="204" r="1.6"/><circle class="grid-dot" cx="340" cy="204" r="1.6"/>
+              </g>
+              <text class="axis-label" x="10" y="22" style="font-size:9.5px">意味が近い点は集まる</text>
+              <!-- similarity lines (query -> hits) -->
+              <line class="sim-line" x1="302" y1="82" x2="322" y2="58" />
+              <line class="sim-line" x1="302" y1="82" x2="338" y2="102" />
+              <line class="sim-line" x1="302" y1="82" x2="262" y2="112" />
+              <text class="sim-score" x="282" y="54">0.87</text>
+              <text class="sim-score" x="330" y="86">0.81</text>
+              <text class="sim-score" x="268" y="92">0.74</text>
+              <!-- chunk points -->
+              <g class="pt" data-pt="c4">
+                <circle cx="86" cy="62" r="11"/><text x="86" y="66">C4</text>
+                <text class="vec-label" x="86" y="88">[-0.65, 0.72, …]</text>
+              </g>
+              <g class="pt hit" data-pt="c1">
+                <circle class="ring" cx="330" cy="52" r="16"/>
+                <circle cx="330" cy="52" r="11"/><text x="330" y="56">C1</text>
+                <text class="vec-label" x="330" y="30">[0.82, 0.57, …]</text>
+                <g class="ground-badge"><rect x="350" y="44" width="36" height="15" rx="7.5"/><text x="368" y="55">根拠</text></g>
+              </g>
+              <g class="pt hit" data-pt="c2">
+                <circle class="ring" cx="346" cy="108" r="16"/>
+                <circle cx="346" cy="108" r="11"/><text x="346" y="112">C2</text>
+                <text class="vec-label" x="346" y="134">[0.78, 0.62, …]</text>
+                <g class="ground-badge"><rect x="328" y="140" width="36" height="15" rx="7.5"/><text x="346" y="151">根拠</text></g>
+              </g>
+              <g class="pt hit" data-pt="c5">
+                <circle class="ring" cx="252" cy="118" r="16"/>
+                <circle cx="252" cy="118" r="11"/><text x="252" y="122">C5</text>
+                <text class="vec-label" x="252" y="144">[0.70, 0.49, …]</text>
+                <g class="ground-badge"><rect x="234" y="150" width="36" height="15" rx="7.5"/><text x="252" y="161">根拠</text></g>
+              </g>
+              <g class="pt" data-pt="c3">
+                <circle cx="76" cy="196" r="11"/><text x="76" y="200">C3</text>
+                <text class="vec-label" x="76" y="222">[-0.80, -0.55, …]</text>
+              </g>
+              <g class="pt" data-pt="c6">
+                <circle cx="128" cy="222" r="11"/><text x="128" y="226">C6</text>
+                <text class="vec-label" x="128" y="246">[-0.72, -0.63, …]</text>
+              </g>
+              <!-- query point -->
+              <g class="qpt">
+                <polygon points="302,68 306.5,77.5 317,78 309.5,85.5 311.5,96 302,91 292.5,96 294.5,85.5 287,78 297.5,77.5" />
+                <text x="302" y="118">質問</text>
+              </g>
+            </svg>
+            <div class="chunk-list" data-chunks aria-live="polite"></div>
+          </div>
+          <p class="fig-cap">実際のベクトルは数百〜数千個の数値の並び（高次元）です。ここでは意味の近さを2次元の地図に潰して表しています。</p>
+        </div>
+      </div>
+
+      <!-- 3. 操作ボタン（連動） -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+
+      <!-- 4. 実際の中身のフロー -->
+      <div class="sec-head">
+        <span class="sec-num">FLOW</span>
+        <h2>実際の中身のフロー</h2>
+        <p>肝は2段階に分かれていることです。文書の登録は<strong>事前の準備フェーズ</strong>で一度だけ行い、質問のたびに繰り返すのは<strong>質問フェーズ</strong>だけ。LLM本体は文書を覚えているわけではなく、毎回「検索で拾った根拠」を渡されて答えます。光っている登場人物が、そのステップで動いている側です。</p>
+      </div>
+      <div class="flow-wrap">
+        <div class="actors" role="img" aria-label="RAGの登場人物：あなた、アプリ、埋め込みモデル、ベクトルDB、LLM">
+          <div class="actor" data-actor="user">
+            <span class="a-icon" aria-hidden="true">🧑</span>
+            <span class="a-name">あなた</span>
+            <span class="a-sub">質問する人</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="app">
+            <span class="a-icon" aria-hidden="true">🖥️</span>
+            <span class="a-name">アプリ</span>
+            <span class="a-sub">分割・検索・組み立て<br>全体の進行役</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="embed">
+            <span class="a-icon" aria-hidden="true">🔢</span>
+            <span class="a-name">埋め込みモデル</span>
+            <span class="a-sub">文章をベクトル<br>（数値の並び）に変換</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="vectordb">
+            <span class="a-icon" aria-hidden="true">🗄️</span>
+            <span class="a-name">ベクトルDB</span>
+            <span class="a-sub">ベクトルと本文の<br>保管庫・類似検索</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="llm">
+            <span class="a-icon" aria-hidden="true">🧠</span>
+            <span class="a-name">LLM（モデル）</span>
+            <span class="a-sub">根拠を踏まえて<br>回答を生成</span>
+          </div>
+        </div>
+        <div class="packet-bar" aria-live="polite">
+          <div class="p-label">いま飛んでいるデータ／処理</div>
+          <div class="p-route" data-packet-route>アプリ（文書を分割）</div>
+          <div class="p-body mono" data-packet-body>社内マニュアル → チャンク6件</div>
+        </div>
+        <div class="step-card">
+          <div class="s-kicker" data-step-kicker>STEP 1 / 9</div>
+          <h3 data-step-title>文書を小さな塊（チャンク）に分割する</h3>
+          <p data-step-desc></p>
+        </div>
+      </div>
+
+      <!-- 5. 補足 -->
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>なぜRAGが要るのか</h2>
+        <p>LLMは学習した時点までの、公開された知識しか持っていません。「モデルの外にある知識」を扱いたいときに、RAGが効きます。</p>
+      </div>
+      <div class="cards three">
+        <div class="card">
+          <h3>学習データにない情報に答える</h3>
+          <p>社内マニュアル、議事録、自社製品の仕様書——こうした情報はモデルの学習データには含まれていません。RAGなら、文書を用意して検索対象に入れるだけで、その内容に基づく回答ができます。</p>
+        </div>
+        <div class="card">
+          <h3>最新情報に追随できる</h3>
+          <p>モデルを再学習させるのは大仕事ですが、RAGの知識源はただの文書ファイルです。規程が改定されたら文書を差し替えてインデックスを作り直すだけ。知識の更新が「文書の差し替え」で済みます。</p>
+        </div>
+        <div class="card">
+          <h3>ハルシネーション対策</h3>
+          <p>根拠となる文書を渡し、「これに基づいて答えて」と指示することで、もっともらしい作り話（ハルシネーション）を抑えられます。さらに出典を示せるので、答えが合っているかを人間が原典で確かめられます。</p>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>チャンク分割の考え方</h2>
+        <p>分割の粒度は検索の当たりやすさを左右します。大きすぎても小さすぎても困る、そのバランスの取り方です。</p>
+      </div>
+      <div class="cards two">
+        <div class="card">
+          <h3>大きすぎる／小さすぎるのトレードオフ</h3>
+          <div class="vs-route">大きすぎる → 1チャンクに話題が混ざり、<br>　ベクトルが「平均的」になって検索で当たりにくい。<br>　渡す根拠も長くなり、ノイズが増える<br>小さすぎる → 前後の文脈が欠けて、<br>　拾えても答えの材料として不足する</div>
+          <p>目安として数百字〜千字程度、見出しや段落の切れ目で割るのが定番です。質問のされ方（1つの質問がどの範囲を聞くか）に合わせて調整します。</p>
+        </div>
+        <div class="card">
+          <h3>オーバーラップ — 切れ目で文を失わない</h3>
+          <div class="vs-route">チャンクA： …申請は2週間前までに行う。…<br>チャンクB： …2週間前までに行う。承認は…<br>　　　　↑ 末尾と先頭を少し重ねる</div>
+          <p>きれいに切り分けると、大事な一文がちょうど境界で分断されることがあります。隣同士を少し重ねて（オーバーラップさせて）分割すると、分断されてもどちらかのチャンクに全文が残ります。</p>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>検索の工夫 — ベクトル検索だけが手ではない</h2>
+        <p>意味の近さで探すベクトル検索は強力ですが、万能ではありません。実務では他の手法と組み合わせるのが普通です。</p>
+      </div>
+      <div class="cards two">
+        <div class="card">
+          <h3>ハイブリッド検索</h3>
+          <p>ベクトル検索は「言い換え」に強い反面、型番・固有名詞・略語のような<strong>一言一句の一致</strong>が大事な語は苦手です。そこで従来のキーワード検索（BM25など）と併用し、両方の結果を統合するのがハイブリッド検索です。</p>
+          <p>例：「型番 XR-2040 の仕様」はキーワード一致が、「手続きの期限」は意味の近さが拾います。</p>
+        </div>
+        <div class="card">
+          <h3>リランキング</h3>
+          <p>まず広めに多めの候補（例：上位20件）を拾い、そのあと<strong>より精度の高いモデルで並べ替え</strong>て上位だけを残す二段構えです。最初の検索は「漏らさない」こと、並べ替えは「外さない」ことを担当します。</p>
+          <p>コストと精度のバランスを取るための定石で、根拠の質がそのまま回答の質になるRAGでは特に効きます。</p>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>RAGの弱点</h2>
+        <p>仕組み上、避けられない弱さもあります。「検索で拾う」という構造そのものから来るものです。</p>
+      </div>
+      <div class="cards two">
+        <div class="card">
+          <h3>根拠を拾えないと、答えられない</h3>
+          <p>回答の質は検索の質で決まります。関係するチャンクが上位に入らなければ、モデルは材料なしで答えることになり、「分からない」か、根拠のない回答になります。<strong>RAGの改善は、たいていモデルではなく検索側の改善</strong>です。</p>
+        </div>
+        <div class="card">
+          <h3>文書の鮮度管理が要る</h3>
+          <p>元の文書が古ければ、答えも古くなります。改定された規程の旧版がインデックスに残っていると、古い方を根拠に答えてしまうことも。文書の更新に合わせてインデックスを作り直す運用が欠かせません。</p>
+        </div>
+      </div>
+      <div class="note-box">
+        <strong>もう1つの論点：</strong> 検索できる文書の範囲は、そのまま「モデルに見せてよい範囲」です。アクセス権限のある文書だけを検索対象にするなど、権限管理とセットで設計する必要があります。
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>ファインチューニングとの違い</h2>
+        <p>「モデルに自社の知識を持たせたい」ときのもう1つの手段がファインチューニングです。役割がまったく違います。</p>
+      </div>
+      <div class="cards two">
+        <div class="card">
+          <h3>ファインチューニング <span class="mono" style="font-size:13px;color:var(--packet)">覚えさせる</span></h3>
+          <div class="vs-route">追加学習でモデルの重み自体を書き換える<br>知識や振る舞いが「身につく」</div>
+          <p>向いているのは、口調・形式・判断のクセのような<strong>「振る舞い」の定着</strong>です。事実の知識を持たせる用途では、更新のたびに再学習が要り、出典も示せません。</p>
+        </div>
+        <div class="card">
+          <h3>RAG <span class="mono" style="font-size:13px;color:var(--accent)">都度引いてくる</span></h3>
+          <div class="vs-route">モデルは変えず、答える直前に<br>外部の文書を検索して渡す</div>
+          <p>向いているのは<strong>事実の知識</strong>です。更新は文書の差し替えで済み、出典も示せます。試験に例えるなら、ファインチューニングは「暗記」、RAGは「資料持ち込み可」です。両者は対立ではなく、組み合わせもできます。</p>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>用語解説</h2>
+      </div>
+      <dl class="glossary">
+        <div class="g-item">
+          <dt>埋め込み<span class="mono">embedding</span></dt>
+          <dd>文章の「意味」を、数値の並び（ベクトル）に変換すること。変換を担うのが埋め込みモデルです。意味が似た文章は、似た数値の並びになります。</dd>
+        </div>
+        <div class="g-item">
+          <dt>ベクトル<span class="mono">vector</span></dt>
+          <dd>埋め込みの結果得られる、数百〜数千個の数値の並び。文章を「意味の空間」の中の1点として表したもので、この点同士の近さが意味の近さに対応します。</dd>
+        </div>
+        <div class="g-item">
+          <dt>コサイン類似度<span class="mono">cosine similarity</span></dt>
+          <dd>2つのベクトルの「向き」がどれだけ揃っているかを −1〜1 で測る指標。1に近いほど意味が近いとみなします。類似検索では、この値の大きい順に上位 k 件を取り出します。</dd>
+        </div>
+        <div class="g-item">
+          <dt>チャンク<span class="mono">chunk</span></dt>
+          <dd>文書を分割した小さな塊。検索の最小単位であり、根拠としてモデルに渡される単位でもあります。分割の粒度が検索精度を左右します。</dd>
+        </div>
+        <div class="g-item">
+          <dt>グラウンディング<span class="mono">grounding</span></dt>
+          <dd>モデルの回答を、実在する根拠（検索で得た文書）に結びつけること。RAGはその代表的な実装で、回答が「何に基づいているか」を出典として示せます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>ベクトルDB<span class="mono">vector database</span></dt>
+          <dd>ベクトルと本文をセットで保存し、「あるベクトルに近いものを速く探す」ことに特化したデータベース。大量のチャンクからでも、上位 k 件の類似検索を高速に返せます。</dd>
+        </div>
+      </dl>
+
+      <footer>
+        このページの文書名・チャンク内容・類似度の数値などは説明用の例です。ベクトルの次元数や検索手法の細部は、利用する埋め込みモデルやベクトルDBの実装によって異なります。
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var STEPS = [
+          {
+            title: "文書を小さな塊（チャンク）に分割する",
+            tag: "<span class='tag prep'>準備フェーズ</span>",
+            desc: "まず、答えの元になる文書（ここでは社内マニュアル）を用意し、検索しやすい大きさの塊——<strong>チャンク</strong>——に切り分けます。文書を丸ごと1件として登録すると、質問に関係ない部分まで混ざって検索がぼやけるためです。見出しや段落の切れ目で割り、ここでは6つのチャンクになりました。<strong>この準備は、文書を登録するときに一度だけ</strong>行います。",
+            route: "アプリ（文書を分割）",
+            packet: "社内マニュアル（就業規則・経理・勤務規程）→ チャンク6件",
+            actors: ["app"]
+          },
+          {
+            title: "各チャンクをベクトルに変換する",
+            tag: "<span class='tag prep'>準備フェーズ</span>",
+            desc: "切り分けたチャンクを1件ずつ<strong>埋め込みモデル</strong>に通し、文章の意味を表す<strong>ベクトル</strong>（数値の並び）に変換します。たとえば C1「有給休暇の申請は…」は <span class='mono'>[0.82, 0.57, …]</span> のような数百〜数千個の数値になります。ポイントは、<strong>意味が似た文章は似たベクトルになる</strong>こと。この性質が、次の「意味で探す検索」の土台です。",
+            route: "アプリ → 埋め込みモデル",
+            packet: "チャンク本文 → ベクトル [0.82, 0.57, …]（チャンク6件分）",
+            actors: ["app", "embed"]
+          },
+          {
+            title: "ベクトルと本文をベクトルDBに保存する",
+            tag: "<span class='tag prep'>準備フェーズ</span>",
+            desc: "変換したベクトルを、<strong>元の本文とセットで</strong>ベクトルDBに保存します。ベクトルは「探すため」のもの、本文は「根拠としてモデルに渡すため」のもの——両方が要るので必ずペアで持ちます。これで検索インデックスの完成です。ここまでが準備フェーズで、<strong>質問が来る前に終わらせておく</strong>工程です。",
+            route: "アプリ → ベクトルDB",
+            packet: "ベクトル＋本文を6件保存 → インデックス完成",
+            actors: ["app", "vectordb"]
+          },
+          {
+            title: "あなたが質問する",
+            tag: "<span class='tag ask'>質問フェーズ</span>",
+            desc: "ここからが質問フェーズです。あなたはチャットで「有給休暇の申請期限はいつまでですか？」と聞きます。LLM自身はこの会社の規程を知りません——学習データに社内マニュアルは含まれていないからです。それでも答えられるのは、<strong>この後のステップで「根拠」を探して渡す</strong>からです。",
+            route: "あなた → アプリ",
+            packet: "「有給休暇の申請期限はいつまでですか？」",
+            actors: ["user", "app"]
+          },
+          {
+            title: "質問文も同じ埋め込みモデルでベクトル化する",
+            tag: "<span class='tag ask'>質問フェーズ</span>",
+            desc: "質問に答える前に、アプリは質問文を<strong>準備フェーズと同じ埋め込みモデル</strong>でベクトル化します。同じ物差しで測らないと、チャンクのベクトルと比べられないからです。地図の上に、質問の点（★）が新たに置かれた状態を思い浮かべてください。",
+            route: "アプリ → 埋め込みモデル",
+            packet: "質問文 → 質問ベクトル [0.79, 0.61, …]",
+            actors: ["app", "embed"]
+          },
+          {
+            title: "意味の近いチャンクを類似検索で取り出す",
+            tag: "<span class='tag ask'>質問フェーズ</span>",
+            desc: "ベクトルDBは、質問ベクトルと各チャンクのベクトルの近さ（<strong>コサイン類似度</strong>）を計算し、近い順に上位 k 件——ここでは3件——を取り出します。拾われたのは有給・休暇まわりの C1（0.87）、C2（0.81）、C5（0.74）。キーワードが一致しなくても、<strong>意味が近ければ拾える</strong>のがベクトル検索の強みです。遠くにある経費やリモートワークのチャンクは対象外になりました。",
+            route: "アプリ → ベクトルDB（類似検索）",
+            packet: "類似検索 → C1（0.87）／ C2（0.81）／ C5（0.74）の3件を取得",
+            actors: ["app", "vectordb"]
+          },
+          {
+            title: "取り出したチャンクを「根拠」としてプロンプトに差し込む",
+            tag: "<span class='tag ask'>質問フェーズ</span>",
+            desc: "アプリは、取得したチャンクの<strong>本文</strong>をプロンプトに組み立ててLLMへ渡します。「以下の資料に基づいて答えてください」という指示文＋資料（チャンク3件）＋質問、という形です。LLMから見れば、これは<strong>試験の直前に参考資料を手渡される</strong>ようなもの。モデルの中身は何も変わっていません。",
+            route: "アプリ → LLM",
+            packet: "プロンプト = 指示 ＋ 根拠チャンク3件 ＋ 質問",
+            actors: ["app", "llm"]
+          },
+          {
+            title: "LLMが根拠を踏まえて回答を生成する",
+            tag: "<span class='tag ask'>質問フェーズ</span>",
+            desc: "LLMは渡された根拠を読み、その範囲で回答を組み立てます。C1に「取得希望日の2週間前まで」とあるので、答えはそこから作られます。裏を返せば、<strong>根拠に書かれていないことは答えにくい</strong>——拾ったチャンクに情報がなければ、モデルは「資料からは分かりません」と答えるよう指示できます。この「根拠に縛られる」性質が、作り話を抑える効き目になります。",
+            route: "LLM（回答を生成）",
+            packet: "根拠 C1・C2 を踏まえて回答文を生成中…",
+            actors: ["llm"]
+          },
+          {
+            title: "回答が返る（出典つき）",
+            tag: "<span class='tag ask'>質問フェーズ</span>",
+            desc: "回答があなたに返ります。どのチャンクを根拠にしたか記録が残っているので、<strong>出典（どの文書のどこか）を付けて示せます</strong>。受け取った側は原典を開いて裏取りができる——これが、モデルに暗記させる方式にはないRAGの強みです。なお次の質問が来たら、繰り返すのは質問フェーズ（ステップ4〜9）だけです。",
+            route: "LLM → アプリ → あなた",
+            packet: "回答 ＋ 出典（就業規則マニュアル p.12 ほか）",
+            actors: ["llm", "app", "user"]
+          }
+        ];
+
+        var CHUNKS = [
+          { id: "C1", text: "有給休暇の申請は、取得希望日の2週間前までに…", src: "就業規則 p.12", vec: "[0.82, 0.57, …]", score: "0.87", hit: true },
+          { id: "C2", text: "有給休暇は入社6か月経過後に10日付与される…", src: "就業規則 p.12", vec: "[0.78, 0.62, …]", score: "0.81", hit: true },
+          { id: "C3", text: "経費精算は領収書を添付し、月末までに申請…", src: "経理規程 p.8", vec: "[-0.80, -0.55, …]", score: "", hit: false },
+          { id: "C4", text: "リモートワークは週2日まで、上長の承認が必要…", src: "勤務規程 p.5", vec: "[-0.65, 0.72, …]", score: "", hit: false },
+          { id: "C5", text: "慶弔休暇は事由の発生から1か月以内に取得…", src: "就業規則 p.15", vec: "[0.70, 0.49, …]", score: "0.74", hit: true },
+          { id: "C6", text: "交通費は実費を精算し、定期券区間は除く…", src: "経理規程 p.9", vec: "[-0.72, -0.63, …]", score: "", hit: false }
+        ];
+
+        function chunkList(mode) {
+          var head = "<div class='cl-head'>ベクトルDBの中身 — チャンク一覧</div>";
+          var rows = CHUNKS.map(function (c) {
+            var cls = "chunk-row";
+            var badge = "";
+            if (mode === "split") {
+              badge = "<span class='cbadge'>分割済み</span>";
+            } else if (mode === "vector") {
+              badge = "<span class='cvec'>" + c.vec + "</span>";
+            } else if (mode === "stored" || mode === "asked" || mode === "embedded") {
+              badge = "<span class='cvec'>" + c.vec + "</span><span class='cbadge'>保存済み</span>";
+            } else if (mode === "searched") {
+              if (c.hit) { cls += " hit"; badge = "<span class='cbadge score'>類似度 " + c.score + "</span>"; }
+              else { cls += " dim"; badge = "<span class='cbadge'>対象外</span>"; }
+            } else if (mode === "grounded") {
+              if (c.hit) { cls += " grounded"; badge = "<span class='cbadge ground'>根拠として使用</span>"; }
+              else { cls += " dim"; badge = "<span class='cbadge'>対象外</span>"; }
+            }
+            return "<div class='" + cls + "'><span class='cid'>" + c.id + "</span><span class='ctext'>" + c.text +
+              "</span><span class='csrc'>" + c.src + "</span>" + badge + "</div>";
+          }).join("");
+          return head + rows;
+        }
+
+        function idxRow(dotCls, name, meta, state, stateCls) {
+          return "<div class='idx-row'><span class='idx-dot " + dotCls + "'></span><span class='idx-name'>" + name +
+            "</span><span class='idx-meta'>" + meta + "</span><span class='idx-state " + stateCls + "'>" + state + "</span></div>";
+        }
+        function indexPanel(state) {
+          if (state === "split") return idxRow("busy", "社内マニュアル", "就業規則・経理・勤務規程", "チャンク分割中…", "busy");
+          if (state === "vector") return idxRow("busy", "社内マニュアル", "就業規則・経理・勤務規程", "ベクトル化中…", "busy");
+          return idxRow("on", "社内マニュアル", "就業規則・経理・勤務規程", "インデックス完成 · 6チャンク", "ok");
+        }
+
+        var USER_MSG = "<div class='msg user'><span class='who'>あなた</span>有給休暇の申請期限はいつまでですか？</div>";
+        var AI_MSG = "<div class='msg ai'><span class='who'>AI（根拠つき回答）</span>有給休暇の申請は、<strong>取得希望日の2週間前まで</strong>に行ってください<span class='cite'>[1]</span>。なお、有給休暇は入社6か月経過後に10日が付与されます<span class='cite'>[2]</span>。" +
+          "<span class='src-list'>出典：[1] 就業規則マニュアル p.12（チャンクC1）<br>[2] 就業規則マニュアル p.12（チャンクC2）</span></div>";
+
+        var VIEW = [
+          { spin: true, index: indexPanel("split"), chunks: chunkList("split"), vmap: "",
+            msgs: "<div class='chat-empty'>準備フェーズの最中です。裏側では、社内マニュアルをチャンクに分割しています。</div>" },
+          { spin: true, index: indexPanel("vector"), chunks: chunkList("vector"), vmap: "show-vec",
+            msgs: "<div class='chat-empty'>各チャンクを埋め込みモデルでベクトルに変換しています…</div>" },
+          { spin: false, index: indexPanel("stored"), chunks: chunkList("stored"), vmap: "show-vec stored",
+            msgs: "<div class='chat-empty'>インデックスが完成しました。ベクトルDBに6チャンクが保存され、質問できる状態です。</div>" },
+          { spin: false, index: indexPanel("stored"), chunks: chunkList("asked"), vmap: "show-vec stored",
+            msgs: USER_MSG },
+          { spin: true, index: indexPanel("stored"), chunks: chunkList("embedded"), vmap: "show-vec stored show-query",
+            msgs: USER_MSG + "<div class='tool-line'>質問をベクトル化しました → [0.79, 0.61, …]</div>" },
+          { spin: true, index: indexPanel("stored"), chunks: chunkList("searched"), vmap: "show-vec stored show-query searched",
+            msgs: USER_MSG + "<div class='tool-line done'>✓ 類似検索 — 意味の近いチャンクを3件取得（上位 k = 3）</div>" },
+          { spin: true, index: indexPanel("stored"), chunks: chunkList("grounded"), vmap: "show-vec stored show-query searched grounded",
+            msgs: USER_MSG + "<div class='tool-line done'>✓ チャンク3件を「根拠」としてプロンプトに差し込みました</div>" },
+          { spin: true, index: indexPanel("stored"), chunks: chunkList("grounded"), vmap: "show-vec stored show-query searched grounded",
+            msgs: USER_MSG + "<div class='tool-line done'>✓ 根拠をもとに回答を生成中…</div>" },
+          { spin: false, index: indexPanel("stored"), chunks: chunkList("grounded"), vmap: "show-vec stored show-query searched grounded",
+            msgs: USER_MSG + AI_MSG }
+        ];
+
+        var idx = 0;
+        var playing = false;
+        var speed = 1;
+        var timer = null;
+        var BASE_MS = 3400;
+
+        var els = {
+          label: document.querySelector("[data-progress-label]"),
+          fill: document.querySelector("[data-progress-fill]"),
+          dotsWrap: document.querySelector("[data-dots]"),
+          spinner: document.querySelector("[data-spinner]"),
+          index: document.querySelector("[data-index]"),
+          msgs: document.querySelector("[data-msgs]"),
+          chunks: document.querySelector("[data-chunks]"),
+          vmap: document.querySelector("[data-vmap]"),
+          route: document.querySelector("[data-packet-route]"),
+          packet: document.querySelector("[data-packet-body]"),
+          kicker: document.querySelector("[data-step-kicker]"),
+          stepTitle: document.querySelector("[data-step-title]"),
+          stepDesc: document.querySelector("[data-step-desc]")
+        };
+
+        /* build dots */
+        var dots = [];
+        for (var i = 0; i < STEPS.length; i++) {
+          (function (n) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "dot";
+            b.textContent = String(n + 1);
+            b.setAttribute("aria-label", "ステップ" + (n + 1) + "へ移動");
+            b.addEventListener("click", function () { pause(); goTo(n); });
+            els.dotsWrap.appendChild(b);
+            dots.push(b);
+          })(i);
+        }
+
+        var actorEls = {};
+        document.querySelectorAll("[data-actor]").forEach(function (el) {
+          actorEls[el.getAttribute("data-actor")] = el;
+        });
+
+        function render() {
+          var s = STEPS[idx];
+          var v = VIEW[idx];
+          els.label.textContent = "ステップ " + (idx + 1) + " / " + STEPS.length;
+          els.fill.style.width = ((idx + 1) / STEPS.length * 100) + "%";
+          dots.forEach(function (d, i) {
+            d.classList.toggle("now", i === idx);
+            d.classList.toggle("done", i < idx);
+          });
+          /* chat mock + vector map */
+          els.spinner.classList.toggle("on", v.spin);
+          els.index.innerHTML = v.index;
+          els.msgs.innerHTML = v.msgs;
+          els.chunks.innerHTML = v.chunks;
+          els.vmap.setAttribute("class", "vmap " + v.vmap);
+          /* flow */
+          els.route.textContent = s.route;
+          els.packet.textContent = s.packet;
+          els.kicker.textContent = "STEP " + (idx + 1) + " / " + STEPS.length + (idx < 3 ? " · 準備フェーズ" : " · 質問フェーズ");
+          els.stepTitle.innerHTML = s.title + (s.tag || "");
+          els.stepDesc.innerHTML = s.desc;
+          Object.keys(actorEls).forEach(function (k) {
+            actorEls[k].classList.toggle("active", s.actors.indexOf(k) !== -1);
+          });
+          /* controls state */
+          document.querySelectorAll("[data-action='prev']").forEach(function (b) { b.disabled = idx === 0; });
+          document.querySelectorAll("[data-action='next']").forEach(function (b) { b.disabled = idx === STEPS.length - 1; });
+          document.querySelectorAll("[data-action='play']").forEach(function (b) {
+            b.textContent = playing ? "⏸ 一時停止" : (idx === STEPS.length - 1 ? "↺ もう一度" : "▶ 再生");
+          });
+        }
+
+        function goTo(n) {
+          idx = Math.max(0, Math.min(STEPS.length - 1, n));
+          render();
+        }
+        function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+        function startTimer() {
+          stopTimer();
+          timer = setInterval(function () {
+            if (idx >= STEPS.length - 1) { pause(); return; }
+            goTo(idx + 1);
+            if (idx >= STEPS.length - 1) { pause(); }
+          }, BASE_MS / speed);
+        }
+        function play() {
+          if (idx >= STEPS.length - 1) { goTo(0); }
+          playing = true;
+          render();
+          startTimer();
+        }
+        function pause() {
+          playing = false;
+          stopTimer();
+          render();
+        }
+
+        document.querySelectorAll("[data-controls]").forEach(function (bar) {
+          bar.addEventListener("click", function (e) {
+            var btn = e.target.closest("[data-action]");
+            if (!btn || btn.disabled) return;
+            var a = btn.getAttribute("data-action");
+            if (a === "prev") { pause(); goTo(idx - 1); }
+            else if (a === "next") { pause(); goTo(idx + 1); }
+            else if (a === "reset") { pause(); goTo(0); }
+            else if (a === "play") { playing ? pause() : play(); }
+          });
+        });
+        document.querySelectorAll("[data-speed]").forEach(function (sel) {
+          sel.addEventListener("change", function () {
+            speed = parseFloat(sel.value);
+            document.querySelectorAll("[data-speed]").forEach(function (o) { o.value = sel.value; });
+            if (playing) startTimer();
+          });
+        });
+
+        render();
+      })();
+    </script>
+  </body>
+</html>
