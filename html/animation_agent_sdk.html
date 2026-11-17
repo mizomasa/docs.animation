@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>Agent SDKの仕組みアニメーション</title>
+<style>
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --surface2:#eef1f4; --text:#17202a; --muted:#5b6b7a; --line:#dde3e8;
+  --accent:#0f766e; --accent2:#0e7490; --red:#dc2626; --red-bg:#fef2f2; --blue:#2563eb; --blue-bg:#eff6ff;
+  --green:#059669; --green-bg:#ecfdf5; --amber:#d97706; --amber-bg:#fffbeb;
+  --code-bg:#0f172a; --code-text:#e2e8f0; --hl-bg:rgba(45,212,191,.28); --hl-line:#2dd4bf;
+  --shadow:0 8px 30px rgba(15,23,42,.08); --radius:16px;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f1419; --surface:#171e26; --surface2:#1e2833; --text:#e6edf3; --muted:#9aa8b5; --line:#2a3644; --red-bg:#2a1215; --blue-bg:#12233d; --green-bg:#0d2a22; --amber-bg:#2e2110; --shadow:0 8px 30px rgba(0,0,0,.35);}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;line-height:1.65}
+.wrap{max-width:1020px;margin:0 auto;padding:20px 16px 56px}
+h1{font-size:clamp(26px,5vw,38px);line-height:1.25;margin:6px 0 8px;letter-spacing:-.02em}
+.lead{color:var(--muted);font-size:15.5px;max-width:760px;margin:0}
+h2{font-size:20px;margin:0 0 6px} h3{font-size:16px;margin:0 0 6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;margin-top:18px}
+.label{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:8px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls button{min-height:44px;padding:0 16px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);font-weight:700;font-size:14px;cursor:pointer}
+.controls button.primary{background:var(--accent);color:#fff;border-color:var(--accent);min-width:92px}
+.controls button:active{transform:scale(.98)}
+.speed{display:flex;gap:4px;margin-left:auto;align-items:center}
+.speed span{font-size:12px;color:var(--muted);font-weight:700}
+.speed button{min-height:36px;padding:0 10px;font-size:13px}
+.speed button.on{background:var(--text);color:var(--bg);border-color:var(--text)}
+.progress{margin-top:12px}
+.progress-meta{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-weight:700;gap:8px}
+.progress-bar{height:8px;background:var(--surface2);border-radius:999px;overflow:hidden;margin-top:6px}
+.progress-fill{height:100%;background:var(--accent);width:0%;transition:width .4s ease;border-radius:999px}
+.dots{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.dots button{width:36px;height:36px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:12px;font-weight:800;cursor:pointer;color:var(--muted)}
+.dots button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dots button.done{background:var(--surface2);color:var(--text)}
+/* run-screen mock */
+.browser{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--surface)}
+.browser-bar{display:flex;align-items:center;gap:8px;background:var(--surface2);padding:10px 12px;border-bottom:1px solid var(--line)}
+.dot{width:11px;height:11px;border-radius:50%;flex:none}
+.url{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.browser-body{padding:16px;min-height:300px;background:var(--code-bg)}
+.log{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.8px;line-height:1.5;color:var(--code-text)}
+.log div{padding:6px 10px;border-radius:8px;margin-bottom:6px;background:rgba(148,163,184,.10);word-break:break-all}
+.log div.latest{background:rgba(45,212,191,.22);outline:1px solid var(--hl-line)}
+.log div.dim{opacity:.75}
+.msgstack{margin-top:14px;border:1px dashed rgba(148,163,184,.5);border-radius:10px;padding:10px 12px}
+.msgstack .cap{font-size:11.5px;font-weight:800;color:#7dd3fc;letter-spacing:.05em;margin-bottom:8px;font-family:system-ui,sans-serif}
+.msg{display:flex;gap:8px;align-items:baseline;font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--code-text);padding:4px 0;border-top:1px solid rgba(148,163,184,.18)}
+.msg:first-of-type{border-top:none}
+.msg .role{flex:none;font-weight:800;font-size:11px;padding:1px 8px;border-radius:999px}
+.msg .role.user{background:#1d4ed8;color:#dbeafe}
+.msg .role.assistant{background:#0f766e;color:#ccfbf1}
+.msg .txt{word-break:break-all}
+.msg.new{animation:pop .45s ease}
+@keyframes pop{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:800}
+.badge.ok{background:var(--green-bg);color:var(--green)} .badge.err{background:var(--red-bg);color:var(--red)} .badge.info{background:var(--blue-bg);color:var(--blue)} .badge.warn{background:var(--amber-bg);color:var(--amber)}
+/* flow */
+.actors{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 6px}
+.actor{border:1px solid var(--line);border-radius:14px;padding:12px 8px;text-align:center;background:var(--surface2);transition:.3s}
+.actor .icon{font-size:26px;line-height:1}
+.actor .name{font-weight:800;font-size:13.5px;margin-top:4px}
+.actor .sub{font-size:11px;color:var(--muted)}
+.actor.active{border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 2px var(--accent) inset}
+.track{position:relative;height:54px;margin:4px 0}
+.track-line{position:absolute;left:4%;right:4%;top:26px;height:2px;background:var(--line)}
+.packet{position:absolute;top:14px;transform:translateX(-50%);background:var(--accent);color:#fff;font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:999px;white-space:nowrap;transition:left .7s ease, background .3s;max-width:46%;overflow:hidden;text-overflow:ellipsis}
+.packet.bad{background:var(--red)} .packet.ok{background:var(--green)}
+.step-detail{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--surface)}
+.step-detail h3{font-size:17px}
+.step-detail p{margin:6px 0;color:var(--muted);font-size:14.5px}
+code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.http-box{background:#0f172a;color:#e2e8f0;border-radius:12px;padding:14px;font-size:12.5px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin-top:10px;text-align:left}
+.http-box .k{color:#7dd3fc}.http-box .v-red{color:#fda4af}.http-box .v-blue{color:#93c5fd}.http-box .v-green{color:#6ee7b7}
+.callout{border-radius:12px;padding:14px 16px;font-size:14.5px;margin-top:12px}
+.callout.warn{background:var(--amber-bg);border:1px solid #fde68a}
+.callout.point{background:var(--blue-bg);border:1px solid #bfdbfe}
+@media(prefers-color-scheme:dark){.callout.warn{border-color:#92400e}.callout.point{border-color:#1e40af}}
+/* code panel */
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.tabs button{min-height:44px;padding:0 16px;border-radius:12px 12px 0 0;border:1px solid var(--line);border-bottom:none;background:var(--surface2);color:var(--muted);font-weight:800;font-size:13.5px;cursor:pointer}
+.tabs button.on{background:var(--code-bg);color:#e2e8f0;border-color:var(--code-bg)}
+.codebox{background:var(--code-bg);border-radius:0 12px 12px 12px;padding:12px 0;overflow-x:auto}
+.codebox .fname{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:#94a3b8;padding:0 16px 8px}
+.cline{display:flex;gap:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.8px;line-height:1.75;color:var(--code-text);padding:0 16px 0 0;white-space:pre;border-left:3px solid transparent}
+.cline .ln{flex:none;width:38px;text-align:right;padding-right:12px;color:#64748b;user-select:none}
+.cline.hl{background:var(--hl-bg);border-left-color:var(--hl-line)}
+.codenote{margin-top:10px;font-size:14px;color:var(--muted)}
+.codenote b{color:var(--text)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:700px){.grid2{grid-template-columns:1fr}.actors{grid-template-columns:repeat(2,1fr)}}
+table.cmp{width:100%;border-collapse:collapse;font-size:14px;margin-top:8px}
+table.cmp th,table.cmp td{border:1px solid var(--line);padding:10px;text-align:left;vertical-align:top}
+table.cmp th{background:var(--surface2)}
+ul.tight{margin:6px 0;padding-left:20px} ul.tight li{margin:4px 0;font-size:14.5px}
+.gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
+.gloss div{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--surface2)}
+.gloss b{display:block;margin-bottom:4px}.gloss p{margin:0;font-size:13.5px;color:var(--muted)}
+.ctxbar{display:flex;gap:4px;flex-wrap:wrap;margin-top:10px}
+.ctxbar span{font-size:11.5px;font-weight:700;padding:5px 9px;border-radius:8px;background:var(--surface2);border:1px solid var(--line)}
+.ctxbar span.u{border-color:var(--blue);color:var(--blue)}
+.ctxbar span.a{border-color:var(--accent);color:var(--accent)}
+/* diagram */
+.diagram{margin-top:12px;border:1px solid var(--line);border-radius:14px;background:var(--surface2);padding:8px 4px 4px}
+.diagram svg{display:block;width:100%;height:auto}
+.diagram svg text{font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif}
+.dnode .body{fill:var(--surface);stroke:var(--line);stroke-width:1.5;transition:stroke .3s, fill .3s}
+.dnode .halo{fill:none;stroke:var(--accent);stroke-width:2;opacity:0;transition:opacity .3s}
+.dnode.active .body{stroke:var(--accent);stroke-width:2.5}
+.dnode.active .halo{opacity:.45;animation:haloPulse 1.2s ease-in-out infinite}
+@keyframes haloPulse{0%,100%{opacity:.25}50%{opacity:.6}}
+.diagram.done .dnode .body{stroke:var(--green)}
+.dnode .dt{font-size:15px;font-weight:800;fill:var(--text)}
+.dnode .ds{font-size:10.5px;fill:var(--muted)}
+.dnode .di{font-size:19px}
+.darrow{stroke:var(--muted);stroke-width:2;fill:none;opacity:.55}
+.ddash{stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 4;fill:none;opacity:.5}
+.dloop{stroke:var(--line);stroke-width:2.5;fill:none;stroke-dasharray:7 6;transition:stroke .3s}
+.dloop.on{stroke:var(--accent);animation:dashMove 1s linear infinite}
+@keyframes dashMove{to{stroke-dashoffset:-13}}
+.dloop-label{font-size:11.5px;font-weight:700;fill:var(--muted);transition:fill .3s}
+.dloop-label.on{fill:var(--accent)}
+#dball{transition:transform .6s ease}
+#dball .ballpill{fill:var(--accent);stroke:var(--surface);stroke-width:2}
+#dball.ok .ballpill{fill:var(--green)}
+#dball.think .ballpill{animation:haloPulse 1s ease-in-out infinite}
+#dball text{font-size:11.5px;font-weight:800;fill:#fff}
+.dmsg-item text{font-size:11px;fill:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.dmsg-item.new{animation:pop .45s ease}
+#ddone{transition:opacity .4s}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12.5px;color:var(--muted)}
+.legend b{color:var(--text)}
+.diagram-cap{margin:10px 2px 0;font-size:14px}
+.diagram-cap b{color:var(--accent)}
+footer{color:var(--muted);font-size:12.5px;text-align:center;margin-top:28px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+<h1>Agent SDKの仕組みアニメーション</h1>
+<p class="lead">Claude Agent SDK や OpenAI Agents SDK で作ったエージェントは、「モデルが考えて → ツールを呼んで → 結果を見て → また考える」という<strong>エージェントループ</strong>で動きます。題材は一般的なタスク「READMEを読んで要約をファイルに書き出す」。9ステップの動きに、両SDKの実装コードのハイライトを連動させて追ってみましょう。</p>
+</header>
+
+<!-- ⓪ 図解アニメーション（全体図＋データの流れ） -->
+<section class="card" aria-label="図解アニメーション">
+<div class="label">図解アニメーション</div>
+<h2>全体図 — データがどこを流れているか</h2>
+<p style="color:var(--muted);font-size:14.5px;margin:4px 0 0">エージェントを構成する5つの要素と、その間を流れるデータの全体図です。下の操作ボタン（ステップアニメーション）と連動していて、ステップを進めると<strong>玉（＝流れているデータ）</strong>が矢印の上を移動し、処理中の箱が光り、messagesの箱に会話が積み上がります。</p>
+<div class="diagram" id="diagram">
+<svg viewBox="0 0 720 452" role="img" aria-label="エージェントの構成図：アプリ、SDK、LLM、ツール群、messagesの間をデータが流れる図">
+<defs>
+<marker id="darr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5b6b7a"></path></marker>
+<marker id="darrL" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0f766e"></path></marker>
+</defs>
+<!-- arrows: top row (bidirectional) -->
+<line class="darrow" x1="163" y1="82" x2="202" y2="82" marker-start="url(#darr)" marker-end="url(#darr)"></line>
+<line class="darrow" x1="358" y1="82" x2="397" y2="82" marker-start="url(#darr)" marker-end="url(#darr)"></line>
+<line class="darrow" x1="543" y1="82" x2="577" y2="82" marker-start="url(#darr)" marker-end="url(#darr)"></line>
+<!-- arrows: history dashed connectors -->
+<line class="ddash" x1="280" y1="127" x2="280" y2="247"></line>
+<line class="ddash" x1="500" y1="127" x2="500" y2="247"></line>
+<text x="288" y="192" style="font-size:10.5px;fill:var(--muted)">履歴を出し入れ</text>
+<text x="508" y="192" style="font-size:10.5px;fill:var(--muted)">毎回履歴ごと送る</text>
+<!-- loop arrow -->
+<path class="dloop" id="dloopPath" d="M 640 140 C 640 205, 470 208, 470 133" marker-end="url(#darrL)"></path>
+<text class="dloop-label" id="dloopLabel" x="556" y="222" text-anchor="middle">結果を見て、もう一度考える（ループ）</text>
+<!-- node: app -->
+<g class="dnode" data-dnode="0">
+<rect class="halo" x="14" y="34" width="152" height="96" rx="17"></rect>
+<rect class="body" x="20" y="40" width="140" height="84" rx="13"></rect>
+<text class="di" x="90" y="72" text-anchor="middle">📱</text>
+<text class="dt" x="90" y="94" text-anchor="middle">あなたのアプリ</text>
+<text class="ds" x="90" y="112" text-anchor="middle">依頼と結果の表示</text>
+</g>
+<!-- node: sdk -->
+<g class="dnode" data-dnode="1">
+<rect class="halo" x="199" y="34" width="162" height="96" rx="17"></rect>
+<rect class="body" x="205" y="40" width="150" height="84" rx="13"></rect>
+<text class="di" x="280" y="72" text-anchor="middle">📦</text>
+<text class="dt" x="280" y="94" text-anchor="middle">SDK</text>
+<text class="ds" x="280" y="112" text-anchor="middle">ループを回す役・実行役</text>
+</g>
+<!-- node: llm -->
+<g class="dnode" data-dnode="2">
+<rect class="halo" x="394" y="34" width="152" height="96" rx="17"></rect>
+<rect class="body" x="400" y="40" width="140" height="84" rx="13"></rect>
+<text class="di" x="470" y="72" text-anchor="middle">🧠</text>
+<text class="dt" x="470" y="94" text-anchor="middle">LLM（モデル）</text>
+<text class="ds" x="470" y="112" text-anchor="middle">考える・判断するだけ</text>
+</g>
+<!-- node: tools -->
+<g class="dnode" data-dnode="3">
+<rect class="halo" x="574" y="24" width="132" height="116" rx="17"></rect>
+<rect class="body" x="580" y="30" width="120" height="104" rx="13"></rect>
+<text class="di" x="640" y="60" text-anchor="middle">🛠️</text>
+<text class="dt" x="640" y="82" text-anchor="middle">ツール群</text>
+<text class="ds" x="640" y="100" text-anchor="middle">ファイル読み書き</text>
+<text class="ds" x="640" y="116" text-anchor="middle">検索・コマンド実行</text>
+</g>
+<!-- node: messages -->
+<g class="dnode" data-dnode="4">
+<rect class="halo" x="199" y="244" width="347" height="196" rx="17"></rect>
+<rect class="body" x="205" y="250" width="335" height="184" rx="13"></rect>
+<text class="dt" x="222" y="276">messages（文脈の箱）</text>
+<text id="dmsgCount" x="523" y="276" text-anchor="end" style="font-size:11px;font-weight:800;fill:var(--accent)">現在 1 件</text>
+<g id="dmsgs"></g>
+</g>
+<!-- done badge -->
+<g id="ddone" opacity="0">
+<rect x="196" y="206" width="328" height="30" rx="15" style="fill:var(--green)"></rect>
+<text x="360" y="226" text-anchor="middle" style="font-size:12.5px;font-weight:800;fill:#fff">✅ ループ完了 — 最終回答がアプリに届きました</text>
+</g>
+<!-- moving ball -->
+<g id="dball" transform="translate(90,82)">
+<rect class="ballpill" x="-62" y="-16" width="124" height="32" rx="16"></rect>
+<text id="dballText" x="0" y="4.5" text-anchor="middle">タスク</text>
+</g>
+</svg>
+</div>
+<p class="diagram-cap" id="diagramCap"></p>
+<div class="legend"><span>● <b>玉</b>＝いま流れているデータ</span><span>光る箱＝<b>処理中の要素</b></span><span>破線＝<b>messages（履歴）の受け渡し</b></span><span>輪の矢印＝<b>ループの繰り返し</b></span></div>
+</section>
+
+<!-- ① 操作ボタン（上） -->
+<section class="card" aria-label="操作">
+<div class="label">STEP CONTROLS</div>
+<div class="controls" data-controls>
+<button data-act="restart">最初から</button>
+<button data-act="prev">← 前へ</button>
+<button data-act="play" class="primary">▶ 再生</button>
+<button data-act="next">次へ →</button>
+<div class="speed"><span>速度</span>
+<button data-speed="0.5">0.5×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button>
+</div>
+</div>
+<div class="progress"><div class="progress-meta"><span data-step-label>ステップ 1 / 9</span><span data-step-title>タスクを渡す</span></div>
+<div class="progress-bar"><div class="progress-fill" data-fill></div></div>
+<div class="dots" data-dots></div></div>
+</section>
+
+<!-- ② 画面でこう見える -->
+<section class="card" aria-label="画面モック">
+<div class="label">画面でこう見える</div>
+<h2>エージェントの実行画面（イメージ）</h2>
+<div class="browser" style="margin-top:12px">
+<div class="browser-bar"><span class="dot" style="background:#f87171"></span><span class="dot" style="background:#fbbf24"></span><span class="dot" style="background:#34d399"></span><span class="url">my-agent — 実行ログと会話履歴（messages）</span></div>
+<div class="browser-body" id="mockBody"></div>
+</div>
+<p style="color:var(--muted);font-size:13px;margin:10px 2px 0">下半分は、モデルに毎回渡されている会話履歴（messages）です。ループが回るたびに tool_use と tool_result が積み上がっていく様子を見てください。</p>
+</section>
+
+<!-- ③ 操作ボタン（下・連動） -->
+<section class="card" aria-label="操作2">
+<div class="controls" data-controls>
+<button data-act="restart">最初から</button>
+<button data-act="prev">← 前へ</button>
+<button data-act="play" class="primary">▶ 再生</button>
+<button data-act="next">次へ →</button>
+<div class="speed"><span>速度</span>
+<button data-speed="0.5">0.5×</button><button data-speed="1" class="on">1×</button><button data-speed="2">2×</button>
+</div>
+</div>
+<div class="progress"><div class="progress-meta"><span data-step-label>ステップ 1 / 9</span><span data-step-title>タスクを渡す</span></div>
+<div class="progress-bar"><div class="progress-fill" data-fill></div></div></div>
+</section>
+
+<!-- ④ 実際の中身のフロー -->
+<section class="card" aria-label="フロー">
+<div class="label">実際の中身</div>
+<h2>裏側では何が起きているか — エージェントループ</h2>
+<div class="actors" id="actors">
+<div class="actor" data-actor="0"><div class="icon">🧑</div><div class="name">あなた</div><div class="sub">開発者・利用者</div></div>
+<div class="actor" data-actor="1"><div class="icon">📦</div><div class="name">あなたのアプリ</div><div class="sub">SDKが動く場所</div></div>
+<div class="actor" data-actor="2"><div class="icon">🧠</div><div class="name">LLM</div><div class="sub">モデル（考えるだけ）</div></div>
+<div class="actor" data-actor="3"><div class="icon">🛠️</div><div class="name">ツール</div><div class="sub">ファイル操作・検索など</div></div>
+</div>
+<div class="track"><div class="track-line"></div><div class="packet" id="packet">タスク（プロンプト）</div></div>
+<div class="step-detail" id="stepDetail"></div>
+</section>
+
+<!-- ④' コード連動パネル -->
+<section class="card" aria-label="コード連動パネル">
+<div class="label">実装コード（ステップ連動）</div>
+<h2>同じステップが、コードではどこか</h2>
+<p style="color:var(--muted);font-size:14.5px;margin:4px 0 0">ステップを進めると、そのステップで中心になる行がハイライトされます。タブを切り替えると、もう一方のSDKでも対応する行が光ります。書き方は違っても、やっていること（ループ）は同じです。</p>
+<div class="tabs" role="tablist">
+<button id="tabClaude" class="on" role="tab" aria-selected="true">Claude Agent SDK（TypeScript）</button>
+<button id="tabOpenai" role="tab" aria-selected="false">OpenAI Agents SDK（Python）</button>
+</div>
+<div class="codebox" id="codeClaude"><div class="fname">agent.ts — @anthropic-ai/claude-agent-sdk</div><div id="linesClaude"></div></div>
+<div class="codebox" id="codeOpenai" hidden><div class="fname">agent.py — openai-agents</div><div id="linesOpenai"></div></div>
+<p class="codenote" id="codeNote"></p>
+<div class="callout point"><b>見比べポイント：</b>Claude Agent SDKは Read / Edit / Bash などの<strong>ツールがSDKに組み込み</strong>で、<code>allowedTools</code> で許可するだけ。OpenAI Agents SDKは <code>@function_tool</code> を付けた<strong>自分の関数をツールとして登録</strong>するのが基本形です。</div>
+</section>
+
+<!-- ⑤ 補足 -->
+<section class="card">
+<div class="label">補足 1</div>
+<h2>ループの終了条件と安全弁</h2>
+<ul class="tight">
+<li><b>自然な終了</b>：モデルが tool_use を返さず、文章（最終回答）を返したらループは終わります。「もうツールは不要」というモデル自身の判断が終了条件です。</li>
+<li><b>最大ターン数</b>：無限ループや暴走を防ぐ安全弁。Claude Agent SDKは <code>maxTurns</code>、OpenAI Agents SDKは <code>Runner.run(..., max_turns=...)</code> で上限を決められます。超えるとエラーで止まります。</li>
+<li><b>権限・コストの上限</b>：危険なツールの実行前に許可を求める設定や、トークン使用量の上限も、実運用では欠かせないブレーキです。</li>
+</ul>
+</section>
+
+<section class="card">
+<div class="label">補足 2</div>
+<h2>コンテキスト（messages）の増え方と圧縮</h2>
+<p style="color:var(--muted);font-size:14.5px;margin:4px 0">モデルは「前回の応答」を覚えているわけではありません。毎ターン、SDKが履歴（messages）全体を送り直すことで、モデルは続きから考えられます。今回の例でも履歴はこう育ちます。</p>
+<div class="ctxbar">
+<span class="u">user：タスク</span><span class="a">assistant：tool_use</span><span class="u">user：tool_result</span><span class="a">assistant：tool_use</span><span class="u">user：tool_result</span><span class="a">assistant：最終回答</span>
+</div>
+<ul class="tight" style="margin-top:12px">
+<li>ツール結果が大きい（長いファイル、検索結果の山など）と、履歴は一気に膨らみます。モデルの読める上限（コンテキストウィンドウ）に近づくと、古い情報が扱えなくなります。</li>
+<li>対策の考え方：<b>圧縮・要約</b>（ここまでの履歴を短い要約に置き換えてから続ける）、<b>結果の切り詰め</b>（ツール結果の要点だけを履歴に残す）、<b>タスクの分割</b>（サブエージェント／ハンドオフで担当を分ける）などがあります。</li>
+<li>コストも履歴の長さに比例します。「何周回るか」と「1周でどれだけ増えるか」が、エージェントの料金と速度をほぼ決めます。</li>
+</ul>
+</section>
+
+<section class="card">
+<div class="label">補足 3</div>
+<h2>ツール定義の書き方 — モデルの判断材料</h2>
+<p style="color:var(--muted);font-size:14.5px;margin:4px 0">モデルはツールの中身（実装コード）は見ていません。見ているのは<b>名前・説明・入力スキーマ（どんな引数を、どの型で渡すか）</b>の3点だけです。だからこの3点の書き方が、そのまま「正しいツールを、正しい引数で呼べるか」を決めます。</p>
+<div class="http-box">{
+  <span class="k">"name"</span>: "read_file",
+  <span class="k">"description"</span>: "指定したパスのファイルの内容を読み取る",
+  <span class="k">"input_schema"</span>: {
+    <span class="k">"type"</span>: "object",
+    <span class="k">"properties"</span>: {
+      <span class="k">"path"</span>: { <span class="k">"type"</span>: "string", <span class="k">"description"</span>: "読み取るファイルのパス" }
+    },
+    <span class="k">"required"</span>: ["path"]
+  }
+}</div>
+<ul class="tight" style="margin-top:10px">
+<li>OpenAI Agents SDKでは、<code>@function_tool</code> を付けると関数の名前・docstring・型注釈からこの定義が自動生成されます。</li>
+<li>Claude Agent SDKの組み込みツールは定義済みですが、自作ツールを足す場合も考え方は同じです。</li>
+<li>説明が曖昧だとモデルはツールを選び間違えます。「いつ使うべきか」まで説明に書くのがコツです。</li>
+</ul>
+</section>
+
+<section class="card">
+<div class="label">補足 4</div>
+<h2>両SDKの対応表</h2>
+<div style="overflow-x:auto">
+<table class="cmp"><tr><th>概念</th><th>Claude Agent SDK</th><th>OpenAI Agents SDK</th></tr>
+<tr><th>実行の入口</th><td><code>query()</code>（非同期イテレータでメッセージを受け取る）</td><td><code>Runner.run()</code>（結果オブジェクトを受け取る）</td></tr>
+<tr><th>ツール</th><td>Read / Edit / Bash / WebSearch などが<b>組み込み</b>。<code>allowedTools</code> で許可する</td><td><code>@function_tool</code> で<b>自分の関数を定義</b>して登録するのが基本</td></tr>
+<tr><th>安全の仕組み</th><td>権限モード（<code>permissionMode</code>）や実行前コールバックで、ツール実行を許可／拒否する</td><td><b>ガードレール</b>：入力・出力・ツールの前後にチェック処理を挟める</td></tr>
+<tr><th>役割分担</th><td><b>サブエージェント</b>：別のエージェントに作業を委譲する</td><td><b>ハンドオフ</b>：担当エージェント自体を切り替える</td></tr>
+<tr><th>処理の差し込み</th><td colspan="1">Hooks：ツール実行前後などのタイミングで自前処理を差し込む</td><td>ライフサイクルフック（RunHooks / AgentHooks）で同様の差し込みが可能</td></tr>
+<tr><th>MCP対応</th><td><code>mcpServers</code> オプションでMCPサーバーを接続できる</td><td>MCPサーバーをツールとして接続できる</td></tr>
+</table>
+</div>
+<p style="color:var(--muted);font-size:13.5px;margin:8px 0 0">MCP（Model Context Protocol）は、外部ツールやデータソースをエージェントにつなぐ共通規格。両SDKとも対応しているので、MCPで作ったツールはSDKをまたいで使い回せます。</p>
+</section>
+
+<section class="card">
+<div class="label">補足 5</div>
+<h2>用語解説</h2>
+<div class="gloss">
+<div><b>エージェントループ</b><p>「モデルが考える → ツールを呼ぶ → 結果を見る → また考える」を、モデルが最終回答を出すまで繰り返す仕組み。エージェントの心臓部。</p></div>
+<div><b>tool_use（ツール使用）</b><p>モデルが返す「このツールを、この引数で呼んでほしい」という構造化された要求。モデル自身は実行せず、実行はSDK側の仕事。</p></div>
+<div><b>tool_result（ツール結果）</b><p>SDKがツールを実行した結果。会話履歴（messages）に積まれてモデルに渡され、モデルはこれを見て次の判断をする。</p></div>
+<div><b>ハンドオフ</b><p>OpenAI Agents SDKの仕組み。タスクの担当エージェントを別の専門エージェントに引き継ぐこと。Claude Agent SDKのサブエージェントに近い発想。</p></div>
+<div><b>ガードレール</b><p>OpenAI Agents SDKの安全機構。入力・出力・ツール実行の前後に検証を挟み、不適切な内容や想定外の動作を止める。</p></div>
+<div><b>コンテキスト</b><p>モデルが1回の判断で読める情報の全体（指示・ツール定義・会話履歴）。履歴が増えるほど1回の呼び出しが重く、高くなる。</p></div>
+</div>
+</section>
+
+<footer>Agent SDKの仕組みアニメーション — 技術アニメーションシリーズ（Claude Agent SDK / OpenAI Agents SDK）</footer>
+</div>
+
+<script>
+/* ---------- code samples ---------- */
+var codeClaude = [
+'import { query } from "@anthropic-ai/claude-agent-sdk";',
+'',
+'for await (const message of query({',
+'  prompt: "README.md を読んで、要約を summary.md に書き出して",',
+'  options: {',
+'    allowedTools: ["Read", "Edit"],  // 組み込みツールを使う',
+'    permissionMode: "acceptEdits",',
+'    maxTurns: 10,',
+'  },',
+'})) {',
+'  if (message.type === "result") {',
+'    console.log(message.result);',
+'  }',
+'}'
+];
+var codeOpenai = [
+'from agents import Agent, Runner, function_tool',
+'',
+'@function_tool',
+'def read_file(path: str) -> str:',
+'    """ファイルの内容を読み取る"""',
+'    with open(path, encoding="utf-8") as f:',
+'        return f.read()',
+'',
+'@function_tool',
+'def write_file(path: str, content: str) -> str:',
+'    """ファイルに内容を書き込む"""',
+'    with open(path, "w", encoding="utf-8") as f:',
+'        f.write(content)',
+'    return "書き込み完了"',
+'',
+'agent = Agent(',
+'    name="調査アシスタント",',
+'    instructions="調べものをして、結果をファイルにまとめてください。",',
+'    tools=[read_file, write_file],',
+')',
+'',
+'result = await Runner.run(',
+'    agent, "README.md を読んで、要約を summary.md に書き出して",',
+'    max_turns=10,',
+')',
+'print(result.final_output)'
+];
+/* highlight line indices per step (0-based step) */
+var hlClaude = [
+ [2,3],
+ [4,5,6],
+ [2,9],
+ [5],
+ [2,9],
+ [2,9],
+ [2,5,9],
+ [10,11],
+ [10,11]
+];
+var hlOpenai = [
+ [21,22],
+ [15,17,18],
+ [2,3,4],
+ [5,6],
+ [21],
+ [21],
+ [8,9,11,12],
+ [25],
+ [25]
+];
+var codeNotes = [
+ 'タスクの受け渡し口です。Claudeは <b>query() の prompt</b>、OpenAIは <b>Runner.run() の第2引数</b>。この1回の呼び出しの中で、ループ全体が回ります。',
+ 'モデルの判断材料を渡す場所。Claudeは <b>allowedTools</b> で使える組み込みツールを許可し、OpenAIは <b>Agent</b> に instructions（指示）と tools（道具一式）を設定します。',
+ 'モデルの応答（tool_use）はループに届きます。OpenAI側では、モデルがこの時点で見ていた<b>ツール定義（@function_tool）</b>をハイライトしています。',
+ '実行の主体はSDK側です。Claudeは<b>組み込みツール</b>をSDKが実行。OpenAIは <b>@function_tool の関数本体</b>がそのまま呼ばれます。',
+ 'tool_result の受け渡しはループの内側で自動に行われます。どちらのSDKでも、開発者が「結果をモデルへ戻す」コードを書く必要はありません。',
+ '履歴（messages）の管理もループの仕事です。<b>for await</b> / <b>Runner.run</b> の内側で、応答と結果が積み上がっていきます。',
+ '2周目も同じ仕組みです。OpenAI側では書き込み用ツール <b>write_file</b> の定義と本体が対応します。',
+ '最終回答の取り出し口。Claudeは <b>result メッセージの result</b>、OpenAIは <b>result.final_output</b> に入ります。',
+ 'アプリはここで受け取った文字列を、画面表示や次の処理につなぎます。ループを回す部分はどちらのSDKでも数行で済むのがポイントです。'
+];
+
+/* ---------- steps ---------- */
+var steps = [
+ {title:'タスクを渡す', packet:'タスク（プロンプト）', from:12, to:37, actors:[0,1], cls:'',
+  detail:'<h3>STEP 1 — アプリがSDK経由でタスクを渡す</h3><p>あなたのプログラム（アプリ）が、SDKにタスクを渡すところから始まります。題材は「README.md を読んで、要約を summary.md に書き出して」という、調べもの＋ファイル作成の一般的なタスクです。</p><div class="http-box">prompt: <span class="v-blue">"README.md を読んで、要約を summary.md に書き出して"</span></div>'},
+ {title:'指示とツール定義をモデルへ', packet:'指示 ＋ ツール定義 ＋ 履歴', from:37, to:62, actors:[1,2], cls:'',
+  detail:'<h3>STEP 2 — SDKがモデルに「指示＋ツール定義＋履歴」を送る</h3><p>SDKはモデルのAPIに、①どう振る舞うかの指示、②使えるツールの一覧（名前・説明・入力スキーマ）、③これまでの会話履歴（messages）をまとめて送ります。モデルが判断に使えるのは、この情報だけです。</p><div class="http-box">tools: [\n  { name: <span class="v-blue">"Read"</span>, description: <span class="v-blue">"ファイルの内容を読み取る"</span>, input: { path } },\n  { name: <span class="v-blue">"Edit"</span>, description: <span class="v-blue">"ファイルに内容を書き込む"</span>, input: { path, content } }\n]</div>'},
+ {title:'モデルが tool_use を返す', packet:'tool_use：Read', from:62, to:37, actors:[1,2], cls:'',
+  detail:'<h3>STEP 3 — モデルが「どのツールを使うか」を決めて返す</h3><p>モデルは「まず README を読む必要がある」と判断し、文章ではなく <b>tool_use</b>（ツール呼び出し）という構造化された応答を返します。モデルがやったのは「どのツールを、どんな引数で呼ぶか」を決めたこと<b>だけ</b>。この時点では、まだ何も実行されていません。</p><div class="http-box">{ <span class="k">"type"</span>: <span class="v-blue">"tool_use"</span>, <span class="k">"name"</span>: <span class="v-blue">"Read"</span>,\n  <span class="k">"input"</span>: { <span class="k">"path"</span>: <span class="v-blue">"README.md"</span> } }</div>'},
+ {title:'SDKがツールを実行する', packet:'Read を実行', from:37, to:87, actors:[1,3], cls:'',
+  detail:'<h3>STEP 4 — 実行するのはSDK側（モデルは実行しない）</h3><p>tool_use を受け取ったSDK（＝あなたのアプリ側）が、実際にファイルを開いて読みます。ファイル操作・検索・コマンド実行といった「現実の世界の操作」はすべてアプリ側の仕事で、<strong>モデル自身は外部に一切触れません</strong>。実行してよいツールかどうかの権限チェックも、この段階で入ります。</p>'},
+ {title:'tool_result がモデルに返る', packet:'tool_result：ファイル内容', from:87, to:62, actors:[1,2,3], cls:'',
+  detail:'<h3>STEP 5 — 実行結果（tool_result）がモデルに返る</h3><p>読み取った内容は <b>tool_result</b> として会話履歴（messages）に積まれ、次のターンの入力としてモデルに送られます。モデルはここで初めてファイルの中身を知ります。「読んだふり」はできない仕組みです。</p><div class="http-box">{ <span class="k">"type"</span>: <span class="v-blue">"tool_result"</span>,\n  <span class="k">"content"</span>: <span class="v-green">"# サンプルプロジェクト\\nこのプロジェクトは…"</span> }</div>'},
+ {title:'モデルが続きを考える', packet:'履歴を見て思考中', from:62, to:62, actors:[2], cls:'',
+  detail:'<h3>STEP 6 — モデルが積み上がった履歴を見て続きを考える</h3><p>モデルは履歴全体（タスク → tool_use → tool_result）を読み直して「次に何をすべきか」を考えます。モデル自体に記憶はなく、<b>SDKが履歴を送り直す</b>ことで続きから考えられる、という点がポイントです。今回は「要約をファイルに書き出す」が残っているので、もう1周ループします。</p>'},
+ {title:'ループ：2回目のツール呼び出し', packet:'tool_use：Edit → 実行 → 結果', from:62, to:87, actors:[1,2,3], cls:'',
+  detail:'<h3>STEP 7 — ループ：もう一度ツール呼び出し</h3><p>モデルが今度は書き込みツールを tool_use で要求し、SDKが実行し、tool_result が返ります。ステップ3〜5とまったく同じ流れの繰り返しです。タスクが複雑なほど、この周回数が増えていきます。</p><div class="http-box">tool_use: { <span class="k">"name"</span>: <span class="v-blue">"Edit"</span>, <span class="k">"input"</span>: { <span class="k">"path"</span>: <span class="v-blue">"summary.md"</span>, … } }\n→ SDKが実行 → tool_result: <span class="v-green">"書き込み完了"</span></div>'},
+ {title:'モデルが最終回答を出す', packet:'最終回答（テキスト）', from:62, to:37, actors:[1,2], cls:'',
+  detail:'<h3>STEP 8 — モデルが「もうツールは不要」と判断し、最終回答を出す</h3><p>モデルがタスクの完了を判断すると、tool_use ではなく通常の文章で最終回答を返します。<b>「モデルがツールを使わなかったら終わり」</b>——これがエージェントループの自然な終了条件です。</p><div class="http-box"><span class="v-green">"要約を作成し、summary.md に保存しました。要点は次の3つです…"</span></div>'},
+ {title:'ループ終了・結果を受け取る', packet:'最終結果', from:37, to:12, actors:[0,1], cls:'ok',
+  detail:'<h3>STEP 9 — ループ終了。アプリが最終結果を受け取る</h3><p>SDKは最終回答をアプリに返し、ループは終了します。Claude Agent SDKでは result メッセージの <code>result</code>、OpenAI Agents SDKでは <code>result.final_output</code> です。アプリはそれを表示したり、保存したり、次の処理につなげたりします。</p>'}
+];
+
+/* ---------- mock (run screen) ---------- */
+var stackItems = [
+ {role:'user', label:'user', txt:'タスク：「README.md を読んで、要約を summary.md に書き出して」'},
+ {role:'assistant', label:'assistant', txt:'tool_use：Read { path: "README.md" }'},
+ {role:'user', label:'user', txt:'tool_result：「# サンプルプロジェクト …」（ファイル内容）'},
+ {role:'assistant', label:'assistant', txt:'tool_use：Edit { path: "summary.md", … }'},
+ {role:'user', label:'user', txt:'tool_result：「書き込み完了」'},
+ {role:'assistant', label:'assistant', txt:'最終回答：「要約を作成し、summary.md に保存しました」'}
+];
+var stackCount = [1,1,2,2,3,3,5,6,6];
+var logs = [
+ ['🧑 あなた：README.md を読んで、要約を summary.md に書き出して','📦 アプリ：タスクを受け取りました。エージェントループ開始'],
+ ['📤 アプリ → モデル：指示 ＋ ツール定義（Read / Edit）＋ 履歴を送信'],
+ ['🧠 モデル → アプリ：tool_use { name: "Read", input: { path: "README.md" } }'],
+ ['⚙️ アプリ（SDK）が Read を実行中…　← 実行するのはモデルではない'],
+ ['📥 tool_result：「# サンプルプロジェクト …」を履歴に追加してモデルへ送信'],
+ ['🧠 モデル：内容を確認。要約の書き出しが残っている → もう1周ループ'],
+ ['🧠 モデル → アプリ：tool_use { name: "Edit", input: { path: "summary.md", … } }','⚙️ アプリ（SDK）が書き込みを実行 → tool_result：「書き込み完了」'],
+ ['🧠 モデル → アプリ：最終回答「要約を作成し、summary.md に保存しました」'],
+ ['✅ ループ終了：アプリが最終結果を受け取りました']
+];
+function mockHTML(idx){
+  var allLogs=[]; for(var i=0;i<=idx;i++){ logs[i].forEach(function(l){ allLogs.push({t:l, step:i}); }); }
+  var lh = allLogs.map(function(l,i){
+    var isLatest = (l.step===idx && i===allLogs.length-1) || (l.step===idx);
+    return '<div class="'+(l.step===idx?'latest':'dim')+'">'+l.t+'</div>';
+  }).join('');
+  var n = stackCount[idx];
+  var sh = stackItems.slice(0,n).map(function(m,i){
+    return '<div class="msg'+(i===n-1 && idx>0?' new':'')+'"><span class="role '+m.role+'">'+m.label+'</span><span class="txt">'+m.txt+'</span></div>';
+  }).join('');
+  return '<div class="log">'+lh+'</div><div class="msgstack"><div class="cap">MESSAGES — モデルに渡っている会話履歴（'+n+'件）</div>'+sh+'</div>';
+}
+
+/* ---------- diagram (overall picture, synced to steps) ---------- */
+var DPOS = { app:[90,82], sdk:[280,82], llm:[470,82], tools:[640,82] };
+var diagramSteps = [
+ {ball:['app','sdk'], label:'タスク', nodes:[0,1], cap:'<b>玉の流れ：</b>アプリ → SDK。あなたのアプリが「タスク」というデータを受け取り、SDKに渡してエージェントが起動します。'},
+ {ball:['sdk','llm'], label:'指示＋ツール定義', nodes:[1,2,4], cap:'<b>玉の流れ：</b>SDK → LLM。指示・ツール定義・messages（履歴）をひとまとめにしてモデルへ送ります。モデルが判断に使えるのは、この玉の中身だけです。'},
+ {ball:['llm','sdk'], label:'tool_use', nodes:[2,1], cap:'<b>玉の流れ：</b>LLM → SDK。モデルは「どのツールを、どんな引数で呼ぶか」だけを決めて <b>tool_use</b> として返します。この時点では、まだ何も実行されていません。'},
+ {ball:['sdk','tools'], label:'ツール実行', nodes:[1,3], cap:'<b>玉の流れ：</b>SDK → ツール群。実際にファイルを開くなどの「実行」をするのはSDK側です。モデル自身は外部に一切触れません。'},
+ {ball:['tools','sdk','llm'], label:'tool_result', nodes:[3,1,2,4], cap:'<b>玉の流れ：</b>ツール群 → SDK → LLM。実行結果（<b>tool_result</b>）が messages の箱に積まれ、モデルへ戻ります。ここからがループです。'},
+ {ball:['llm'], label:'考え中…', nodes:[2,4], think:true, cap:'<b>LLMが処理中：</b>モデルは messages の箱に積み上がった履歴全体を読み直して、続きを考えます。モデル自体に記憶はなく、履歴を送り直すことで続きから考えられます。'},
+ {ball:['llm','sdk','tools','sdk','llm'], label:'tool_use（2回目）', nodes:[2,1,3,4], loop:true, cap:'<b>ループ2周目：</b>tool_use → 実行 → tool_result がもう一度流れます。下の輪の矢印が光るのが「繰り返し」の合図です。タスクが複雑なほど、この周回数が増えます。'},
+ {ball:['llm','sdk'], label:'最終回答', nodes:[2,1], cap:'<b>玉の流れ：</b>LLM → SDK。モデルが「もうツールは不要」と判断し、tool_use ではなく文章（最終回答）を返します。これがループの終了条件です。'},
+ {ball:['sdk','app'], label:'最終結果', nodes:[1,0], ok:true, done:true, cap:'<b>玉の流れ：</b>SDK → アプリ。最終結果があなたのアプリに届き、ループは終了します。玉がアプリまで戻ったら、全体が完了状態になります。'}
+];
+var dShort = [
+ 'user：タスク「READMEを読んで要約して」',
+ 'assistant：tool_use Read',
+ 'user：tool_result ファイル内容',
+ 'assistant：tool_use Edit',
+ 'user：tool_result 書き込み完了',
+ 'assistant：最終回答'
+];
+var ballTimers = [];
+function setBall(x, y){ document.getElementById('dball').setAttribute('transform','translate('+x+','+y+')'); }
+function renderDiagram(idx){
+  var d = diagramSteps[idx];
+  ballTimers.forEach(function(t){ clearTimeout(t); }); ballTimers = [];
+  var ball = document.getElementById('dball');
+  ball.setAttribute('class', (d.ok?'ok':'') + (d.think?' think':''));
+  document.getElementById('dballText').textContent = d.label;
+  var pts = d.ball.map(function(k){ return DPOS[k]; });
+  setBall(pts[0][0], pts[0][1]);
+  pts.slice(1).forEach(function(p, i){
+    ballTimers.push(setTimeout(function(){ setBall(p[0], p[1]); }, 120 + i * 680));
+  });
+  document.querySelectorAll('[data-dnode]').forEach(function(n){
+    n.classList.toggle('active', d.nodes.indexOf(+n.getAttribute('data-dnode')) >= 0);
+  });
+  var loopOn = !!d.loop || idx === 4 || idx === 5;
+  document.getElementById('dloopPath').classList.toggle('on', loopOn);
+  document.getElementById('dloopLabel').classList.toggle('on', loopOn);
+  document.getElementById('diagram').classList.toggle('done', !!d.done);
+  document.getElementById('ddone').setAttribute('opacity', d.done ? '1' : '0');
+  document.getElementById('diagramCap').innerHTML = d.cap;
+  var n = stackCount[idx];
+  document.getElementById('dmsgCount').textContent = '現在 ' + n + ' 件';
+  var g = document.getElementById('dmsgs');
+  var NS = 'http://www.w3.org/2000/svg';
+  while (g.firstChild) g.removeChild(g.firstChild);
+  for (var i = 0; i < n; i++){
+    var item = stackItems[i];
+    var y = 292 + i * 23;
+    var grp = document.createElementNS(NS, 'g');
+    grp.setAttribute('class', 'dmsg-item' + (i === n - 1 && idx > 0 ? ' new' : ''));
+    var bg = document.createElementNS(NS, 'rect');
+    bg.setAttribute('x', 222); bg.setAttribute('y', y); bg.setAttribute('width', 300); bg.setAttribute('height', 19);
+    bg.setAttribute('rx', 5); bg.setAttribute('style', 'fill:var(--surface2);stroke:var(--line)');
+    var chip = document.createElementNS(NS, 'rect');
+    chip.setAttribute('x', 222); chip.setAttribute('y', y); chip.setAttribute('width', 58); chip.setAttribute('height', 19);
+    chip.setAttribute('rx', 5); chip.setAttribute('fill', item.role === 'user' ? '#1d4ed8' : '#0f766e');
+    var role = document.createElementNS(NS, 'text');
+    role.setAttribute('x', 251); role.setAttribute('y', y + 13.5); role.setAttribute('text-anchor', 'middle');
+    role.setAttribute('style', 'font-size:9.5px;font-weight:800;fill:#fff;font-family:system-ui,sans-serif');
+    role.textContent = item.label;
+    var tx = document.createElementNS(NS, 'text');
+    tx.setAttribute('x', 288); tx.setAttribute('y', y + 13.5);
+    tx.textContent = dShort[i];
+    grp.appendChild(bg); grp.appendChild(chip); grp.appendChild(role); grp.appendChild(tx);
+    g.appendChild(grp);
+  }
+}
+
+/* ---------- code rendering ---------- */
+function buildLines(elId, lines){
+  var el=document.getElementById(elId);
+  el.innerHTML='';
+  lines.forEach(function(t,i){
+    var d=document.createElement('div'); d.className='cline';
+    var ln=document.createElement('span'); ln.className='ln'; ln.textContent=(i+1);
+    var tx=document.createElement('span'); tx.textContent=t||' ';
+    d.appendChild(ln); d.appendChild(tx); el.appendChild(d);
+  });
+}
+buildLines('linesClaude', codeClaude);
+buildLines('linesOpenai', codeOpenai);
+function paintCode(idx){
+  [['linesClaude',hlClaude[idx]],['linesOpenai',hlOpenai[idx]]].forEach(function(pair){
+    var el=document.getElementById(pair[0]);
+    Array.prototype.forEach.call(el.children,function(row,i){
+      row.classList.toggle('hl', pair[1].indexOf(i)>=0);
+    });
+  });
+  document.getElementById('codeNote').innerHTML = codeNotes[idx];
+}
+var tabC=document.getElementById('tabClaude'), tabO=document.getElementById('tabOpenai');
+function setTab(openai){
+  tabC.classList.toggle('on', !openai); tabO.classList.toggle('on', openai);
+  tabC.setAttribute('aria-selected', String(!openai)); tabO.setAttribute('aria-selected', String(openai));
+  document.getElementById('codeClaude').hidden = openai;
+  document.getElementById('codeOpenai').hidden = !openai;
+}
+tabC.addEventListener('click', function(){ setTab(false); });
+tabO.addEventListener('click', function(){ setTab(true); });
+
+/* ---------- step engine ---------- */
+var cur=0, playing=false, timer=null, speed=1;
+var dotsWrap=document.querySelector('[data-dots]');
+steps.forEach(function(s,i){var b=document.createElement('button');b.textContent=i+1;b.setAttribute('aria-label','ステップ'+(i+1));b.addEventListener('click',function(){stop();go(i);});dotsWrap.appendChild(b);});
+
+function render(){
+  var s=steps[cur];
+  document.querySelectorAll('[data-step-label]').forEach(function(e){e.textContent='ステップ '+(cur+1)+' / '+steps.length;});
+  document.querySelectorAll('[data-step-title]').forEach(function(e){e.textContent=s.title;});
+  document.querySelectorAll('[data-fill]').forEach(function(e){e.style.width=((cur+1)/steps.length*100)+'%';});
+  Array.prototype.forEach.call(dotsWrap.children,function(b,i){b.className=i===cur?'on':(i<cur?'done':'');});
+  document.getElementById('mockBody').innerHTML=mockHTML(cur);
+  document.getElementById('stepDetail').innerHTML=s.detail;
+  renderDiagram(cur);
+  paintCode(cur);
+  var pk=document.getElementById('packet');
+  pk.textContent=s.packet; pk.className='packet'+(s.cls?' '+s.cls:'');
+  pk.style.left=s.from+'%';
+  requestAnimationFrame(function(){requestAnimationFrame(function(){pk.style.left=s.to+'%';});});
+  document.querySelectorAll('.actor').forEach(function(a){a.classList.toggle('active', s.actors.indexOf(+a.dataset.actor)>=0);});
+}
+function go(i){cur=Math.max(0,Math.min(steps.length-1,i));render();}
+function stop(){playing=false;if(timer){clearInterval(timer);timer=null;}syncPlay();}
+function syncPlay(){document.querySelectorAll('[data-act="play"]').forEach(function(b){b.textContent=playing?'⏸ 一時停止':'▶ 再生';});}
+function play(){
+  if(playing){stop();return;}
+  if(cur>=steps.length-1){cur=0;}
+  playing=true;syncPlay();render();
+  timer=setInterval(function(){ if(cur>=steps.length-1){stop();return;} cur++; render(); if(cur>=steps.length-1){stop();} }, 3400/speed);
+}
+document.querySelectorAll('[data-controls]').forEach(function(w){
+  w.addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b)return;
+    if(b.dataset.act==='play')play();
+    else if(b.dataset.act==='next'){stop();go(cur+1);}
+    else if(b.dataset.act==='prev'){stop();go(cur-1);}
+    else if(b.dataset.act==='restart'){stop();go(0);}
+    else if(b.dataset.speed){speed=parseFloat(b.dataset.speed);document.querySelectorAll('[data-speed]').forEach(function(x){x.classList.toggle('on',x.dataset.speed===b.dataset.speed);}); if(playing){stop();play();}}
+  });
+});
+document.addEventListener('keydown',function(e){if(e.key==='ArrowRight'){stop();go(cur+1);}if(e.key==='ArrowLeft'){stop();go(cur-1);}});
+render();
+</script>
+</body>
+</html>

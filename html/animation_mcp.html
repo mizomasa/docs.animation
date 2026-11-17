@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>MCPの仕組みアニメーション</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
+      * { box-sizing: border-box; }
+      :root {
+        --bg: #f4f6f5;
+        --surface: #ffffff;
+        --surface-2: #eef2f0;
+        --ink: #17211d;
+        --ink-2: #44534c;
+        --ink-3: #6b7a72;
+        --line: #d5ded9;
+        --accent: #0e7a5f;
+        --accent-ink: #ffffff;
+        --accent-soft: #dff0e9;
+        --packet: #b45309;
+        --packet-soft: #fdf0dd;
+        --danger: #b3261e;
+        --danger-soft: #fbe9e7;
+        --term-bg: #101613;
+        --term-ink: #c9e7d6;
+        --term-dim: #7d968a;
+        --radius: 10px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0e1311;
+          --surface: #161d1a;
+          --surface-2: #1d2622;
+          --ink: #e6ede9;
+          --ink-2: #b3c2ba;
+          --ink-3: #84958c;
+          --line: #2c3833;
+          --accent: #2fbf9a;
+          --accent-ink: #06231a;
+          --accent-soft: #14332a;
+          --packet: #f0a832;
+          --packet-soft: #3a2c12;
+          --danger: #f0867e;
+          --danger-soft: #3d1d1a;
+          --term-bg: #070a09;
+          --term-ink: #c9e7d6;
+          --term-dim: #71877b;
+          color-scheme: dark;
+        }
+      }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "IBM Plex Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        line-height: 1.75;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { max-width: 960px; margin: 0 auto; padding: 28px 18px 72px; }
+      h1 { font-size: clamp(26px, 5.4vw, 38px); line-height: 1.3; margin: 0 0 10px; letter-spacing: .01em; }
+      .lede { color: var(--ink-2); font-size: 16px; margin: 0 0 6px; max-width: 42em; }
+      .lede .mono { color: var(--accent); font-weight: 600; }
+      h2 { font-size: 21px; margin: 0 0 6px; line-height: 1.4; }
+      h3 { font-size: 16px; margin: 0 0 6px; }
+      .sec-head { margin: 40px 0 14px; }
+      .sec-head p { margin: 0; color: var(--ink-2); font-size: 14.5px; max-width: 44em; }
+      .sec-num { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 1px 10px; margin-bottom: 8px; letter-spacing: .08em; }
+
+      /* ---------- controls ---------- */
+      .controls {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 10px 12px; margin: 18px 0;
+      }
+      .controls .btn {
+        appearance: none; border: 1px solid var(--line); background: var(--surface-2);
+        color: var(--ink); border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 14.5px; font-weight: 600;
+        cursor: pointer; min-width: 44px;
+      }
+      .controls .btn:hover { border-color: var(--accent); }
+      .controls .btn:focus-visible, .speedsel:focus-visible, .dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .controls .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 92px; }
+      .controls .btn:disabled { opacity: .38; cursor: default; }
+      .controls .btn:disabled:hover { border-color: var(--line); }
+      .controls .btn.primary:disabled:hover { border-color: var(--accent); }
+      .speedwrap { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13.5px; color: var(--ink-2); }
+      .speedsel { font: inherit; font-size: 14px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+      .progress-line { display: flex; align-items: center; gap: 12px; margin: 4px 2px 0; flex-wrap: wrap; }
+      .progress-label { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+      .progress-track { flex: 1 1 140px; height: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+      .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .45s ease; }
+      .dots { display: flex; gap: 6px; flex-wrap: wrap; }
+      .dot { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+      .dot.done { border-color: var(--accent); color: var(--accent); }
+      .dot.now { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+      /* ---------- chat mock + rpc panel ---------- */
+      .stage-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      @media (min-width: 820px) { .stage-grid { grid-template-columns: 1fr 1fr; } }
+      .browser, .term {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+      }
+      .browser-bar {
+        display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+        background: var(--surface-2); border-bottom: 1px solid var(--line);
+      }
+      .traffic { display: flex; gap: 6px; flex: none; }
+      .traffic i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+      .traffic i:nth-child(1) { background: #e0655f; } .traffic i:nth-child(2) { background: #e8b23f; } .traffic i:nth-child(3) { background: #58b368; }
+      .win-title { font-size: 13.5px; font-weight: 700; color: var(--ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .spinner {
+        width: 16px; height: 16px; border-radius: 50%; flex: none; margin-left: auto;
+        border: 2.5px solid var(--line); border-top-color: var(--accent);
+        animation: spin .8s linear infinite; display: none;
+      }
+      .spinner.on { display: block; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .chat-body { padding: 16px 16px 18px; min-height: 342px; display: flex; flex-direction: column; gap: 10px; }
+      .srv-panel { border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; background: var(--surface-2); }
+      .srv-panel .srv-head { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; color: var(--ink-3); margin-bottom: 4px; }
+      .srv-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13.5px; flex-wrap: wrap; }
+      .srv-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); flex: none; }
+      .srv-dot.on { background: var(--accent); }
+      .srv-dot.busy { background: var(--packet); }
+      .srv-name { font-weight: 700; }
+      .srv-meta { color: var(--ink-3); font-size: 12px; }
+      .srv-state { margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+      .srv-state.ok { color: var(--accent); }
+      .srv-state.busy { color: var(--packet); }
+      .tools-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+      .tools-row .t-label { font-size: 12px; color: var(--ink-3); font-weight: 700; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 6px; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 600;
+        border-radius: 999px; padding: 2px 11px; border: 1.5px solid var(--accent); color: var(--accent); background: var(--accent-soft);
+      }
+      .chip.gray { border-color: var(--line); color: var(--ink-2); background: var(--surface-2); }
+      .chat-msgs { display: flex; flex-direction: column; gap: 9px; flex: 1; }
+      .chat-empty { color: var(--ink-3); font-size: 13.5px; text-align: center; padding: 14px 8px; border: 1px dashed var(--line); border-radius: 8px; }
+      .msg { max-width: 90%; padding: 9px 13px; border-radius: 12px; font-size: 14px; line-height: 1.65; }
+      .msg .who { display: block; font-size: 11px; font-weight: 700; opacity: .7; margin-bottom: 1px; }
+      .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px; }
+      .msg.ai { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+      .tool-line {
+        align-self: stretch; display: flex; align-items: center; gap: 8px;
+        font-family: "IBM Plex Mono", monospace; font-size: 12.5px; line-height: 1.55;
+        border: 1.5px dashed var(--packet); color: var(--packet); background: var(--packet-soft);
+        border-radius: 8px; padding: 7px 12px; word-break: break-all;
+      }
+      .tool-line.done { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+      .term-head { padding: 8px 14px; font-size: 12.5px; color: var(--term-dim); background: var(--term-bg); border-bottom: 1px solid #223028; font-family: "IBM Plex Mono", monospace; }
+      .term-body {
+        background: var(--term-bg); color: var(--term-ink); margin: 0; padding: 14px 16px 18px;
+        font-family: "IBM Plex Mono", monospace; font-size: 12.4px; line-height: 1.6; min-height: 342px;
+        white-space: pre-wrap; word-break: break-all;
+      }
+      .term-body .dim { color: var(--term-dim); }
+      .term-body .hl { color: #f0a832; }
+      .fig-cap { font-size: 12.5px; color: var(--ink-3); margin: 8px 2px 0; }
+
+      /* ---------- flow diagram ---------- */
+      .flow-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 16px 16px; }
+      .actors { display: flex; align-items: stretch; gap: 0; }
+      .actor {
+        flex: 1 1 0; min-width: 0; text-align: center; padding: 12px 6px 10px; border: 1.5px solid var(--line);
+        border-radius: var(--radius); background: var(--surface-2); transition: border-color .3s, background .3s, box-shadow .3s;
+      }
+      .actor .a-icon { font-size: 24px; line-height: 1.2; display: block; }
+      .actor .a-name { font-weight: 700; font-size: 13.5px; display: block; margin-top: 4px; line-height: 1.45; }
+      .actor .a-sub { font-size: 11.5px; color: var(--ink-3); display: block; line-height: 1.5; }
+      .actor.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .actor .a-tag { display: none; margin-top: 6px; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; color: var(--accent); }
+      .actor.tag-on .a-tag { display: inline-block; }
+      .link-arrow { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 15px; }
+      @media (max-width: 640px) {
+        .actors { flex-direction: column; gap: 0; }
+        .link-arrow { transform: rotate(90deg); height: 22px; flex-basis: 22px; margin: 0 auto; }
+      }
+      .packet-bar {
+        margin-top: 16px; border: 1.5px solid var(--packet); background: var(--packet-soft); border-radius: var(--radius);
+        padding: 12px 16px; min-height: 76px;
+      }
+      .packet-bar .p-label { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; color: var(--packet); margin-bottom: 2px; }
+      .packet-bar .p-route { font-weight: 700; font-size: 15px; }
+      .packet-bar .p-body { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; margin-top: 2px; word-break: break-all; }
+      .step-card { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px; }
+      .step-card .s-kicker { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent); font-weight: 600; letter-spacing: .06em; }
+      .step-card h3 { font-size: 19px; margin: 4px 0 8px; }
+      .step-card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+      .step-card p .mono { color: var(--ink); font-weight: 600; font-size: .94em; }
+      .tag { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 1px 10px; margin-left: 8px; vertical-align: 2px; }
+      .tag.rec { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+      .tag.itr { background: var(--packet-soft); color: var(--packet); border: 1px solid var(--packet); }
+
+      /* ---------- supplements ---------- */
+      .cards { display: grid; grid-template-columns: 1fr; gap: 14px; }
+      @media (min-width: 720px) { .cards.two { grid-template-columns: 1fr 1fr; } .cards.three { grid-template-columns: repeat(3, 1fr); } }
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+      .card p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+      .card p + p { margin-top: 8px; }
+      .card .mono { color: var(--ink); font-weight: 600; }
+      .vs-route { font-family: "IBM Plex Mono", monospace; font-size: 13px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; line-height: 1.9; word-break: break-all; }
+      dl.glossary { display: grid; grid-template-columns: 1fr; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 0; }
+      @media (min-width: 720px) { dl.glossary { grid-template-columns: 1fr 1fr; } }
+      .glossary .g-item { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+      .glossary dt { font-weight: 700; font-size: 15px; }
+      .glossary dt .mono { font-size: 13px; color: var(--accent); font-weight: 600; margin-left: 6px; }
+      .glossary dd { margin: 4px 0 0; font-size: 14px; color: var(--ink-2); }
+      .note-box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 6px; padding: 14px 18px; font-size: 14.5px; color: var(--ink-2); margin-top: 14px; }
+      .note-box strong { color: var(--ink); }
+      footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .spinner { animation: none; }
+        .progress-fill { transition: none; }
+        .actor { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>MCPの仕組みアニメーション</h1>
+      <p class="lede">
+        <span class="mono">MCP（Model Context Protocol）</span>は、AIアプリと外部のツールやデータを「共通の差し込み口」でつなぐための標準規格です。
+        アプリがサーバーへ接続し、ツール一覧を受け取り、モデルがそれを呼び出すまでの一連の流れを、9ステップで再生できます。
+      </p>
+
+      <!-- 1. 操作ボタン -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+      <div class="progress-line">
+        <span class="progress-label" data-progress-label>ステップ 1 / 9</span>
+        <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+        <div class="dots" data-dots aria-label="ステップ一覧"></div>
+      </div>
+
+      <!-- 2. 画面でこう見える -->
+      <div class="sec-head">
+        <span class="sec-num">VIEW</span>
+        <h2>画面でこう見える</h2>
+        <p>AIアプリのチャット画面と、その裏で流れる <span class="mono">JSON-RPC</span> メッセージです。どちらもステップに連動して変化します。</p>
+      </div>
+      <div class="stage-grid">
+        <div>
+          <div class="browser" aria-label="AIアプリのチャット画面のモック">
+            <div class="browser-bar">
+              <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="win-title">AIアプリ（ホスト）</div>
+              <span class="spinner" data-spinner aria-hidden="true"></span>
+            </div>
+            <div class="chat-body">
+              <div class="srv-panel" aria-label="MCPサーバーの接続状態">
+                <div class="srv-head">MCPサーバー</div>
+                <div data-servers></div>
+              </div>
+              <div class="tools-row" data-tools></div>
+              <div class="chat-msgs" data-msgs aria-live="polite"></div>
+            </div>
+          </div>
+          <p class="fig-cap">チャット画面のモック。接続済みサーバーと使えるツールが表示され、ツール実行中はその旨が出ます。</p>
+        </div>
+        <div>
+          <div class="term" aria-label="JSON-RPCメッセージのモック">
+            <div class="term-head">MCPの通信 — JSON-RPC 2.0 メッセージ</div>
+            <pre class="term-body" data-rpc></pre>
+          </div>
+          <p class="fig-cap">クライアント⇔サーバー間で実際に流れるメッセージのイメージです（値は説明用の例）。</p>
+        </div>
+      </div>
+
+      <!-- 3. 操作ボタン（連動） -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+
+      <!-- 4. 実際の中身のフロー -->
+      <div class="sec-head">
+        <span class="sec-num">FLOW</span>
+        <h2>実際の中身のフロー</h2>
+        <p>ポイントは役割分担です。モデルは「どのツールを呼ぶか」を決めるだけ、実際の処理はMCPサーバーが担い、橋渡しをするのがホスト内のクライアントです。光っている登場人物が、そのステップで動いている側です。</p>
+      </div>
+      <div class="flow-wrap">
+        <div class="actors" role="img" aria-label="MCPの登場人物：あなた、ホスト、LLM、MCPサーバー、外部の道具・データ">
+          <div class="actor" data-actor="user">
+            <span class="a-icon" aria-hidden="true">🧑</span>
+            <span class="a-name">あなた</span>
+            <span class="a-sub">タスクを頼む人</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="host">
+            <span class="a-icon" aria-hidden="true">🖥️</span>
+            <span class="a-name">ホスト（AIアプリ）</span>
+            <span class="a-sub">MCPクライアントを内蔵<br>サーバーごとに1つずつ</span>
+            <span class="a-tag" data-tag>ツール 3件 登録済み</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="llm">
+            <span class="a-icon" aria-hidden="true">🧠</span>
+            <span class="a-name">LLM（モデル）</span>
+            <span class="a-sub">考える・ツールを選ぶ</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="server">
+            <span class="a-icon" aria-hidden="true">🔌</span>
+            <span class="a-name">MCPサーバー</span>
+            <span class="a-sub">ツールを提供する<br>独立したプログラム</span>
+            <span class="a-tag" data-tag>接続済み</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="ext">
+            <span class="a-icon" aria-hidden="true">🗂️</span>
+            <span class="a-name">外部の道具・データ</span>
+            <span class="a-sub">ファイル／DB／Webサービス</span>
+          </div>
+        </div>
+        <div class="packet-bar" aria-live="polite">
+          <div class="p-label">いま飛んでいるメッセージ／処理</div>
+          <div class="p-route" data-packet-route>ホスト → MCPサーバー</div>
+          <div class="p-body mono" data-packet-body>接続を開始</div>
+        </div>
+        <div class="step-card">
+          <div class="s-kicker" data-step-kicker>STEP 1 / 9</div>
+          <h3 data-step-title>ホストが起動し、サーバーへ接続を始める</h3>
+          <p data-step-desc></p>
+        </div>
+      </div>
+
+      <!-- 5. 補足 -->
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>MCPの3つの基本機能</h2>
+        <p>サーバーがホストへ提供できるものは3種類あります。今回のアニメーションで使ったのは Tools ですが、残りの2つも同じ接続の上でやり取りされます。</p>
+      </div>
+      <div class="cards three">
+        <div class="card">
+          <h3>Tools <span class="mono" style="font-size:13px;color:var(--accent)">道具</span></h3>
+          <p>モデルが「呼ぶ」ための機能です。ファイルを読む、DBを検索する、メッセージを送るなど、<strong>処理の実行</strong>を伴います。いつ・何を呼ぶかはモデルが判断します。</p>
+          <p>例：<span class="mono">read_file</span>、<span class="mono">search_db</span>、<span class="mono">send_message</span></p>
+        </div>
+        <div class="card">
+          <h3>Resources <span class="mono" style="font-size:13px;color:var(--accent)">読み取り用データ</span></h3>
+          <p>モデルに渡すための「読み物」です。ファイルの中身やDBのレコードなどを URI で指し、アプリやユーザーが「これを文脈に入れる」と選ぶ使い方を想定しています。基本は<strong>読み取り専用</strong>です。</p>
+          <p>例：<span class="mono">file:///data/docs/spec.md</span>、<span class="mono">db://orders/2026</span></p>
+        </div>
+        <div class="card">
+          <h3>Prompts <span class="mono" style="font-size:13px;color:var(--accent)">テンプレート</span></h3>
+          <p>よく使う指示の雛形です。「この文書を要約して」「コードレビューして」といった定型の頼み方を、サーバー側が引数付きテンプレートとして用意し、ユーザーが選んで使います。</p>
+          <p>例：<span class="mono">summarize_doc</span>、<span class="mono">review_code</span></p>
+        </div>
+      </div>
+      <div class="note-box">
+        <strong>見分け方：</strong> 実行するのは Tools、読ませるのは Resources、頼み方の型は Prompts。「誰が主導するか」も違い、Tools はモデル主導、Resources と Prompts はアプリ／ユーザー主導で選ばれるのが基本です。
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>なぜ標準規格が要るのか — M×N問題</h2>
+        <p>MCPが無い世界では、AIアプリとツールの組み合わせごとに個別の連携コードが必要でした。アプリが M 個、ツールが N 個あると、連携は最大で M×N 本になります。</p>
+      </div>
+      <div class="cards two">
+        <div class="card">
+          <h3>標準が無い場合 <span class="mono" style="font-size:13px;color:var(--packet)">M × N</span></h3>
+          <div class="vs-route">アプリA × ファイル操作 → 専用連携①<br>アプリA × DB参照 → 専用連携②<br>アプリB × ファイル操作 → 専用連携③<br>アプリB × DB参照 → 専用連携④<br>…組み合わせの数だけ作り直し</div>
+          <p>ツールが1つ増えるたびに、使いたいアプリの数だけ連携を実装し直すことになります。アプリ側もツール側も負担が膨らみ続けます。</p>
+        </div>
+        <div class="card">
+          <h3>MCPがある場合 <span class="mono" style="font-size:13px;color:var(--accent)">M + N</span></h3>
+          <div class="vs-route">各アプリ → MCPクライアントを1回実装<br>各ツール → MCPサーバーを1回実装<br><br>あとは差し込むだけで組み合わさる</div>
+          <p>両側が同じ規格に合わせて一度作れば、あとは自由に組み合わせられます。よく引き合いに出されるのが <strong>USB-C</strong> の例えで、差し込み口の形が統一されたから、機器同士をいちいち専用ケーブルでつながなくて済むようになりました。</p>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>トランスポート — 接続の配線の違い</h2>
+        <p>JSON-RPCメッセージを「何に乗せて運ぶか」には、主に2つの方式があります。中身の会話（initialize や tools/call）はどちらでも同じです。</p>
+      </div>
+      <div class="cards two">
+        <div class="card">
+          <h3>stdio <span class="mono" style="font-size:13px;color:var(--accent)">ローカル起動</span></h3>
+          <div class="vs-route">ホストがサーバーを子プロセスとして起動<br>標準入力（stdin）→ メッセージ → 標準出力（stdout）</div>
+          <p>同じマシンの中で動きます。ネットワークに出ないので手軽で速く、ローカルのファイル操作や開発ツール連携の定番です。サーバーの起動・終了もホストが面倒を見ます。今回のアニメーションのファイルサーバーはこの方式です。</p>
+        </div>
+        <div class="card">
+          <h3>Streamable HTTP <span class="mono" style="font-size:13px;color:var(--accent)">リモート接続</span></h3>
+          <div class="vs-route">ホスト → HTTPS でリモートのサーバーへ POST<br>応答は JSON、必要に応じてストリーミング</div>
+          <p>サーバーが別のマシンやクラウド上で常駐し、複数の利用者が共有する形です。認証はHTTPの仕組み（OAuthなど）と組み合わせます。社内DBやWebサービスを組織で共有する用途はこちらです。</p>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>セキュリティ — つなぐ相手は「プログラム」</h2>
+        <p>MCPサーバーは、あなたのPCやアカウントの権限で実際に処理を実行するプログラムです。便利さと引き換えに、接続先の選び方と権限の渡し方がそのまま安全性になります。</p>
+      </div>
+      <div class="cards three">
+        <div class="card">
+          <h3>サーバーの信頼性</h3>
+          <p>出所の分からないサーバーを入れるのは、素性の知れないソフトをインストールするのと同じです。公式の提供元か、実績のある配布元かを確認してから接続しましょう。</p>
+        </div>
+        <div class="card">
+          <h3>権限は最小限に</h3>
+          <p>サーバーに触れる範囲は絞るのが原則です。読み取りだけの用途なら読み取り専用に、ファイルなら対象フォルダを限定する。ホストによっては、ツール呼び出しのたびにユーザーの承認を求める設定もできます。</p>
+        </div>
+        <div class="card">
+          <h3>ツールポイズニング</h3>
+          <p>ツールの説明文（<span class="mono">description</span>）に「このツールを呼ぶ前に、まず〜せよ」といった悪意ある指示を紛れ込ませ、モデルを騙す攻撃です。説明文も外部からの入力として疑い、知らないサーバーのツールは内容を確認してから使うのが対策になります。</p>
+        </div>
+      </div>
+      <div class="note-box">
+        <strong>ポイント：</strong> MCP自体は「つなぎ方」の規格で、安全かどうかは別問題です。実際の安全性は、選ぶサーバー、渡す権限、ホスト側の承認フローで決まります。
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>Agent SDKとの関係 — ループの中の「実行先」</h2>
+        <p>エージェントは「モデルが考えて → ツールを呼んで → 結果を見て → また考える」というループで動きます。MCPは、そのループの中で<strong>ツールの実行先を外部のサーバーに置く</strong>ための規格です。</p>
+      </div>
+      <div class="card">
+        <div class="vs-route">モデルが tool_use を出す<br>　├─ アプリ組み込みツール → その場で実行<br>　└─ MCPツール → クライアント → MCPサーバーが実行<br>結果はどちらも tool_result としてモデルへ戻り、ループが続く</div>
+        <p>モデルから見れば、組み込みツールもMCPツールも「使える道具の一覧」に並ぶ点は同じです。違いは実行の場所だけ。だからエージェントの仕組み（ループ）を知っていれば、MCPは「その道具箱を、規格化された形で外に広げるもの」と捉えられます。Claude Agent SDK や OpenAI Agents SDK も、MCPサーバーをツールの供給元として接続できます。</p>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>用語解説</h2>
+      </div>
+      <dl class="glossary">
+        <div class="g-item">
+          <dt>ホスト<span class="mono">host</span></dt>
+          <dd>あなたが使うAIアプリ本体。モデルの呼び出し、クライアントの管理、画面表示、権限の確認などを担う「現場監督」です。</dd>
+        </div>
+        <div class="g-item">
+          <dt>クライアント<span class="mono">client</span></dt>
+          <dd>ホストの中で動く接続担当。接続先のサーバーごとに1つずつ作られ、そのサーバーとの会話（初期化・一覧取得・呼び出し）を一手に引き受けます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>サーバー<span class="mono">server</span></dt>
+          <dd>ツールやデータを実際に提供する独立したプログラム。ファイル用、DB用、Webサービス用など、役割ごとに別々に存在し、複数を同時に接続できます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>JSON-RPC<span class="mono">JSON-RPC 2.0</span></dt>
+          <dd>「メソッド名＋引数」をJSONで送り、結果をJSONで返す、遠隔呼び出しの約束事。MCPの会話はすべてこの形式で、<span class="mono">id</span> でリクエストとレスポンスを対応付けます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>capabilities<span class="mono">能力宣言</span></dt>
+          <dd>初期化のときに双方が交換する「自分はこれができます」の一覧。サーバー側は Tools／Resources／Prompts のどれに対応するか、クライアント側は自分が受けられる機能を申告します。</dd>
+        </div>
+        <div class="g-item">
+          <dt>initialize<span class="mono">初期化</span></dt>
+          <dd>接続直後に必ず行う最初の会話。プロトコルのバージョンと capabilities を交換し、終わったら <span class="mono">notifications/initialized</span> という通知で「準備完了」を伝えます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>tools/list<span class="mono">ツール発見</span></dt>
+          <dd>サーバーが提供するツールの一覧をもらうリクエスト。各ツールの名前・説明・入力スキーマ（どんな引数が要るか）が返り、ホストはこれをモデルへ渡します。</dd>
+        </div>
+        <div class="g-item">
+          <dt>tools/call<span class="mono">ツール実行</span></dt>
+          <dd>ツールを実際に1回実行してもらうリクエスト。ツール名と引数を送ると、サーバーが処理を行い、結果（テキストや画像などの content）が返ります。</dd>
+        </div>
+      </dl>
+
+      <footer>
+        このページのサーバー名・ツール名・メッセージ内容は説明用の例です。プロトコルのバージョン表記（2025-03-26）などは執筆時点の仕様に基づく例で、実際の値や細部は利用するホスト／サーバーの実装によって異なります。
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var STEPS = [
+          {
+            title: "ホストが起動し、サーバーへ接続を始める",
+            tag: "",
+            desc: "AIアプリ（ホスト）が起動すると、設定ファイルに書かれたMCPサーバーへ接続を始めます。今回の例は、ローカルのファイルを扱う「ファイルサーバー」（<span class='mono'>stdio</span> 方式）です。ホストはサーバーのプログラムを子プロセスとして起動し、その中へ<strong>サーバー1つにつきクライアント1つ</strong>を用意します。",
+            route: "ホスト → MCPサーバー（ファイルサーバー）",
+            packet: "サーバープロセスを起動し、接続を開始",
+            actors: ["host", "server"],
+            hostTag: false, serverTag: false
+          },
+          {
+            title: "初期化（initialize）— 「はじめまして」の交換",
+            tag: "<span class='tag rec'>initialize</span>",
+            desc: "接続したら最初に必ず行うのが初期化です。クライアントは <span class='mono'>initialize</span> リクエストを送り、プロトコルのバージョンと、自分ができること（<span class='mono'>capabilities</span>）を伝えます。サーバーも自分のバージョン・capabilities・サーバー名を返し、最後にクライアントが <span class='mono'>notifications/initialized</span> という通知を送って準備完了です。<strong>お互いの「話せる言葉と得意技」をすり合わせる</strong>工程です。",
+            route: "クライアント ⇄ MCPサーバー",
+            packet: "initialize → バージョンと capabilities を交換",
+            actors: ["host", "server"],
+            hostTag: false, serverTag: true
+          },
+          {
+            title: "ツール発見（tools/list）— 道具の一覧をもらう",
+            tag: "<span class='tag rec'>tools/list</span>",
+            desc: "次にクライアントは <span class='mono'>tools/list</span> で「どんな道具がありますか？」と尋ねます。サーバーはツールの<strong>名前・説明・入力スキーマ（どんな引数が要るか）</strong>の一覧を返します。ここで初めて、ホストはそのサーバーが何をしてくれるのかを知ります。実際に処理が走るわけではない、目録の受け渡しです。",
+            route: "クライアント → MCPサーバー →（一覧）→ クライアント",
+            packet: "tools/list → read_file / list_files / write_file の定義",
+            actors: ["host", "server"],
+            hostTag: false, serverTag: true
+          },
+          {
+            title: "ツール定義がモデルの「使える道具」になる",
+            tag: "",
+            desc: "受け取ったツール定義は、ホストからモデルへ渡されます。モデルはこれを見て「自分は <span class='mono'>read_file</span> という道具が使える。引数は <span class='mono'>path</span> が必須だ」と知ります。<strong>サーバーが増えれば、この道具一覧に定義が足されるだけ</strong>で、モデルの使い方そのものは変わりません。",
+            route: "ホスト → LLM（モデル）",
+            packet: "ツール定義3件をモデルの道具一覧へ追加",
+            actors: ["host", "llm"],
+            hostTag: true, serverTag: true
+          },
+          {
+            title: "あなたがタスクを頼む",
+            tag: "",
+            desc: "ここで初めて、あなたの出番です。「プロジェクトのREADMEを読んで、概要を3行で教えて」とチャットで頼みます。この発言は、ツール定義と一緒にモデルへ送られます。<strong>接続や準備はすべて、頼む前の裏側で終わっている</strong>のがポイントです。",
+            route: "あなた → ホスト → LLM",
+            packet: "「READMEを読んで概要を教えて」＋ ツール定義",
+            actors: ["user", "host", "llm"],
+            hostTag: true, serverTag: true
+          },
+          {
+            title: "モデルがツールを選んで、呼び出しを決める",
+            tag: "",
+            desc: "モデルは頼みを読み、「READMEの中身が必要だ」と判断して <span class='mono'>read_file</span> を選び、引数 <span class='mono'>path: /data/docs/README.md</span> まで決めて返します。ただしモデル自身はファイルを読めません。<strong>モデルが決めるのは「何を・どの引数で呼ぶか」だけ</strong>で、実行は次のステップの担当です。",
+            route: "LLM → ホスト",
+            packet: "tool_use: read_file(path: \"/data/docs/README.md\")",
+            actors: ["llm", "host"],
+            hostTag: true, serverTag: true
+          },
+          {
+            title: "クライアントが tools/call を送り、サーバーが実行する",
+            tag: "<span class='tag itr'>tools/call</span>",
+            desc: "モデルの指示を受けて、クライアントが <span class='mono'>tools/call</span> リクエストをサーバーへ送ります。サーバーは受け取って<strong>実際の処理</strong>——ファイルを本当に開いて中身を読む——を実行します。「考える」モデルと「手を動かす」サーバーの分担が、ここで効いてきます。",
+            route: "クライアント → MCPサーバー → ファイル",
+            packet: "tools/call: read_file を実行中…",
+            actors: ["host", "server", "ext"],
+            hostTag: true, serverTag: true
+          },
+          {
+            title: "実行結果がクライアント経由でモデルに返る",
+            tag: "",
+            desc: "サーバーは読み取ったファイルの中身を <span class='mono'>content</span> として返します。クライアントがそれを受け取り、ホストが <span class='mono'>tool_result</span> としてモデルへ渡します。モデルにとってはここが初めて「ファイルの中身を目にする」瞬間です。エラーだった場合は、その旨も同じ形で返ります。",
+            route: "MCPサーバー → クライアント → LLM",
+            packet: "result: READMEの本文（テキスト）が返る",
+            actors: ["server", "host", "llm"],
+            hostTag: true, serverTag: true
+          },
+          {
+            title: "モデルが結果を使って回答する — そして汎用性",
+            tag: "",
+            desc: "モデルはREADMEの中身をもとに、概要を3行にまとめて回答します。これで一往復が完了です。そして大事なのは、<strong>別のサーバー（DB参照用など）も、まったく同じ手順</strong>——接続 → initialize → tools/list → tools/call——で使えること。規格が1つに定まっているから、道具を増やすコストが小さく済みます。",
+            route: "LLM → ホスト → あなた（＋別サーバーも同じ手順）",
+            packet: "最終回答 ／ DBサーバーも initialize → tools/list で接続済み",
+            actors: ["llm", "host", "user"],
+            hostTag: true, serverTag: true
+          }
+        ];
+
+        var USER_MSG = "<div class='msg user'><span class='who'>あなた</span>プロジェクトのREADMEを読んで、概要を3行で教えて</div>";
+
+        function srvRow(dotCls, name, meta, state, stateCls) {
+          return "<div class='srv-row'><span class='srv-dot " + dotCls + "'></span><span class='srv-name'>" + name +
+            "</span><span class='srv-meta'>" + meta + "</span><span class='srv-state " + stateCls + "'>" + state + "</span></div>";
+        }
+        var SRV_FILES = "ファイルサーバー";
+        var SRV_DB = "DB参照サーバー";
+        function servers(filesState, dbState) {
+          var f = {
+            off: srvRow("", SRV_FILES, "stdio · ローカル", "未接続", ""),
+            busy1: srvRow("busy", SRV_FILES, "stdio · ローカル", "接続中…", "busy"),
+            busy2: srvRow("busy", SRV_FILES, "stdio · ローカル", "初期化中…", "busy"),
+            busy3: srvRow("busy", SRV_FILES, "stdio · ローカル", "ツール取得中…", "busy"),
+            on: srvRow("on", SRV_FILES, "stdio · ローカル", "接続済み · ツール3件", "ok")
+          }[filesState];
+          var d = {
+            off: srvRow("", SRV_DB, "Streamable HTTP · リモート", "未接続", ""),
+            on: srvRow("on", SRV_DB, "Streamable HTTP · リモート", "接続済み · ツール2件", "ok")
+          }[dbState];
+          return f + d;
+        }
+        function toolsRow(kind) {
+          if (kind === "none") return "<span class='t-label'>使えるツール</span><span class='chip gray'>まだありません</span>";
+          if (kind === "busy") return "<span class='t-label'>使えるツール</span><span class='chip gray'>取得中…</span>";
+          var base = "<span class='t-label'>使えるツール</span><span class='chip'>read_file</span><span class='chip'>list_files</span><span class='chip'>write_file</span>";
+          if (kind === "all") base += "<span class='chip'>search_db</span><span class='chip'>get_record</span>";
+          return base;
+        }
+
+        var VIEW = [
+          { spin: true, servers: servers("busy1", "off"), tools: toolsRow("none"),
+            msgs: "<div class='chat-empty'>アプリが起動しました。裏側では、設定されたMCPサーバーへの接続が始まっています。</div>" },
+          { spin: true, servers: servers("busy2", "off"), tools: toolsRow("none"),
+            msgs: "<div class='chat-empty'>接続の初期化（initialize）が行われています。バージョンと capabilities を交換中…</div>" },
+          { spin: true, servers: servers("busy3", "off"), tools: toolsRow("busy"),
+            msgs: "<div class='chat-empty'>サーバーからツールの一覧（tools/list）を受け取っています…</div>" },
+          { spin: false, servers: servers("on", "off"), tools: toolsRow("files"),
+            msgs: "<div class='chat-empty'>準備が整いました。ツール定義がモデルへ渡され、あとは頼むだけです。</div>" },
+          { spin: false, servers: servers("on", "off"), tools: toolsRow("files"),
+            msgs: USER_MSG },
+          { spin: true, servers: servers("on", "off"), tools: toolsRow("files"),
+            msgs: USER_MSG + "<div class='tool-line'>tool_use → read_file(path: /data/docs/README.md) の呼び出しを決定</div>" },
+          { spin: true, servers: servers("on", "off"), tools: toolsRow("files"),
+            msgs: USER_MSG + "<div class='tool-line'>🔧 tools/call → read_file を実行中…（サーバーがファイルを読んでいます）</div>" },
+          { spin: false, servers: servers("on", "off"), tools: toolsRow("files"),
+            msgs: USER_MSG + "<div class='tool-line done'>✓ read_file 完了 — 結果がモデルに返りました</div>" },
+          { spin: false, servers: servers("on", "on"), tools: toolsRow("all"),
+            msgs: USER_MSG + "<div class='tool-line done'>✓ read_file 完了</div>" +
+              "<div class='msg ai'><span class='who'>AI</span>READMEの概要です。<br>1. 社内の文書を横断して探し、要約するプロジェクトです<br>2. ファイルとDBの両方を対象にできます<br>3. 使い方は「はじめに」の章にまとまっています<br><br>なお、DB参照サーバーも同じ手順で接続済みなので、DB側の情報も調べられます。</div>" }
+        ];
+
+        var RPC = [
+          "<span class='dim'>// stdio方式：ホストがサーバープログラムを\n// 子プロセスとして起動する</span>\n$ server-filesystem /data/docs\n\n<span class='dim'>（プロセスが立ち上がった。ここから標準入出力で\n  JSON-RPCのやり取りができるようになる）\n\nまだプロトコルの会話は始まっていない</span>",
+          "<span class='dim'>→ リクエスト（クライアント → サーバー）</span>\n{\n  \"jsonrpc\": \"2.0\", \"id\": 1,\n  \"method\": <span class='hl'>\"initialize\"</span>,\n  \"params\": {\n    \"protocolVersion\": \"2025-03-26\",\n    \"capabilities\": {},\n    \"clientInfo\": { \"name\": \"AIアプリ\", \"version\": \"1.0\" }\n  }\n}\n\n<span class='dim'>← レスポンス（サーバー → クライアント）</span>\n{\n  \"jsonrpc\": \"2.0\", \"id\": 1,\n  \"result\": {\n    \"protocolVersion\": \"2025-03-26\",\n    \"capabilities\": { \"tools\": {} },\n    \"serverInfo\": { \"name\": \"files-server\", \"version\": \"1.2\" }\n  }\n}\n\n<span class='dim'>→ 通知 \"notifications/initialized\"\n  （返事の要らない一方通行の連絡で、初期化の完了を伝える）</span>",
+          "<span class='dim'>→ リクエスト</span>\n{ \"jsonrpc\": \"2.0\", \"id\": 2, \"method\": <span class='hl'>\"tools/list\"</span> }\n\n<span class='dim'>← レスポンス：ツールの一覧が返る</span>\n{\n  \"jsonrpc\": \"2.0\", \"id\": 2,\n  \"result\": { \"tools\": [\n    {\n      \"name\": \"read_file\",\n      \"description\": \"指定したファイルの中身を読み取る\",\n      \"inputSchema\": {\n        \"type\": \"object\",\n        \"properties\": { \"path\": { \"type\": \"string\" } },\n        \"required\": [\"path\"]\n      }\n    },\n    { \"name\": \"list_files\", \"description\": \"…\", … },\n    { \"name\": \"write_file\", \"description\": \"…\", … }\n  ] }\n}",
+          "<span class='dim'>// ホストがモデルへ送るリクエストに、\n// ツール定義がそのまま含められる</span>\ntools: [\n  { \"name\": \"read_file\",\n    \"description\": \"指定したファイルの中身を読み取る\",\n    \"input_schema\": { \"path\": \"string（必須）\" } },\n  { \"name\": \"list_files\", … },\n  { \"name\": \"write_file\", … }\n]\n\n<span class='dim'>モデルはこの一覧を見て\n「自分はこの道具が使える」と知る。\nサーバーが増えれば、ここに定義が足されるだけ。</span>",
+          "<span class='dim'>// 会話にユーザーの発言が追加され、\n// ツール定義と一緒にモデルへ送られる</span>\n{\n  \"role\": \"user\",\n  \"content\": \"プロジェクトのREADMEを読んで、\n              概要を3行で教えて\"\n}\n\n<span class='dim'>この時点では、まだツールは呼ばれていない</span>",
+          "<span class='dim'>// モデルの応答：文章ではなく\n// 「ツールを呼んで」という指示が返る</span>\n{\n  \"role\": \"assistant\",\n  \"content\": [\n    { \"type\": \"tool_use\",\n      \"name\": <span class='hl'>\"read_file\"</span>,\n      \"input\": { \"path\": \"/data/docs/README.md\" } }\n  ]\n}\n\n<span class='dim'>モデル自身はファイルを読めない。\n決めたのは「何を・どの引数で呼ぶか」だけ。</span>",
+          "<span class='dim'>→ リクエスト（クライアント → サーバー）</span>\n{\n  \"jsonrpc\": \"2.0\", \"id\": 3,\n  \"method\": <span class='hl'>\"tools/call\"</span>,\n  \"params\": {\n    \"name\": \"read_file\",\n    \"arguments\": { \"path\": \"/data/docs/README.md\" }\n  }\n}\n\n<span class='dim'>// サーバー側の実処理：\n// ファイルを実際に開いて中身を読む</span>\nread: /data/docs/README.md <span class='dim'>…実行中</span>",
+          "<span class='dim'>← レスポンス（サーバー → クライアント）</span>\n{\n  \"jsonrpc\": \"2.0\", \"id\": 3,\n  \"result\": {\n    \"content\": [\n      { \"type\": \"text\",\n        \"text\": \"# プロジェクト概要\\nこのツールは…\" }\n    ],\n    \"isError\": false\n  }\n}\n\n<span class='dim'>ホストはこの中身を tool_result としてモデルへ渡す。\nモデルは初めて「ファイルの中身」を目にする。</span>",
+          "<span class='dim'>// 別のサーバー（DB参照用）も、\n// まったく同じ手順でつながる</span>\n<span class='dim'>→ initialize → tools/list →（使えるようになる）</span>\n\n{ \"jsonrpc\": \"2.0\", \"id\": 4,\n  \"method\": \"tools/call\",\n  \"params\": {\n    \"name\": \"search_db\",\n    \"arguments\": { \"query\": \"…\" } } }\n\n<span class='dim'>接続先が増えても、増えるのは\n「クライアント1つ＋設定の数行」だけ。\n会話の形は一切変わらない。</span>"
+        ];
+
+        var idx = 0;
+        var playing = false;
+        var speed = 1;
+        var timer = null;
+        var BASE_MS = 3400;
+
+        var els = {
+          label: document.querySelector("[data-progress-label]"),
+          fill: document.querySelector("[data-progress-fill]"),
+          dotsWrap: document.querySelector("[data-dots]"),
+          spinner: document.querySelector("[data-spinner]"),
+          servers: document.querySelector("[data-servers]"),
+          tools: document.querySelector("[data-tools]"),
+          msgs: document.querySelector("[data-msgs]"),
+          rpc: document.querySelector("[data-rpc]"),
+          route: document.querySelector("[data-packet-route]"),
+          packet: document.querySelector("[data-packet-body]"),
+          kicker: document.querySelector("[data-step-kicker]"),
+          stepTitle: document.querySelector("[data-step-title]"),
+          stepDesc: document.querySelector("[data-step-desc]")
+        };
+
+        /* build dots */
+        var dots = [];
+        for (var i = 0; i < STEPS.length; i++) {
+          (function (n) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "dot";
+            b.textContent = String(n + 1);
+            b.setAttribute("aria-label", "ステップ" + (n + 1) + "へ移動");
+            b.addEventListener("click", function () { pause(); goTo(n); });
+            els.dotsWrap.appendChild(b);
+            dots.push(b);
+          })(i);
+        }
+
+        var actorEls = {};
+        document.querySelectorAll("[data-actor]").forEach(function (el) {
+          actorEls[el.getAttribute("data-actor")] = el;
+        });
+
+        function render() {
+          var s = STEPS[idx];
+          var v = VIEW[idx];
+          els.label.textContent = "ステップ " + (idx + 1) + " / " + STEPS.length;
+          els.fill.style.width = ((idx + 1) / STEPS.length * 100) + "%";
+          dots.forEach(function (d, i) {
+            d.classList.toggle("now", i === idx);
+            d.classList.toggle("done", i < idx);
+          });
+          /* chat mock + rpc */
+          els.spinner.classList.toggle("on", v.spin);
+          els.servers.innerHTML = v.servers;
+          els.tools.innerHTML = v.tools;
+          els.msgs.innerHTML = v.msgs;
+          els.rpc.innerHTML = RPC[idx];
+          /* flow */
+          els.route.textContent = s.route;
+          els.packet.textContent = s.packet;
+          els.kicker.textContent = "STEP " + (idx + 1) + " / " + STEPS.length;
+          els.stepTitle.innerHTML = s.title + (s.tag || "");
+          els.stepDesc.innerHTML = s.desc;
+          Object.keys(actorEls).forEach(function (k) {
+            actorEls[k].classList.toggle("active", s.actors.indexOf(k) !== -1);
+          });
+          actorEls.host.classList.toggle("tag-on", !!s.hostTag);
+          actorEls.server.classList.toggle("tag-on", !!s.serverTag);
+          /* controls state */
+          document.querySelectorAll("[data-action='prev']").forEach(function (b) { b.disabled = idx === 0; });
+          document.querySelectorAll("[data-action='next']").forEach(function (b) { b.disabled = idx === STEPS.length - 1; });
+          document.querySelectorAll("[data-action='play']").forEach(function (b) {
+            b.textContent = playing ? "⏸ 一時停止" : (idx === STEPS.length - 1 ? "↺ もう一度" : "▶ 再生");
+          });
+        }
+
+        function goTo(n) {
+          idx = Math.max(0, Math.min(STEPS.length - 1, n));
+          render();
+        }
+        function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+        function startTimer() {
+          stopTimer();
+          timer = setInterval(function () {
+            if (idx >= STEPS.length - 1) { pause(); return; }
+            goTo(idx + 1);
+            if (idx >= STEPS.length - 1) { pause(); }
+          }, BASE_MS / speed);
+        }
+        function play() {
+          if (idx >= STEPS.length - 1) { goTo(0); }
+          playing = true;
+          render();
+          startTimer();
+        }
+        function pause() {
+          playing = false;
+          stopTimer();
+          render();
+        }
+
+        document.querySelectorAll("[data-controls]").forEach(function (bar) {
+          bar.addEventListener("click", function (e) {
+            var btn = e.target.closest("[data-action]");
+            if (!btn || btn.disabled) return;
+            var a = btn.getAttribute("data-action");
+            if (a === "prev") { pause(); goTo(idx - 1); }
+            else if (a === "next") { pause(); goTo(idx + 1); }
+            else if (a === "reset") { pause(); goTo(0); }
+            else if (a === "play") { playing ? pause() : play(); }
+          });
+        });
+        document.querySelectorAll("[data-speed]").forEach(function (sel) {
+          sel.addEventListener("change", function () {
+            speed = parseFloat(sel.value);
+            document.querySelectorAll("[data-speed]").forEach(function (o) { o.value = sel.value; });
+            if (playing) startTimer();
+          });
+        });
+
+        render();
+      })();
+    </script>
+  </body>
+</html>

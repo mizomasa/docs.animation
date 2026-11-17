@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>マルチエージェントの仕組みアニメーション</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
+      * { box-sizing: border-box; }
+      :root {
+        --bg: #f4f6f5;
+        --surface: #ffffff;
+        --surface-2: #eef2f0;
+        --ink: #17211d;
+        --ink-2: #44534c;
+        --ink-3: #6b7a72;
+        --line: #d5ded9;
+        --accent: #0e7a5f;
+        --accent-ink: #ffffff;
+        --accent-soft: #dff0e9;
+        --packet: #b45309;
+        --packet-soft: #fdf0dd;
+        --blue: #1d5fae;
+        --blue-soft: #e2edfa;
+        --danger: #b3261e;
+        --danger-soft: #fbe9e7;
+        --term-bg: #101613;
+        --term-ink: #c9e7d6;
+        --term-dim: #7d968a;
+        --radius: 10px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0e1311;
+          --surface: #161d1a;
+          --surface-2: #1d2622;
+          --ink: #e6ede9;
+          --ink-2: #b3c2ba;
+          --ink-3: #84958c;
+          --line: #2c3833;
+          --accent: #2fbf9a;
+          --accent-ink: #06231a;
+          --accent-soft: #14332a;
+          --packet: #f0a832;
+          --packet-soft: #3a2c12;
+          --blue: #7db1e8;
+          --blue-soft: #16283d;
+          --danger: #f0867e;
+          --danger-soft: #3d1d1a;
+          --term-bg: #070a09;
+          --term-ink: #c9e7d6;
+          --term-dim: #71877b;
+          color-scheme: dark;
+        }
+      }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "IBM Plex Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        line-height: 1.75;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { max-width: 960px; margin: 0 auto; padding: 28px 18px 72px; }
+      h1 { font-size: clamp(26px, 5.4vw, 38px); line-height: 1.3; margin: 0 0 10px; letter-spacing: .01em; }
+      .lede { color: var(--ink-2); font-size: 16px; margin: 0 0 6px; max-width: 42em; }
+      .lede .mono { color: var(--accent); font-weight: 600; }
+      h2 { font-size: 21px; margin: 0 0 6px; line-height: 1.4; }
+      h3 { font-size: 16px; margin: 0 0 6px; }
+      .sec-head { margin: 40px 0 14px; }
+      .sec-head p { margin: 0; color: var(--ink-2); font-size: 14.5px; max-width: 44em; }
+      .sec-num { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 1px 10px; margin-bottom: 8px; letter-spacing: .08em; }
+
+      /* ---------- controls ---------- */
+      .controls {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 10px 12px; margin: 18px 0;
+      }
+      .controls .btn {
+        appearance: none; border: 1px solid var(--line); background: var(--surface-2);
+        color: var(--ink); border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 14.5px; font-weight: 600;
+        cursor: pointer; min-width: 44px;
+      }
+      .controls .btn:hover { border-color: var(--accent); }
+      .controls .btn:focus-visible, .speedsel:focus-visible, .dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .controls .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 92px; }
+      .controls .btn:disabled { opacity: .38; cursor: default; }
+      .controls .btn:disabled:hover { border-color: var(--line); }
+      .controls .btn.primary:disabled:hover { border-color: var(--accent); }
+      .speedwrap { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13.5px; color: var(--ink-2); }
+      .speedsel { font: inherit; font-size: 14px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+      .progress-line { display: flex; align-items: center; gap: 12px; margin: 4px 2px 0; flex-wrap: wrap; }
+      .progress-label { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+      .progress-track { flex: 1 1 140px; height: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+      .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .45s ease; }
+      .dots { display: flex; gap: 6px; flex-wrap: wrap; }
+      .dot { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+      .dot.done { border-color: var(--accent); color: var(--accent); }
+      .dot.now { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+      /* ---------- chat mock + status list ---------- */
+      .stage-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      @media (min-width: 820px) { .stage-grid { grid-template-columns: 1.15fr .85fr; } }
+      .chatwin, .panel {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+      }
+      .win-bar {
+        display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+        background: var(--surface-2); border-bottom: 1px solid var(--line);
+      }
+      .traffic { display: flex; gap: 6px; flex: none; }
+      .traffic i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+      .traffic i:nth-child(1) { background: #e0655f; } .traffic i:nth-child(2) { background: #e8b23f; } .traffic i:nth-child(3) { background: #58b368; }
+      .win-title { font-size: 13.5px; font-weight: 700; color: var(--ink-2); display: flex; align-items: center; gap: 8px; min-height: 34px; }
+      .spinner {
+        width: 15px; height: 15px; border-radius: 50%; flex: none;
+        border: 2.5px solid var(--line); border-top-color: var(--accent);
+        animation: spin .8s linear infinite; display: none;
+      }
+      .spinner.on { display: block; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .chat-body { padding: 16px 14px 18px; min-height: 300px; display: flex; flex-direction: column; gap: 10px; }
+      .msg { max-width: 88%; padding: 9px 13px; border-radius: 12px; font-size: 14px; line-height: 1.65; }
+      .msg .m-who { display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em; margin-bottom: 2px; }
+      .msg.user { align-self: flex-end; background: var(--blue-soft); border: 1px solid var(--blue); border-bottom-right-radius: 4px; }
+      .msg.user .m-who { color: var(--blue); }
+      .msg.orch { align-self: flex-start; background: var(--accent-soft); border: 1px solid var(--accent); border-bottom-left-radius: 4px; }
+      .msg.orch .m-who { color: var(--accent); }
+      .msg.final { background: var(--surface); border: 1.5px solid var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .msg.sys { align-self: center; max-width: 96%; background: var(--surface-2); border: 1px dashed var(--line); color: var(--ink-2); font-size: 12.8px; text-align: center; border-radius: 999px; padding: 5px 14px; }
+      .msg.sys .m-who { display: inline; color: var(--ink-3); margin-right: 6px; }
+      .msg ul { margin: 4px 0 0; padding-left: 1.2em; }
+      .msg li { margin: 1px 0; }
+      .panel-head { padding: 9px 14px; font-size: 13px; font-weight: 700; color: var(--ink-2); background: var(--surface-2); border-bottom: 1px solid var(--line); display: flex; align-items: center; min-height: 34px; box-sizing: content-box; }
+      .panel-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; min-height: 300px; }
+      .srow { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface); }
+      .srow-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .srow-name { font-weight: 700; font-size: 14px; }
+      .srow-task { font-size: 12.5px; color: var(--ink-3); }
+      .badge { margin-left: auto; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 1px 10px; border: 1.5px solid var(--line); color: var(--ink-3); background: var(--surface-2); white-space: nowrap; }
+      .badge.run { border-color: var(--packet); color: var(--packet); background: var(--packet-soft); }
+      .badge.done { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+      .mini-track { height: 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; margin-top: 8px; }
+      .mini-fill { height: 100%; width: 0%; background: var(--packet); transition: width .8s ease; }
+      .mini-fill.done { background: var(--accent); }
+      .srow-note { font-size: 12.5px; color: var(--ink-2); margin-top: 6px; line-height: 1.6; }
+      .panel-foot { font-size: 12.5px; color: var(--ink-3); border-top: 1px dashed var(--line); padding-top: 10px; margin-top: auto; }
+      .fig-cap { font-size: 12.5px; color: var(--ink-3); margin: 8px 2px 0; }
+
+      /* ---------- flow diagram ---------- */
+      .flow-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 16px 16px; }
+      .actors { display: flex; align-items: stretch; gap: 0; }
+      .actor {
+        flex: 1 1 0; min-width: 0; text-align: center; padding: 12px 6px 10px; border: 1.5px solid var(--line);
+        border-radius: var(--radius); background: var(--surface-2); transition: border-color .3s, background .3s, box-shadow .3s;
+      }
+      .actor .a-icon { font-size: 24px; line-height: 1.2; display: block; }
+      .actor .a-name { font-weight: 700; font-size: 13.5px; display: block; margin-top: 4px; line-height: 1.45; }
+      .actor .a-sub { font-size: 11.5px; color: var(--ink-3); display: block; line-height: 1.5; }
+      .actor.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .actor.narrow { flex: 0 1 220px; }
+      .actor.wide { flex: 1 1 0; }
+      .link-arrow { flex: 0 0 30px; display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 16px; }
+      .fan-arrow { text-align: center; color: var(--ink-3); font-size: 15px; line-height: 1.3; padding: 5px 0 1px; letter-spacing: .4em; }
+      .fan-arrow .fan-label { display: block; font-size: 11.5px; letter-spacing: .05em; color: var(--ink-3); font-family: "IBM Plex Sans JP", sans-serif; margin-top: 1px; }
+      .sub-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+      @media (min-width: 720px) { .sub-grid { grid-template-columns: repeat(3, 1fr); } }
+      .sub {
+        position: relative; border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--surface-2);
+        padding: 12px 12px 12px; transition: border-color .3s, background .3s, box-shadow .3s, opacity .3s;
+      }
+      .sub.idle { opacity: .55; }
+      .sub.active { border-color: var(--packet); background: var(--packet-soft); box-shadow: 0 0 0 3px var(--packet-soft); }
+      .sub.done { border-color: var(--accent); background: var(--accent-soft); }
+      .sub-head { display: flex; align-items: center; gap: 8px; }
+      .sub-head .a-icon { font-size: 21px; line-height: 1.2; }
+      .sub-name { font-weight: 700; font-size: 14px; line-height: 1.4; }
+      .sub-task { font-size: 12px; color: var(--ink-3); display: block; line-height: 1.5; }
+      .ctx-chip {
+        display: inline-block; margin-top: 8px; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600;
+        border: 1px dashed var(--ink-3); color: var(--ink-2); border-radius: 6px; padding: 1px 8px;
+      }
+      .sub.done .ctx-chip { border-color: var(--accent); color: var(--accent); border-style: solid; }
+      .sub-track { height: 9px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; margin-top: 10px; }
+      .sub-fill { height: 100%; width: 0%; background: var(--packet); transition: width .9s ease; }
+      .sub.done .sub-fill { background: var(--accent); }
+      .sub-meta { display: flex; align-items: center; gap: 6px; margin-top: 7px; font-size: 12px; color: var(--ink-2); flex-wrap: wrap; }
+      .sub-meta .pct { font-family: "IBM Plex Mono", monospace; font-weight: 600; }
+      .tool-line { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--ink-3); margin-top: 6px; word-break: break-all; line-height: 1.6; }
+      .ball {
+        position: absolute; top: -9px; right: 12px; width: 18px; height: 18px; border-radius: 50%;
+        background: var(--accent); border: 2.5px solid var(--surface); box-shadow: 0 1px 4px rgba(0,0,0,.25);
+        opacity: 0; transform: translateY(8px) scale(.6); transition: opacity .35s, transform .35s;
+      }
+      .ball::after { content: "✓"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 700; }
+      .ball.on { opacity: 1; transform: translateY(0) scale(1); animation: ball-hop .7s ease; }
+      @keyframes ball-hop { 0% { transform: translateY(10px) scale(.6); } 55% { transform: translateY(-7px) scale(1.08); } 100% { transform: translateY(0) scale(1); } }
+      .merge-arrow { text-align: center; color: var(--ink-3); font-size: 15px; line-height: 1.3; padding: 5px 0 1px; letter-spacing: .4em; }
+      .packet-bar {
+        margin-top: 16px; border: 1.5px solid var(--packet); background: var(--packet-soft); border-radius: var(--radius);
+        padding: 12px 16px; min-height: 76px;
+      }
+      .packet-bar .p-label { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; color: var(--packet); margin-bottom: 2px; }
+      .packet-bar .p-route { font-weight: 700; font-size: 15px; }
+      .packet-bar .p-body { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; margin-top: 2px; word-break: break-all; }
+      .step-card { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px; }
+      .step-card .s-kicker { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent); font-weight: 600; letter-spacing: .06em; }
+      .step-card h3 { font-size: 19px; margin: 4px 0 8px; }
+      .step-card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+      .step-card p .mono { color: var(--ink); font-weight: 600; font-size: .94em; }
+      .tag { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 1px 10px; margin-left: 8px; vertical-align: 2px; }
+      .tag.par { background: var(--packet-soft); color: var(--packet); border: 1px solid var(--packet); }
+      .tag.ctx { background: var(--blue-soft); color: var(--blue); border: 1px solid var(--blue); }
+
+      /* ---------- supplements ---------- */
+      .cards { display: grid; grid-template-columns: 1fr; gap: 14px; }
+      @media (min-width: 720px) { .cards.two { grid-template-columns: 1fr 1fr; } .cards.three { grid-template-columns: repeat(3, 1fr); } }
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+      .card p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+      .card p + p { margin-top: 8px; }
+      .card .mono { color: var(--ink); font-weight: 600; }
+      .card ul { margin: 6px 0 0; padding-left: 1.25em; font-size: 14.5px; color: var(--ink-2); }
+      .card li { margin: 3px 0; }
+      .vs-route { font-family: "IBM Plex Mono", monospace; font-size: 13px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; line-height: 1.9; word-break: break-all; }
+      .brief {
+        font-family: "IBM Plex Mono", monospace; font-size: 13px; line-height: 1.85;
+        background: var(--term-bg); color: var(--term-ink); border-radius: 8px; padding: 14px 16px; margin: 10px 0; white-space: pre-wrap; word-break: break-all;
+      }
+      .brief .dim { color: var(--term-dim); }
+      dl.glossary { display: grid; grid-template-columns: 1fr; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 0; }
+      @media (min-width: 720px) { dl.glossary { grid-template-columns: 1fr 1fr; } }
+      .glossary .g-item { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+      .glossary dt { font-weight: 700; font-size: 15px; }
+      .glossary dt .mono { font-size: 13px; color: var(--accent); font-weight: 600; margin-left: 6px; }
+      .glossary dd { margin: 4px 0 0; font-size: 14px; color: var(--ink-2); }
+      .note-box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 6px; padding: 14px 18px; font-size: 14.5px; color: var(--ink-2); margin-top: 14px; }
+      .note-box strong { color: var(--ink); }
+      footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+      @media (max-width: 640px) {
+        .actors.top { flex-direction: column; }
+        .actors.top .link-arrow { transform: rotate(90deg); height: 24px; flex-basis: 24px; margin: 0 auto; }
+        .actors.top .actor.narrow { flex: 1 1 auto; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .spinner { animation: none; }
+        .progress-fill, .mini-fill, .sub-fill, .ball { transition: none; animation: none; }
+        .actor, .sub { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>マルチエージェントの仕組みアニメーション</h1>
+      <p class="lede">
+        大きなタスクを1つのエージェントで抱え込まず、<span class="mono">司令塔（オーケストレーター）</span>が仕事を分割し、複数の<span class="mono">サブエージェント</span>に並行して調べさせて、最後に結果を1つにまとめる。
+        その「分担 → 並行実行 → 統合」の流れを、9ステップで再生できます。
+      </p>
+
+      <!-- 1. 操作ボタン -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+      <div class="progress-line">
+        <span class="progress-label" data-progress-label>ステップ 1 / 9</span>
+        <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+        <div class="dots" data-dots aria-label="ステップ一覧"></div>
+      </div>
+
+      <!-- 2. 画面でこう見える -->
+      <div class="sec-head">
+        <span class="sec-num">VIEW</span>
+        <h2>画面でこう見える</h2>
+        <p>あなたが話しかけるのは司令塔のチャット画面だけです。サブエージェントの稼働状況は、裏側でリストとして見えています。どちらもステップに連動して変化します。</p>
+      </div>
+      <div class="stage-grid">
+        <div>
+          <div class="chatwin" aria-label="司令塔エージェントのチャット画面モック">
+            <div class="win-bar">
+              <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="win-title">💬 司令塔エージェントとのチャット <span class="spinner" data-spinner aria-hidden="true"></span></div>
+            </div>
+            <div class="chat-body" data-chat></div>
+          </div>
+          <p class="fig-cap">チャット画面のモック。サブエージェントとのやり取りは表に出ず、司令塔が要約して伝えます。</p>
+        </div>
+        <div>
+          <div class="panel" aria-label="サブエージェント稼働状況リストのモック">
+            <div class="panel-head">🧭 サブエージェント稼働状況</div>
+            <div class="panel-body">
+              <div class="srow" data-srow="a">
+                <div class="srow-top">
+                  <span class="srow-name">サブエージェント A</span>
+                  <span class="srow-task">宿を調べる</span>
+                  <span class="badge" data-badge="a">未起動</span>
+                </div>
+                <div class="mini-track"><div class="mini-fill" data-mini="a"></div></div>
+                <div class="srow-note" data-snote="a">まだ起動していません</div>
+              </div>
+              <div class="srow" data-srow="b">
+                <div class="srow-top">
+                  <span class="srow-name">サブエージェント B</span>
+                  <span class="srow-task">交通を調べる</span>
+                  <span class="badge" data-badge="b">未起動</span>
+                </div>
+                <div class="mini-track"><div class="mini-fill" data-mini="b"></div></div>
+                <div class="srow-note" data-snote="b">まだ起動していません</div>
+              </div>
+              <div class="srow" data-srow="c">
+                <div class="srow-top">
+                  <span class="srow-name">サブエージェント C</span>
+                  <span class="srow-task">見どころを調べる</span>
+                  <span class="badge" data-badge="c">未起動</span>
+                </div>
+                <div class="mini-track"><div class="mini-fill" data-mini="c"></div></div>
+                <div class="srow-note" data-snote="c">まだ起動していません</div>
+              </div>
+              <div class="panel-foot" data-panel-foot>司令塔はまだ何も始めていません。各サブエージェントは互いの様子を知りません。</div>
+            </div>
+          </div>
+          <p class="fig-cap">稼働状況リストのモック。進捗がバラバラに伸びていく様子がポイントです。</p>
+        </div>
+      </div>
+
+      <!-- 3. 操作ボタン（連動） -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+
+      <!-- 4. 実際の中身のフロー -->
+      <div class="sec-head">
+        <span class="sec-num">FLOW</span>
+        <h2>実際の中身のフロー</h2>
+        <p>司令塔の下にサブエージェントが横に並びます。光っている箱がそのステップで動いている側で、各サブエージェントの進捗バーは独立に伸びます。終わったエージェントには結果の玉（✓）が付き、司令塔へ戻っていきます。</p>
+      </div>
+      <div class="flow-wrap">
+        <div class="actors top">
+          <div class="actor narrow" data-actor="user">
+            <span class="a-icon" aria-hidden="true">🧑</span>
+            <span class="a-name">あなた</span>
+            <span class="a-sub">大きなタスクを1つ頼む</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor wide" data-actor="orch">
+            <span class="a-icon" aria-hidden="true">🧭</span>
+            <span class="a-name">司令塔エージェント（オーケストレーター）</span>
+            <span class="a-sub">分解 → 起動 → 待ち合わせ → 統合を担う。あなたとの会話はこのエージェントだけ</span>
+          </div>
+        </div>
+        <div class="fan-arrow" aria-hidden="true">↓ ↓ ↓<span class="fan-label" data-fan-label>サブタスクと専用の指示を配る</span></div>
+        <div class="sub-grid" role="img" aria-label="サブエージェントA・B・Cが並行して動く全体図">
+          <div class="sub idle" data-sub="a">
+            <span class="ball" data-ball="a" aria-hidden="true"></span>
+            <div class="sub-head">
+              <span class="a-icon" aria-hidden="true">🏨</span>
+              <div>
+                <span class="sub-name">サブエージェント A</span>
+                <span class="sub-task">担当：宿（ホテル）を調べる</span>
+              </div>
+            </div>
+            <span class="ctx-chip">context: A専用（まっさら）</span>
+            <div class="sub-track"><div class="sub-fill" data-subfill="a"></div></div>
+            <div class="sub-meta"><span class="pct" data-subpct="a">0%</span><span data-substate="a">未起動</span></div>
+            <div class="tool-line" data-subtool="a">tools: —</div>
+          </div>
+          <div class="sub idle" data-sub="b">
+            <span class="ball" data-ball="b" aria-hidden="true"></span>
+            <div class="sub-head">
+              <span class="a-icon" aria-hidden="true">🚆</span>
+              <div>
+                <span class="sub-name">サブエージェント B</span>
+                <span class="sub-task">担当：交通（行き方）を調べる</span>
+              </div>
+            </div>
+            <span class="ctx-chip">context: B専用（まっさら）</span>
+            <div class="sub-track"><div class="sub-fill" data-subfill="b"></div></div>
+            <div class="sub-meta"><span class="pct" data-subpct="b">0%</span><span data-substate="b">未起動</span></div>
+            <div class="tool-line" data-subtool="b">tools: —</div>
+          </div>
+          <div class="sub idle" data-sub="c">
+            <span class="ball" data-ball="c" aria-hidden="true"></span>
+            <div class="sub-head">
+              <span class="a-icon" aria-hidden="true">🗺️</span>
+              <div>
+                <span class="sub-name">サブエージェント C</span>
+                <span class="sub-task">担当：現地の見どころを調べる</span>
+              </div>
+            </div>
+            <span class="ctx-chip">context: C専用（まっさら）</span>
+            <div class="sub-track"><div class="sub-fill" data-subfill="c"></div></div>
+            <div class="sub-meta"><span class="pct" data-subpct="c">0%</span><span data-substate="c">未起動</span></div>
+            <div class="tool-line" data-subtool="c">tools: —</div>
+          </div>
+        </div>
+        <div class="merge-arrow" aria-hidden="true">↑ ↑ ↑<span class="fan-label" style="display:block;font-size:11.5px;letter-spacing:.05em;margin-top:1px;">結果（要約）が司令塔へ戻る</span></div>
+        <div class="packet-bar" aria-live="polite">
+          <div class="p-label">いま飛んでいる指示／結果</div>
+          <div class="p-route" data-packet-route>あなた → 司令塔</div>
+          <div class="p-body mono" data-packet-body>旅行先について、宿・交通・見どころをまとめて調べて</div>
+        </div>
+        <div class="step-card">
+          <div class="s-kicker" data-step-kicker>STEP 1 / 9</div>
+          <h3 data-step-title>大きなタスクを頼む</h3>
+          <p data-step-desc></p>
+        </div>
+      </div>
+
+      <!-- 5. 補足 -->
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>なぜ分けるのか</h2>
+        <p>1つのエージェントに全部やらせるのと比べて、サブエージェントに分けると何が得られるのか。理由は大きく3つあります。</p>
+      </div>
+      <div class="cards three">
+        <div class="card">
+          <h3>コンテキストが汚れない</h3>
+          <p>宿の候補を何十件も読み込む作業を司令塔自身がやると、その細かい情報で司令塔の文脈（コンテキスト）が埋まってしまいます。サブエージェントが自分の文脈の中で読み込み、司令塔には<strong>要約だけ</strong>が返るので、司令塔は全体の見通しを保ったまま判断できます。</p>
+        </div>
+        <div class="card">
+          <h3>並行化で速い</h3>
+          <p>宿 → 交通 → 見どころを順番に調べると、所要時間は3つの合計になります。同時に走らせれば、<strong>いちばん遅い1つの時間</strong>で済みます。互いに依存しないサブタスクほど、この効果が大きくなります。</p>
+        </div>
+        <div class="card">
+          <h3>専門特化させられる</h3>
+          <p>サブエージェントごとに指示・使えるツール・（製品によっては）モデルを変えられます。「宿担当は予約サイト検索だけ」「交通担当は時刻表ツールだけ」のように役割を絞ると、迷いが減って精度が上がります。</p>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>コストと限界</h2>
+        <p>分ければ万能、ではありません。マルチエージェント化にははっきりした代償があります。</p>
+      </div>
+      <div class="cards three">
+        <div class="card">
+          <h3>トークン消費が増える</h3>
+          <p>サブエージェントの数だけ、指示の読み込みと推論が走ります。3人に分ければ、ざっくり<strong>3人分のコスト</strong>です。並行化で時間は買えますが、料金は増えるのが基本です。</p>
+        </div>
+        <div class="card">
+          <h3>統合という仕事が生まれる</h3>
+          <p>結果はバラバラの粒度・形式で返ってきます。矛盾の調整、重複の除去、最終回答への組み立ては司令塔の仕事で、ここが雑だと「分けたのにまとまらない」結果になります。サブタスク同士の依存が強い課題ほど統合は難しくなります。</p>
+        </div>
+        <div class="card">
+          <h3>単純なタスクには過剰</h3>
+          <p>1回のツール呼び出しで済むような依頼にまで分解すると、起動と待ち合わせの手間だけが増えて遅くなります。「分割できるか」ではなく<strong>「分割する価値があるか」</strong>が判断基準です。目安は、調査範囲が広く、独立に進められて、結果が要約で済むタスクかどうかです。</p>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>連携パターンの違い</h2>
+        <p>今回のアニメーションは「司令塔型」です。エージェント同士のつなぎ方には、他にも代表的な型があります。</p>
+      </div>
+      <div class="cards three">
+        <div class="card">
+          <h3>司令塔型（オーケストレーター）</h3>
+          <div class="vs-route">あなた → 司令塔<br>司令塔 → A・B・C（並行）<br>A・B・C → 司令塔 → あなた</div>
+          <p>中心の司令塔が分解・配布・統合を担い、ワーカーは互いを知りません。全体像は司令塔だけが持ちます。今回の構成で、並行調査や大量処理に向きます。</p>
+        </div>
+        <div class="card">
+          <h3>引き継ぎ型（ハンドオフ）</h3>
+          <div class="vs-route">あなた → 受付エージェント<br>　→ 専門エージェント<br>　→ 別の専門エージェント</div>
+          <p>会話の主導権そのものを次のエージェントへ渡します。「一次受付が内容を聞き、専門担当にバトンタッチする」ような流れで、引き継いだ側があなたと直接やり取りを続けます。</p>
+        </div>
+        <div class="card">
+          <h3>順番型（パイプライン）</h3>
+          <div class="vs-route">入力 → 工程1 → 工程2 → 工程3 → 出力<br>（下書き → 校正 → 整形 など）</div>
+          <p>前の工程の出力を次の工程の入力にする一本道です。並行にはなりませんが、工程ごとに指示と品質基準を固定でき、再現性が上がります。</p>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>サブエージェントへの指示の書き方</h2>
+        <p>サブエージェントは生まれたての状態で起動し、<strong>あなたと司令塔の会話履歴は共有されません</strong>。だから指示は「それだけ読めば仕事が完結する」自己完結な形で渡すのが鉄則です。</p>
+      </div>
+      <div class="card">
+        <h3>良い指示の例（Aへの指示）</h3>
+        <div class="brief"><span class="dim"># タスク</span>
+旅行先エリアの宿を調べ、候補を3件に絞ること。
+<span class="dim"># 期待する成果物</span>
+候補ごとに「名前／1泊の目安価格／特徴を1行」を箇条書きで。最後に推薦を1件。
+<span class="dim"># 制約</span>
+予算は1泊2万円まで。公式サイトか予約サイトで確認できた情報だけを使うこと。
+分からない項目は「未確認」と書くこと。</div>
+        <ul>
+          <li><strong>タスク</strong>：何をしてほしいか。背景も含め、その場で判断できる材料を渡す</li>
+          <li><strong>期待する成果物</strong>：形式と量を決める。統合する側（司令塔）が受け取りやすい形に</li>
+          <li><strong>制約</strong>：予算・情報源・禁止事項。書かれていない前提は伝わらないと思って書く</li>
+          <li>逆に「さっき話した条件で」のような指示は通用しません。会話履歴が見えない相手への<strong>引き継ぎメモ</strong>だと考えるのが近道です</li>
+        </ul>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>用語解説</h2>
+      </div>
+      <dl class="glossary">
+        <div class="g-item">
+          <dt>オーケストレーション<span class="mono">orchestration</span></dt>
+          <dd>複数のエージェントや処理の段取りを、中心役が指揮して全体を進めること。分解・配布・待ち合わせ・統合までを含む、司令塔の仕事全体を指します。</dd>
+        </div>
+        <div class="g-item">
+          <dt>ハンドオフ<span class="mono">handoff</span></dt>
+          <dd>処理の主導権を別のエージェントへ引き継ぐこと。司令塔型と違い、引き継いだ側がそのまま対話や処理を続行します。</dd>
+        </div>
+        <div class="g-item">
+          <dt>コンテキスト分離<span class="mono">context isolation</span></dt>
+          <dd>エージェントごとに会話・作業の文脈を独立させること。細部の情報が他へ漏れ広がらず、各エージェントは自分の仕事に集中できます。代わりに、必要な情報は指示として明示的に渡す必要があります。</dd>
+        </div>
+        <div class="g-item">
+          <dt>並行実行<span class="mono">parallel execution</span></dt>
+          <dd>複数のサブエージェントを同時に走らせること。全体の所要時間は「合計」ではなく「最も遅い1つ」に近づきます。互いに依存しないサブタスクでのみ可能です。</dd>
+        </div>
+        <div class="g-item">
+          <dt>サブタスク<span class="mono">subtask</span></dt>
+          <dd>大きなタスクを分解した個々の仕事。「宿を調べる」「交通を調べる」のように、それ単体で完了を判定できる粒度に切るのがコツです。</dd>
+        </div>
+        <div class="g-item">
+          <dt>ワーカー<span class="mono">worker</span></dt>
+          <dd>司令塔からサブタスクを受けて実際に手を動かす側のエージェント。サブエージェントとほぼ同じ意味で、司令塔型の構成でよく使われる呼び方です。</dd>
+        </div>
+      </dl>
+
+      <footer>
+        このページのタスク例（旅行先の宿・交通・見どころの調査）や進捗の数値は、仕組みを説明するための一般的な例です。実際の製品では、サブエージェントの起動方法・並行数の上限・結果の受け渡し形式はフレームワークごとに異なります。
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var SUB_KEYS = ["a", "b", "c"];
+
+        var STEPS = [
+          {
+            title: "大きなタスクを頼む",
+            tag: "",
+            desc: "あなたが頼むのは1つの大きなタスクです。「旅行先について、<strong>宿・交通・現地の見どころをまとめて調べて</strong>」。この時点では、相手は司令塔エージェントだけ。サブエージェントはまだ存在しません。調査を全部ひとりでやれば時間がかかり、調べた細部で文脈も埋まってしまいます。そこで司令塔は「分担」を選びます。",
+            route: "あなた → 司令塔",
+            packet: "旅行先について、宿・交通・見どころをまとめて調べて",
+            fan: "（まだ何も配っていません）",
+            top: ["user", "orch"],
+            subs: {
+              a: { st: "idle", pct: 0, state: "未起動", tool: "tools: —" },
+              b: { st: "idle", pct: 0, state: "未起動", tool: "tools: —" },
+              c: { st: "idle", pct: 0, state: "未起動", tool: "tools: —" }
+            }
+          },
+          {
+            title: "司令塔がタスクを分解する",
+            tag: "",
+            desc: "司令塔はタスクを眺めて、<strong>互いに依存せず独立に進められるサブタスク</strong>へ切り分けます。今回は「宿」「交通」「見どころ」の3つ。宿の調査結果がなくても交通は調べられます——この<strong>独立性</strong>が、後の並行実行を可能にする条件です。切り方が悪いと、統合の段階で困ることになります。",
+            route: "司令塔（頭の中）",
+            packet: "分解結果： ①宿を調べる ②交通を調べる ③見どころを調べる",
+            fan: "サブタスクと専用の指示を配る",
+            top: ["orch"],
+            subs: {
+              a: { st: "idle", pct: 0, state: "割当済み", tool: "tools: —" },
+              b: { st: "idle", pct: 0, state: "割当済み", tool: "tools: —" },
+              c: { st: "idle", pct: 0, state: "割当済み", tool: "tools: —" }
+            }
+          },
+          {
+            title: "サブエージェントを複数起動する",
+            tag: "<span class='tag ctx'>コンテキスト分離</span>",
+            desc: "サブタスクごとに、サブエージェント A・B・C を起動します。渡されるのは<strong>そのサブタスク専用の指示</strong>と、<strong>まっさらな独立コンテキスト</strong>だけ。あなたと司令塔の会話履歴は共有されません。だから指示には、タスク・期待する成果物・制約を自己完結に書いておく必要があります（詳しくは下の補足）。",
+            route: "司令塔 → A・B・C（同時に起動）",
+            packet: "A「宿を調べよ」 B「交通を調べよ」 C「見どころを調べよ」＋各専用コンテキスト",
+            fan: "起動：専用の指示＋まっさらなコンテキストを渡す",
+            top: ["orch"],
+            subs: {
+              a: { st: "run", pct: 5, state: "起動したところ", tool: "tools: 宿検索の準備中…" },
+              b: { st: "run", pct: 5, state: "起動したところ", tool: "tools: 経路検索の準備中…" },
+              c: { st: "run", pct: 5, state: "起動したところ", tool: "tools: 情報検索の準備中…" }
+            }
+          },
+          {
+            title: "サブエージェントが並行して動く",
+            tag: "<span class='tag par'>並行実行</span>",
+            desc: "3者は<strong>同時に</strong>動き出します。各サブエージェントは自分のエージェントループ（考える → ツールを使う → 結果を見てまた考える）を持ち、自分の担当だけを調べます。Aが宿サイトを読み込む間、Bは経路を検索し、Cは観光情報を集めています。互いの存在は知らず、連絡も取りません。",
+            route: "A・B・C（それぞれ独立に実行中）",
+            packet: "A: 宿検索→料金比較 / B: 経路検索 / C: 観光情報の収集（同時進行）",
+            fan: "それぞれ独立に実行中（連絡は取り合わない）",
+            top: [],
+            subs: {
+              a: { st: "run", pct: 45, state: "実行中", tool: "tools: 宿検索 → 料金・空室を比較中…" },
+              b: { st: "run", pct: 35, state: "実行中", tool: "tools: 経路検索 → 所要時間を確認中…" },
+              c: { st: "run", pct: 25, state: "実行中", tool: "tools: 観光スポットを収集中…" }
+            }
+          },
+          {
+            title: "進み具合はバラバラ",
+            tag: "<span class='tag par'>並行実行</span>",
+            desc: "並行に走らせても、終わる速さは揃いません。宿は候補が絞れて<strong>まもなく完了（90%）</strong>、交通は乗り換えパターンの検証で<strong>半分ほど（55%）</strong>、見どころは情報量が多くて<strong>まだ序盤（30%）</strong>。調べものの量も難しさも担当ごとに違うので、これは普通のことです。司令塔は終わるのをただ待つのではなく、状況を見守ります。",
+            route: "A・B・C（進捗に差が出る）",
+            packet: "進捗レポート： A 90% / B 55% / C 30%",
+            fan: "それぞれ独立に実行中（速さはバラバラ）",
+            top: [],
+            subs: {
+              a: { st: "run", pct: 90, state: "実行中（まもなく完了）", tool: "tools: 候補を3件に絞り込み中…" },
+              b: { st: "run", pct: 55, state: "実行中", tool: "tools: 乗り換えパターンを検証中…" },
+              c: { st: "run", pct: 30, state: "実行中", tool: "tools: 口コミと営業時間を確認中…" }
+            }
+          },
+          {
+            title: "終わった者から結果が返る",
+            tag: "",
+            desc: "最初に終わった A から、結果が司令塔へ返ってきました。返るのは調査の全記録ではなく、<strong>統合に使える形の要約</strong>（候補3件＋推薦）です。A のコンテキストはここで役目を終えます。B と C はまだ走り続けています——<strong>全員が終わるまで待つのではなく、終わった順に受け取る</strong>のがポイントです。",
+            route: "A → 司令塔（結果の要約）／ B・C は継続中",
+            packet: "A の結果： 宿の候補3件（名前・価格目安・特徴）＋推薦1件",
+            fan: "終わった順に、結果（要約）が戻り始める",
+            top: ["orch"],
+            subs: {
+              a: { st: "done", pct: 100, state: "完了・結果を返却", tool: "result: 要約を司令塔へ返した" },
+              b: { st: "run", pct: 75, state: "実行中", tool: "tools: 特急と在来線を比較中…" },
+              c: { st: "run", pct: 45, state: "実行中", tool: "tools: 見どころをエリア別に整理中…" }
+            }
+          },
+          {
+            title: "全員の結果がそろう",
+            tag: "",
+            desc: "B（交通）と C（見どころ）の結果も返り、3件がそろいました。ここで初めて司令塔の手元に全体像が集まります。ただしこの時点では、まだ<strong>バラバラの要約が3つあるだけ</strong>。たとえば「Aの推薦する宿」と「Bの調べた最寄り駅」が噛み合っているかは、まだ誰も確認していません。",
+            route: "B・C → 司令塔（結果の要約）",
+            packet: "B： 推奨ルートと所要時間 / C： 見どころ5件（エリア別）",
+            fan: "全員の結果が司令塔にそろった",
+            top: ["orch"],
+            subs: {
+              a: { st: "done", pct: 100, state: "完了・結果を返却", tool: "result: 要約を司令塔へ返した" },
+              b: { st: "done", pct: 100, state: "完了・結果を返却", tool: "result: 要約を司令塔へ返した" },
+              c: { st: "done", pct: 100, state: "完了・結果を返却", tool: "result: 要約を司令塔へ返した" }
+            }
+          },
+          {
+            title: "司令塔が統合し、矛盾を調整する",
+            tag: "",
+            desc: "司令塔の最後の仕事は<strong>統合</strong>です。3つの要約を読み合わせ、食い違いを調整します。たとえば A の推薦宿は駅から遠いので、B のルートに送迎の情報を足す。C の見どころは宿のエリアに近い順に並べ替える。バラバラの調査結果が、<strong>1つの筋の通った回答</strong>に組み上がっていきます。",
+            route: "司令塔（3件の要約を統合中）",
+            packet: "統合中： 宿×交通の整合チェック／見どころをエリア順に再編",
+            fan: "統合は司令塔の仕事",
+            top: ["orch"],
+            subs: {
+              a: { st: "done", pct: 100, state: "完了", tool: "result: 統合待ち" },
+              b: { st: "done", pct: 100, state: "完了", tool: "result: 統合待ち" },
+              c: { st: "done", pct: 100, state: "完了", tool: "result: 統合待ち" }
+            }
+          },
+          {
+            title: "最終回答が届く",
+            tag: "",
+            desc: "統合された最終回答が、あなたに届きます。あなたの目に触れるのはこの1件だけ。裏側で3つのエージェントが並行して走り、それぞれのコンテキストで大量の情報を読み、要約だけが戻ってきた過程は表に出ません。<strong>大きなタスクを、分割・並行・統合で処理する</strong>——これがマルチエージェントの基本形です。",
+            route: "司令塔 → あなた（最終回答）",
+            packet: "最終回答： 宿・交通・見どころを統合したまとめ",
+            fan: "統合は司令塔の仕事",
+            top: ["orch", "user"],
+            subs: {
+              a: { st: "done", pct: 100, state: "完了", tool: "result: 統合済み" },
+              b: { st: "done", pct: 100, state: "完了", tool: "result: 統合済み" },
+              c: { st: "done", pct: 100, state: "完了", tool: "result: 統合済み" }
+            }
+          }
+        ];
+
+        var M_USER = "<div class='msg user'><span class='m-who'>あなた</span>来月の旅行先について、宿・交通・現地の見どころをまとめて調べてほしい</div>";
+        var M_SPLIT = "<div class='msg orch'><span class='m-who'>司令塔</span>承知しました。3つに分けて並行して調べます。<ul><li>A：宿の候補</li><li>B：交通ルート</li><li>C：現地の見どころ</li></ul></div>";
+        var M_LAUNCH = "<div class='msg sys'><span class='m-who'>状態</span>サブエージェント A・B・C を起動しました</div>";
+        var M_RUN = "<div class='msg sys'><span class='m-who'>状態</span>3者が並行して調査中です…</div>";
+        var M_DIFF = "<div class='msg sys'><span class='m-who'>状態</span>進捗に差が出ています（A まもなく完了／B 半分／C 序盤）</div>";
+        var M_RET_A = "<div class='msg sys'><span class='m-who'>状態</span>A（宿）の結果が返ってきました</div>";
+        var M_ALL = "<div class='msg sys'><span class='m-who'>状態</span>B・C の結果もそろいました（3件完）</div>";
+        var M_MERGE = "<div class='msg orch'><span class='m-who'>司令塔</span>3件の結果を統合しています。宿と交通の食い違いを調整中…</div>";
+        var M_FINAL = "<div class='msg orch final'><span class='m-who'>司令塔（最終回答）</span>調査結果をまとめました。<ul><li><strong>宿</strong>：駅近の候補を本命に、3件を比較表で提示</li><li><strong>交通</strong>：特急利用のルートが最速。到着後の送迎も確認済み</li><li><strong>見どころ</strong>：宿のエリアに近い順に5件。初日に回れる順序つき</li></ul>詳細は各項目にまとめています。</div>";
+
+        var CHATS = [
+          [M_USER],
+          [M_USER, M_SPLIT],
+          [M_USER, M_SPLIT, M_LAUNCH],
+          [M_USER, M_SPLIT, M_LAUNCH, M_RUN],
+          [M_USER, M_SPLIT, M_LAUNCH, M_RUN, M_DIFF],
+          [M_USER, M_SPLIT, M_LAUNCH, M_RUN, M_DIFF, M_RET_A],
+          [M_USER, M_SPLIT, M_LAUNCH, M_RUN, M_DIFF, M_RET_A, M_ALL],
+          [M_USER, M_SPLIT, M_LAUNCH, M_RUN, M_DIFF, M_RET_A, M_ALL, M_MERGE],
+          [M_USER, M_SPLIT, M_LAUNCH, M_RUN, M_DIFF, M_RET_A, M_ALL, M_FINAL]
+        ];
+        var SPIN = [false, true, false, true, true, true, true, true, false];
+
+        /* panel rows per step: badge text/class, note, footer */
+        var ROW_IDLE = { badge: "未起動", cls: "", note: "まだ起動していません" };
+        var ROW_PREP = { badge: "準備中", cls: "", note: "司令塔が専用の指示を組み立てています" };
+        var PANEL = [
+          { a: ROW_IDLE, b: ROW_IDLE, c: ROW_IDLE,
+            foot: "司令塔はまだ何も始めていません。各サブエージェントは互いの様子を知りません。" },
+          { a: ROW_PREP, b: ROW_PREP, c: ROW_PREP,
+            foot: "サブタスクへの分割が終わりました。次にまとめて起動します。" },
+          { a: { badge: "実行中", cls: "run", note: "起動しました。まっさらなコンテキストで開始" },
+            b: { badge: "実行中", cls: "run", note: "起動しました。まっさらなコンテキストで開始" },
+            c: { badge: "実行中", cls: "run", note: "起動しました。まっさらなコンテキストで開始" },
+            foot: "3者が同時に起動しました。会話履歴は共有されず、渡された指示だけで動きます。" },
+          { a: { badge: "実行中", cls: "run", note: "宿検索 → 料金・空室を比較中" },
+            b: { badge: "実行中", cls: "run", note: "経路検索 → 所要時間を確認中" },
+            c: { badge: "実行中", cls: "run", note: "観光スポットを収集中" },
+            foot: "並行実行中。3者とも自分のエージェントループでツールを使っています。" },
+          { a: { badge: "実行中", cls: "run", note: "候補を3件に絞り込み中（まもなく完了）" },
+            b: { badge: "実行中", cls: "run", note: "乗り換えパターンを検証中" },
+            c: { badge: "実行中", cls: "run", note: "口コミと営業時間を確認中" },
+            foot: "進捗はバラバラです。担当ごとの情報量と難しさが違うためです。" },
+          { a: { badge: "完了", cls: "done", note: "結果（要約）を司令塔へ返しました" },
+            b: { badge: "実行中", cls: "run", note: "特急と在来線を比較中" },
+            c: { badge: "実行中", cls: "run", note: "見どころをエリア別に整理中" },
+            foot: "A が先に完了。終わった順に結果を受け取ります。" },
+          { a: { badge: "完了", cls: "done", note: "結果（要約）を司令塔へ返しました" },
+            b: { badge: "完了", cls: "done", note: "結果（要約）を司令塔へ返しました" },
+            c: { badge: "完了", cls: "done", note: "結果（要約）を司令塔へ返しました" },
+            foot: "全員の結果がそろいました。あとは司令塔の統合待ちです。" },
+          { a: { badge: "完了", cls: "done", note: "統合待ち" },
+            b: { badge: "完了", cls: "done", note: "統合待ち" },
+            c: { badge: "完了", cls: "done", note: "統合待ち" },
+            foot: "司令塔が3件の要約を読み合わせ、矛盾を調整しています。" },
+          { a: { badge: "完了", cls: "done", note: "統合済み" },
+            b: { badge: "完了", cls: "done", note: "統合済み" },
+            c: { badge: "完了", cls: "done", note: "統合済み" },
+            foot: "最終回答があなたに届きました。サブエージェントの作業過程は表に出ません。" }
+        ];
+
+        var idx = 0;
+        var playing = false;
+        var speed = 1;
+        var timer = null;
+        var BASE_MS = 3200;
+
+        var els = {
+          label: document.querySelector("[data-progress-label]"),
+          fill: document.querySelector("[data-progress-fill]"),
+          dotsWrap: document.querySelector("[data-dots]"),
+          chat: document.querySelector("[data-chat]"),
+          spinner: document.querySelector("[data-spinner]"),
+          panelFoot: document.querySelector("[data-panel-foot]"),
+          fan: document.querySelector("[data-fan-label]"),
+          route: document.querySelector("[data-packet-route]"),
+          packet: document.querySelector("[data-packet-body]"),
+          kicker: document.querySelector("[data-step-kicker]"),
+          stepTitle: document.querySelector("[data-step-title]"),
+          stepDesc: document.querySelector("[data-step-desc]")
+        };
+
+        var dots = [];
+        for (var i = 0; i < STEPS.length; i++) {
+          (function (n) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "dot";
+            b.textContent = String(n + 1);
+            b.setAttribute("aria-label", "ステップ" + (n + 1) + "へ移動");
+            b.addEventListener("click", function () { pause(); goTo(n); });
+            els.dotsWrap.appendChild(b);
+            dots.push(b);
+          })(i);
+        }
+
+        var actorEls = {};
+        document.querySelectorAll("[data-actor]").forEach(function (el) {
+          actorEls[el.getAttribute("data-actor")] = el;
+        });
+        var subEls = {}, panelEls = {};
+        SUB_KEYS.forEach(function (k) {
+          subEls[k] = {
+            box: document.querySelector("[data-sub='" + k + "']"),
+            fill: document.querySelector("[data-subfill='" + k + "']"),
+            pct: document.querySelector("[data-subpct='" + k + "']"),
+            state: document.querySelector("[data-substate='" + k + "']"),
+            tool: document.querySelector("[data-subtool='" + k + "']"),
+            ball: document.querySelector("[data-ball='" + k + "']")
+          };
+          panelEls[k] = {
+            badge: document.querySelector("[data-badge='" + k + "']"),
+            mini: document.querySelector("[data-mini='" + k + "']"),
+            note: document.querySelector("[data-snote='" + k + "']")
+          };
+        });
+
+        function render() {
+          var s = STEPS[idx];
+          var p = PANEL[idx];
+          els.label.textContent = "ステップ " + (idx + 1) + " / " + STEPS.length;
+          els.fill.style.width = ((idx + 1) / STEPS.length * 100) + "%";
+          dots.forEach(function (d, i) {
+            d.classList.toggle("now", i === idx);
+            d.classList.toggle("done", i < idx);
+          });
+          /* chat mock + panel */
+          els.chat.innerHTML = CHATS[idx].join("");
+          els.spinner.classList.toggle("on", SPIN[idx]);
+          els.panelFoot.textContent = p.foot;
+          /* flow */
+          els.fan.textContent = s.fan;
+          els.route.textContent = s.route;
+          els.packet.textContent = s.packet;
+          els.kicker.textContent = "STEP " + (idx + 1) + " / " + STEPS.length;
+          els.stepTitle.innerHTML = s.title + (s.tag || "");
+          els.stepDesc.innerHTML = s.desc;
+          Object.keys(actorEls).forEach(function (k) {
+            actorEls[k].classList.toggle("active", s.top.indexOf(k) !== -1);
+          });
+          SUB_KEYS.forEach(function (k) {
+            var sub = s.subs[k];
+            var se = subEls[k];
+            se.box.classList.toggle("idle", sub.st === "idle");
+            se.box.classList.toggle("active", sub.st === "run");
+            se.box.classList.toggle("done", sub.st === "done");
+            se.fill.style.width = sub.pct + "%";
+            se.pct.textContent = sub.pct + "%";
+            se.state.textContent = sub.state;
+            se.tool.textContent = sub.tool;
+            se.ball.classList.toggle("on", sub.st === "done");
+            var pe = panelEls[k];
+            var row = p[k];
+            pe.badge.textContent = row.badge;
+            pe.badge.className = "badge" + (row.cls ? " " + row.cls : "");
+            pe.mini.style.width = sub.pct + "%";
+            pe.mini.classList.toggle("done", sub.st === "done");
+            pe.note.textContent = row.note;
+          });
+          /* controls state */
+          document.querySelectorAll("[data-action='prev']").forEach(function (b) { b.disabled = idx === 0; });
+          document.querySelectorAll("[data-action='next']").forEach(function (b) { b.disabled = idx === STEPS.length - 1; });
+          document.querySelectorAll("[data-action='play']").forEach(function (b) {
+            b.textContent = playing ? "⏸ 一時停止" : (idx === STEPS.length - 1 ? "↺ もう一度" : "▶ 再生");
+          });
+        }
+
+        function goTo(n) {
+          idx = Math.max(0, Math.min(STEPS.length - 1, n));
+          render();
+        }
+        function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+        function startTimer() {
+          stopTimer();
+          timer = setInterval(function () {
+            if (idx >= STEPS.length - 1) { pause(); return; }
+            goTo(idx + 1);
+            if (idx >= STEPS.length - 1) { pause(); }
+          }, BASE_MS / speed);
+        }
+        function play() {
+          if (idx >= STEPS.length - 1) { goTo(0); }
+          playing = true;
+          render();
+          startTimer();
+        }
+        function pause() {
+          playing = false;
+          stopTimer();
+          render();
+        }
+
+        document.querySelectorAll("[data-controls]").forEach(function (bar) {
+          bar.addEventListener("click", function (e) {
+            var btn = e.target.closest("[data-action]");
+            if (!btn || btn.disabled) return;
+            var a = btn.getAttribute("data-action");
+            if (a === "prev") { pause(); goTo(idx - 1); }
+            else if (a === "next") { pause(); goTo(idx + 1); }
+            else if (a === "reset") { pause(); goTo(0); }
+            else if (a === "play") { playing ? pause() : play(); }
+          });
+        });
+        document.querySelectorAll("[data-speed]").forEach(function (sel) {
+          sel.addEventListener("change", function () {
+            speed = parseFloat(sel.value);
+            document.querySelectorAll("[data-speed]").forEach(function (o) { o.value = sel.value; });
+            if (playing) startTimer();
+          });
+        });
+
+        render();
+      })();
+    </script>
+  </body>
+</html>
