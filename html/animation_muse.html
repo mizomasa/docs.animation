@@ -1,0 +1,1010 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>Museのアーキテクチャ</title>
+<style>
+:root{
+  --bg:#f6f7f9; --card:#ffffff; --card2:#eef1f4; --text:#18212b; --muted:#5b6b7a; --line:#dde3e8;
+  --accent:#0f766e; --accentBg:#ccfbf1;
+  --c-user:#d97706; --c-userBg:#fef3c7;
+  --c-anko:#0f766e; --c-ankoBg:#ccfbf1;
+  --c-comp:#2563eb; --c-compBg:#dbeafe;
+  --c-mem:#7c3aed; --c-memBg:#ede9fe;
+  --c-skill:#b45309; --c-skillBg:#fef3c7;
+  --c-conn:#db2777; --c-connBg:#fce7f3;
+  --c-sub:#0891b2; --c-subBg:#cffafe;
+  --c-sched:#65a30d; --c-schedBg:#ecfccb;
+  --c-back:#64748b; --c-backBg:#e2e8f0;
+  --c-dev:#4f46e5; --c-devBg:#e0e7ff;
+  --c-out:#c2410c; --c-outBg:#ffedd5;
+  --warn:#fff7ed; --warnLine:#fed7aa;
+  --shadow:0 8px 30px rgba(0,0,0,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0f1419; --card:#1a222c; --card2:#232e3a; --text:#eef2f5; --muted:#9fb0bf; --line:#2e3d4d;
+    --accentBg:#083f3a; --c-userBg:#3a2a07; --c-ankoBg:#083f3a; --c-compBg:#172a4d; --c-memBg:#2d1b4e;
+    --c-skillBg:#3a2a07; --c-connBg:#3d1030; --c-subBg:#083344; --c-schedBg:#1f3005; --c-backBg:#26303d;
+    --c-devBg:#232350; --c-outBg:#3d1e07; --warn:#2a1c0d; --warnLine:#7c4a12; --shadow:0 8px 30px rgba(0,0,0,.35);}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;line-height:1.65}
+.wrap{max-width:1080px;margin:0 auto;padding:20px 16px 56px}
+.hero{padding:10px 0 6px}
+.hero h1{font-size:32px;line-height:1.25;margin:0;letter-spacing:-.02em}
+@media(max-width:600px){.hero h1{font-size:26px}}
+.hero p{color:var(--muted);margin:10px 0 0;max-width:780px;font-size:15.5px}
+.badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.badge{font-size:12.5px;font-weight:700;background:var(--card);border:1px solid var(--line);padding:6px 10px;border-radius:999px}
+.badge b{color:var(--accent)}
+section{margin-top:34px}
+.secHead h2{font-size:21px;margin:0 0 4px}
+.secHead p{margin:0;color:var(--muted);font-size:14px;max-width:780px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:16px;margin-top:14px}
+button,[role="button"],select,summary{min-height:2rem}
+
+/* ---------- architecture diagram ---------- */
+.diagram{display:flex;flex-direction:column;gap:12px}
+.drow{display:flex;gap:12px;align-items:stretch;flex-wrap:wrap}
+.drow .node{flex:1 1 150px}
+.arrow{display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:18px;font-weight:800;flex:0 0 auto;min-width:22px;pointer-events:none}
+@media(max-width:640px){.arrow{width:100%;height:20px;min-height:20px;font-size:0}.arrow::after{content:"↓";font-size:16px}}
+.node{position:relative;z-index:1;appearance:none;text-align:left;background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:11px 12px;cursor:pointer;color:var(--text);font-family:inherit;transition:.2s;display:flex;gap:10px;align-items:flex-start;width:100%}
+.node:hover{border-color:var(--muted)}
+.node.selected{box-shadow:0 6px 18px rgba(0,0,0,.12);transform:translateY(-2px)}
+.node .ic{width:42px;height:42px;flex:0 0 42px;border-radius:50%;display:grid;place-items:center;font-size:21px}
+.node h3{margin:0;font-size:14.5px;line-height:1.35}
+.node p{margin:2px 0 0;font-size:12px;color:var(--muted);line-height:1.45}
+.node[data-k="user"] .ic{background:var(--c-userBg)} .node[data-k="user"].selected{border-color:var(--c-user)}
+.node[data-k="anko"] .ic{background:var(--c-ankoBg)} .node[data-k="anko"].selected{border-color:var(--c-anko)}
+.node[data-k="memory"] .ic{background:var(--c-memBg)} .node[data-k="memory"].selected{border-color:var(--c-mem)}
+.node[data-k="skill"] .ic{background:var(--c-skillBg)} .node[data-k="skill"].selected{border-color:var(--c-skill)}
+.node[data-k="connector"] .ic{background:var(--c-connBg)} .node[data-k="connector"].selected{border-color:var(--c-conn)}
+.node[data-k="subagent"] .ic{background:var(--c-subBg)} .node[data-k="subagent"].selected{border-color:var(--c-sub)}
+.node[data-k="schedule"] .ic{background:var(--c-schedBg)} .node[data-k="schedule"].selected{border-color:var(--c-sched)}
+.node[data-k="background"] .ic{background:var(--c-backBg)} .node[data-k="background"].selected{border-color:var(--c-back)}
+.node[data-k="device"] .ic{background:var(--c-devBg)} .node[data-k="device"].selected{border-color:var(--c-dev)}
+.node[data-k="outputs"] .ic{background:var(--c-outBg)} .node[data-k="outputs"].selected{border-color:var(--c-out)}
+.compBox{border:1.5px dashed var(--c-comp);border-radius:16px;padding:12px;background:color-mix(in srgb,var(--c-compBg) 35%, var(--card))}
+.compHead{appearance:none;width:100%;text-align:left;background:none;border:none;cursor:pointer;color:var(--text);font-family:inherit;padding:2px 2px 10px;display:flex;gap:10px;align-items:flex-start}
+.compHead .ic{width:42px;height:42px;flex:0 0 42px;border-radius:50%;display:grid;place-items:center;font-size:21px;background:var(--c-compBg)}
+.compHead h3{margin:0;font-size:15px}
+.compHead p{margin:2px 0 0;font-size:12px;color:var(--muted)}
+.compHead.sel h3{color:var(--c-comp)}
+.compInner{display:flex;gap:12px;flex-wrap:wrap}
+.compInner .node{flex:1 1 200px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.chip{font-size:11.5px;font-weight:700;background:var(--card);border:1px solid var(--line);border-radius:999px;padding:4px 9px;color:var(--muted)}
+.detail{margin-top:14px;background:var(--card2);border-radius:14px;padding:16px}
+.detail h3{margin:0 0 4px;font-size:17px}
+.detail .role{margin:0;font-size:14.5px}
+.detail .ex{margin:10px 0 0;font-size:13.5px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+.detail .ex b{color:var(--accent)}
+.basisTags{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.btag{font-size:11px;font-weight:800;border-radius:999px;padding:3px 9px;border:1px solid}
+.btag.official{color:#0f766e;border-color:#0f766e;background:var(--accentBg)}
+.btag.actual{color:#2563eb;border-color:#2563eb;background:var(--c-compBg)}
+.btag.concept{color:#b45309;border-color:#b45309;background:var(--c-skillBg)}
+@media (prefers-color-scheme: dark){.btag.official{color:#5eead4}.btag.actual{color:#93c5fd}.btag.concept{color:#fcd34d}}
+
+/* ---------- security architecture ---------- */
+.secGrid{display:grid;grid-template-columns:170px 1fr 170px;gap:12px;align-items:stretch}
+@media(max-width:860px){.secGrid{grid-template-columns:1fr}}
+.zone{border-radius:16px;padding:12px;border:1.5px solid var(--line)}
+.zone h4{margin:0 0 8px;font-size:13px;letter-spacing:.02em}
+.zone .mini{font-size:12px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:8px;line-height:1.5}
+.zone .mini b{display:block;font-size:12.5px}
+.userZone{background:color-mix(in srgb,var(--c-userBg) 40%, var(--card))}
+.vmZone{border:1.5px dashed var(--c-comp);background:color-mix(in srgb,var(--c-compBg) 22%, var(--card))}
+.extZone{background:color-mix(in srgb,var(--c-outBg) 45%, var(--card))}
+.vmInner{display:grid;grid-template-columns:1.05fr .95fr;gap:12px}
+@media(max-width:640px){.vmInner{grid-template-columns:1fr}}
+.cellBox{border:1.5px dashed var(--accent);border-radius:14px;padding:11px;background:var(--card)}
+.cellBox h5,.hostBox h5{margin:0;font-size:14px}
+.cellBox p,.hostBox p{margin:4px 0 0;font-size:12px;color:var(--muted);line-height:1.55}
+.cellBox ul{margin:8px 0 0;padding-left:16px;font-size:12.5px}
+.hostStack{display:flex;flex-direction:column;gap:8px}
+.hostBox{border:1.5px solid #7c3aed;border-radius:12px;padding:10px 11px;background:var(--card)}
+.hostBox.sentinel{border-color:#dc2626;background:#fef2f2}
+@media(prefers-color-scheme:dark){.hostBox.sentinel{background:#3b1111}}
+.hostBox h5{font-size:13.5px}
+.flowStrip{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:var(--card2);border-radius:12px;padding:12px}
+.flowStrip .fstep{flex:1 1 140px;text-align:center;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 8px;font-size:13px;font-weight:700}
+.flowStrip .farr{color:var(--muted);font-weight:800}
+.ipcNote{margin-top:10px;font-size:12.5px;color:var(--muted);text-align:center}
+.scopeChips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.scopeChips span{font-size:12px;font-weight:700;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:4px 10px}
+/* ---------- security animations ---------- */
+.secAnimIntro{margin-top:18px;background:var(--card2);border-radius:12px;padding:12px 14px;font-size:13.5px}
+.secAnimIntro b{color:var(--accent)}
+.actors.n4{grid-template-columns:repeat(4,1fr)}
+.actors.n7{grid-template-columns:repeat(7,1fr)}
+@media(max-width:640px){.actors.n4{grid-template-columns:repeat(2,1fr)}.actors.n7{grid-template-columns:repeat(4,1fr)}}
+.actor[data-a="sentinel"] .icon{background:#fee2e2}.actor[data-a="sentinel"].active{border-color:#dc2626}
+.actor[data-a="authd"] .icon{background:#ede9fe}.actor[data-a="authd"].active{border-color:#7c3aed}
+.actor[data-a="privsep"] .icon{background:#dbeafe}.actor[data-a="privsep"].active{border-color:#2563eb}
+.actor[data-a="extsvc"] .icon{background:var(--c-outBg)}.actor[data-a="extsvc"].active{border-color:var(--c-out)}
+.actor[data-a="evil"] .icon{background:#fee2e2}.actor[data-a="evil"].active{border-color:#dc2626}
+.actor[data-a="safety"] .icon{background:#fef3c7}.actor[data-a="safety"].active{border-color:#d97706}
+.actor[data-a="boundary"] .icon{background:#e2e8f0}.actor[data-a="boundary"].active{border-color:#475569}
+.actor[data-a="clientui"] .icon{background:var(--c-userBg)}.actor[data-a="clientui"].active{border-color:var(--c-user)}
+.secPacket{position:absolute;z-index:5;top:60px;left:10%;transform:translate(-50%,-50%);background:#111827;color:#fff;font-size:12px;font-weight:700;padding:8px 11px;border-radius:999px;box-shadow:0 10px 24px rgba(0,0,0,.28);opacity:0;pointer-events:none;white-space:nowrap;max-width:86vw;overflow:hidden;text-overflow:ellipsis}
+@media(prefers-color-scheme:dark){.secPacket{background:#f8fafc;color:#0f172a}}
+.secPacket.show{opacity:1}
+.extraVisual{margin-top:14px;position:relative;z-index:2}
+.branchGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:640px){.branchGrid{grid-template-columns:1fr}}
+.branchBox{border:1.5px solid var(--line);border-radius:12px;padding:11px 12px;background:var(--card);font-size:13px;line-height:1.55}
+.branchBox b{display:block;font-size:13.5px;margin-bottom:3px}
+.branchBox.on{border-color:var(--accent);background:var(--accentBg)}
+.branchBox.on-warn{border-color:#d97706;background:var(--c-userBg)}
+.branchBox.dim{opacity:.45}
+.dialogMock{max-width:420px;margin:0 auto;border:1.5px solid #d97706;border-radius:14px;background:var(--card);padding:14px;box-shadow:var(--shadow)}
+.dialogMock h5{margin:0 0 4px;font-size:14px}
+.dialogMock p{margin:0;font-size:13px;color:var(--muted)}
+.dialogMock .dbtns{display:flex;gap:8px;margin-top:10px}
+.dialogMock .dbtns span{flex:1;text-align:center;font-size:13px;font-weight:700;border-radius:9px;padding:8px;border:1px solid var(--line)}
+.dialogMock .dbtns span.allow{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dialogNote{text-align:center;font-size:12.5px;color:#b45309;font-weight:700;margin-top:8px}
+.tokenDemo{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:stretch}
+@media(max-width:640px){.tokenDemo{grid-template-columns:1fr}}
+.tokenZone{border:1.5px dashed var(--line);border-radius:12px;padding:11px 12px;font-size:13px}
+.tokenZone.cell{border-color:var(--accent)}
+.tokenZone.outside{border-color:#7c3aed}
+.tokenZone h6{margin:0 0 6px;font-size:12px;letter-spacing:.04em;color:var(--muted)}
+.tokenPill{display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:13px;padding:7px 12px;margin-top:4px}
+.tokenPill.surrogate{border:2px dashed #64748b;border-radius:6px;background:var(--card2);color:var(--muted);font-family:ui-monospace,monospace}
+.tokenPill.real{border:2px solid #b45309;border-radius:999px;background:#111827;color:#fde68a;font-family:ui-monospace,monospace}
+@media(prefers-color-scheme:dark){.tokenPill.real{background:#fde68a;color:#111827}}
+.tokenPill.none{border:1.5px solid var(--line);border-radius:6px;color:var(--muted);font-weight:600}
+.tokenArrow{display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:var(--muted)}
+@media(max-width:640px){.tokenArrow{transform:rotate(90deg)}}
+.tokenNote{margin-top:10px;font-size:13px;background:var(--card2);border-radius:10px;padding:9px 12px;text-align:center}
+.trifecta{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
+.trifecta .tri{flex:1 1 150px;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--card);font-size:13px;text-align:center}
+.trifecta .tri b{display:block;font-size:13.5px}
+.trifecta .tri.cut{border-color:#dc2626;background:#fef2f2}
+@media(prefers-color-scheme:dark){.trifecta .tri.cut{background:#3b1111}}
+.trifecta .tri .st{font-size:12px;font-weight:800;margin-top:4px}
+.trifecta .plus{display:flex;align-items:center;font-weight:800;color:var(--muted);font-size:18px}
+.layerStrip{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.layerStrip span{flex:1 1 120px;text-align:center;font-size:12px;font-weight:700;border:1.5px solid var(--line);border-radius:9px;padding:7px 6px;background:var(--card);color:var(--muted)}
+.layerStrip span.on{border-color:var(--accent);background:var(--accentBg);color:var(--text)}
+.layerStrip span.block{border-color:#dc2626;background:#fef2f2;color:var(--text)}
+@media(prefers-color-scheme:dark){.layerStrip span.block{background:#3b1111}}
+.secCards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:12px}
+.secCard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px 16px;box-shadow:var(--shadow)}
+.secCard h3{margin:0 0 6px;font-size:15px}
+.secCard p{margin:0;font-size:13.5px}
+.secCard ul{margin:8px 0 0;padding-left:18px;font-size:13.5px}
+
+/* ---------- flow players ---------- */
+.flowTabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.ftab{min-height:44px;padding:9px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);font-weight:700;cursor:pointer;font-size:14px;font-family:inherit}
+.ftab.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.stageCard{background:var(--card);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);overflow:hidden;margin-top:12px}
+.stageHead{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:14px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.stageHead h3{font-size:16px;margin:0}
+.stageHead p{margin:0;color:var(--muted);font-size:13px}
+.stage{position:relative;padding:18px 12px 14px;min-height:250px;overflow:hidden}
+.actors{display:grid;gap:10px;position:relative;z-index:2}
+.actors.n6{grid-template-columns:repeat(6,1fr)}
+.actors.n5{grid-template-columns:repeat(5,1fr)}
+@media(max-width:640px){.actors{gap:5px}.actors.n6{grid-template-columns:repeat(3,1fr)}.actors.n5{grid-template-columns:repeat(3,1fr)}}
+.actor{text-align:center;padding:12px 5px 10px;border-radius:14px;border:1.5px solid var(--line);background:var(--card);transition:.25s}
+.actor.active{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,.12)}
+.actor .icon{width:50px;height:50px;margin:0 auto 6px;border-radius:50%;display:grid;place-items:center;font-size:25px}
+@media(max-width:640px){.actor .icon{width:38px;height:38px;font-size:19px}}
+.actor h4{margin:0;font-size:13.5px;line-height:1.3}
+@media(max-width:640px){.actor h4{font-size:11.5px}}
+.actor .sub{font-size:11px;color:var(--muted);line-height:1.35;margin-top:2px}
+@media(max-width:640px){.actor .sub{display:none}}
+.actor[data-a="user"] .icon{background:var(--c-userBg)} .actor[data-a="user"].active{border-color:var(--c-user)}
+.actor[data-a="anko"] .icon{background:var(--c-ankoBg)} .actor[data-a="anko"].active{border-color:var(--c-anko)}
+.actor[data-a="memory"] .icon{background:var(--c-memBg)} .actor[data-a="memory"].active{border-color:var(--c-mem)}
+.actor[data-a="skill"] .icon{background:var(--c-skillBg)} .actor[data-a="skill"].active{border-color:var(--c-skill)}
+.actor[data-a="tool"] .icon{background:var(--c-compBg)} .actor[data-a="tool"].active{border-color:var(--c-comp)}
+.actor[data-a="sub"] .icon{background:var(--c-subBg)} .actor[data-a="sub"].active{border-color:var(--c-sub)}
+.actor[data-a="sched"] .icon{background:var(--c-schedBg)} .actor[data-a="sched"].active{border-color:var(--c-sched)}
+.actor[data-a="gmail"] .icon{background:var(--c-connBg)} .actor[data-a="gmail"].active{border-color:var(--c-conn)}
+#packet{position:absolute;z-index:5;top:60px;left:10%;transform:translate(-50%,-50%);background:#111827;color:#fff;font-size:12px;font-weight:700;padding:8px 11px;border-radius:999px;box-shadow:0 10px 24px rgba(0,0,0,.28);opacity:0;pointer-events:none;white-space:nowrap;max-width:86vw;overflow:hidden;text-overflow:ellipsis}
+@media(prefers-color-scheme:dark){#packet{background:#f8fafc;color:#0f172a}}
+#packet.show{opacity:1}
+.stepText{border-top:1px solid var(--line);padding:14px 16px;background:var(--card)}
+.stepText .st{font-size:12px;font-weight:800;color:var(--accent);letter-spacing:.05em}
+.stepText h4{margin:3px 0 4px;font-size:16.5px}
+.stepText p{margin:0;font-size:14px;color:var(--text)}
+.controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:13px 14px;border-top:1px solid var(--line);background:var(--card)}
+.btn{min-height:44px;padding:9px 16px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);font-weight:700;cursor:pointer;font-size:14px;font-family:inherit}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);min-width:110px}
+.btn:active{transform:scale(.98)}
+select{min-height:44px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);padding:0 10px;font-weight:700;font-family:inherit}
+.progress{flex:1;min-width:140px}
+.progressBar{height:8px;background:var(--card2);border-radius:99px;overflow:hidden}
+.progressBar i{display:block;height:100%;background:var(--accent);width:0%;transition:.4s}
+.stepCount{font-size:12.5px;color:var(--muted);font-weight:700;margin-top:5px}
+.dots{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}
+.dots button{width:26px;height:26px;min-height:26px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:10px;padding:0;cursor:pointer;color:var(--muted);font-family:inherit}
+.dots button.done{background:var(--accent);color:#fff;border-color:var(--accent)}
+.dots button.current{outline:2px solid var(--accent);font-weight:800;color:var(--text)}
+
+/* ---------- cards / misc sections ---------- */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;margin-top:14px}
+.ccard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px 16px;box-shadow:var(--shadow)}
+.ccard .chead{display:flex;gap:10px;align-items:center}
+.ccard .ic{width:40px;height:40px;flex:0 0 40px;border-radius:50%;display:grid;place-items:center;font-size:20px}
+.ccard h3{margin:0;font-size:15.5px}
+.ccard p{margin:8px 0 0;font-size:13.5px}
+.ccard .ex{margin-top:9px;font-size:13px;background:var(--card2);border-radius:10px;padding:8px 11px}
+.ccard .ex b{color:var(--accent)}
+.ccard[data-k="user"] .ic{background:var(--c-userBg)} .ccard[data-k="anko"] .ic{background:var(--c-ankoBg)}
+.ccard[data-k="computer"] .ic{background:var(--c-compBg)} .ccard[data-k="memory"] .ic{background:var(--c-memBg)}
+.ccard[data-k="skill"] .ic{background:var(--c-skillBg)} .ccard[data-k="connector"] .ic{background:var(--c-connBg)}
+.ccard[data-k="subagent"] .ic{background:var(--c-subBg)} .ccard[data-k="schedule"] .ic{background:var(--c-schedBg)}
+.ccard[data-k="background"] .ic{background:var(--c-backBg)} .ccard[data-k="device"] .ic{background:var(--c-devBg)}
+.ccard[data-k="outputs"] .ic{background:var(--c-outBg)}
+.myth{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+.myth h3{margin:0 0 6px;font-size:15.5px}
+.myth h3 .q{color:var(--accent)}
+.myth p{margin:0;font-size:14px}
+.basisGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:14px}
+.basisBox{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px 16px;box-shadow:var(--shadow)}
+.basisBox h3{margin:0 0 6px;font-size:15px}
+.basisBox p{margin:0;font-size:13.5px}
+.basisBox ul{margin:8px 0 0;padding-left:18px;font-size:13.5px}
+.note{margin-top:14px;background:var(--warn);border:1px solid var(--warnLine);border-radius:14px;padding:13px 16px;font-size:13.5px}
+.srcs{margin-top:12px;font-size:13px;color:var(--muted)}
+.srcs b{color:var(--text)}
+footer{margin-top:40px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);padding-top:14px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>Museのアーキテクチャ</h1>
+  <p>パーソナルAIエージェント「Muse」は、チャット相手というより「自分のコンピュータと作業場所を持ち、覚えていて、頼まれれば定期的に動く」仕組みです。このページでは、その全体構成と、頼んだ仕事がどう流れるかを図とアニメーションで解説します。</p>
+  <div class="badges">
+    <span class="badge">部品 <b>11</b></span>
+    <span class="badge">仕事の流れ <b>2例</b></span>
+    <span class="badge">セキュリティ図 <b>公式ブログ準拠</b></span>
+    <span class="badge">根拠の区別つき</span>
+  </div>
+</header>
+
+<!-- ============ 1. Architecture diagram ============ -->
+<section>
+  <div class="secHead">
+    <h2>1. 全体のアーキテクチャ図</h2>
+    <p>部品をタップ／クリックすると、下にその部品の役割が表示されます。中心は「Muse」で、専用のコンピュータの上で、メモリ・スキル・道具を使いながら仕事を進めます。</p>
+  </div>
+  <div class="panel">
+    <div class="diagram" id="diagram">
+      <div class="drow">
+        <button class="node" data-k="user"><span class="ic">👤</span><span><h3>ユーザー</h3><p>iOSアプリ／Web／Macアプリ／WhatsAppなどから話しかける</p></span></button>
+        <span class="arrow">→</span>
+        <button class="node" data-k="anko"><span class="ic">🧠</span><span><h3>Muse（エージェント本体）</h3><p>Museのモデルが考え・判断し、仕事を進める中心</p></span></button>
+        <span class="arrow">←</span>
+        <button class="node" data-k="schedule"><span class="ic">⏰</span><span><h3>スケジュール実行</h3><p>決まった時刻に自動で起動する</p></span></button>
+      </div>
+
+      <div class="compBox">
+        <button class="compHead" id="compHead" data-k="computer"><span class="ic">💻</span><span><h3>Muse専用のコンピュータ</h3><p>ファイルと作業場所を持ち、会話が終わっても成果物が残る</p></span></button>
+        <div class="compInner">
+          <button class="node" data-k="memory"><span class="ic">🗂️</span><span><h3>メモリ（2層）</h3><p>長期メモリ（ファイルに残る）／会話の文脈（有限・圧縮される）</p></span></button>
+          <button class="node" data-k="skill"><span class="ic">📖</span><span><h3>スキル</h3><p>作業の手順書。必要に応じて読み込んで使う</p></span></button>
+        </div>
+        <div class="chips">
+          <span class="chip">📁 ワークスペース（作業場所）</span>
+          <span class="chip">⌨️ ターミナル（コマンド実行）</span>
+          <span class="chip">🌐 本物のブラウザ（ログイン状態を保持）</span>
+        </div>
+      </div>
+
+      <div class="drow">
+        <button class="node" data-k="connector"><span class="ic">🔌</span><span><h3>コネクタ</h3><p>Gmail／Googleカレンダー／GitHubなど外部サービスとの接続</p></span></button>
+        <button class="node" data-k="device"><span class="ic">📱</span><span><h3>ペアリングしたデバイス</h3><p>iPhoneなど。位置やデバイスのデータ取得に使う</p></span></button>
+        <button class="node" data-k="subagent"><span class="ic">👥</span><span><h3>サブエージェント</h3><p>独立した仕事を並行して任せられる分身</p></span></button>
+        <button class="node" data-k="background"><span class="ic">🌙</span><span><h3>バックグラウンドの仕組み</h3><p>フィード作成、目標・関係性の整理、メモリの自己改善</p></span></button>
+      </div>
+
+      <div class="drow">
+        <span class="arrow">↓</span>
+        <button class="node" data-k="outputs"><span class="ic">🗄️</span><span><h3>成果物の置き場</h3><p>作ったページやドキュメント（ライブラリ）、フィード、目標タブなど、開いて見る場所</p></span></button>
+      </div>
+    </div>
+
+    <div class="detail" id="detail" aria-live="polite"></div>
+  </div>
+</section>
+
+<!-- ============ 2. Security architecture ============ -->
+<section>
+  <div class="secHead">
+    <h2>2. セキュリティのアーキテクチャ</h2>
+    <p>公式ブログが示す要点は、MuseのVMは「root権限を持つLLMエージェントが自由に動く場所」ではない、ということです。1台のマシン上に隔離された<strong>2つのセキュリティ領域</strong>があります。信頼できないデータの処理が想定されるランタイムセルの<strong>外</strong>に、安全を担うサービスを置くのが骨格です。 <span class="btag official">公式情報</span></p>
+  </div>
+  <div class="panel">
+    <div class="secGrid">
+      <div class="zone userZone">
+        <h4>👤 User control（ユーザーの管理）</h4>
+        <div class="mini"><b>USER intent / consent</b>ユーザーの意図と同意</div>
+        <div class="mini"><b>Muse clients / Main UI</b>アプリから話しかける</div>
+        <div class="mini"><b>Approvals</b>承認ダイアログ（クライアントUIに直接表示）</div>
+        <div class="mini"><b>Credential Capture UI</b>パスワード等は専用UIからauthdへ直接。Museには見えない</div>
+      </div>
+      <div class="zone vmZone">
+        <h4>🖥️ User's VM — Ingress（TLS + Noise）を経て中へ</h4>
+        <div class="vmInner">
+          <div class="cellBox">
+            <h5>🟩 Runtime cell（ランタイムセル）</h5>
+            <p>systemd-nspawnコンテナ。信頼できないデータの処理が想定される領域。</p>
+            <ul>
+              <li><b>Hatchデーモン</b>（中核の実行基盤）＋ agentic harness</li>
+              <li>ワークスペースとファイル、メモリ、Persistent Storage（LUKS暗号化）</li>
+              <li>Museが実行するすべてのツール・バイナリ</li>
+              <li>guest root ≠ host root（セル内のrootはホスト側では無権限ユーザーにマッピング）</li>
+              <li>独自のrootファイルシステム、仮想ネットワーク、フィルタ済みシステムコール（io_uringなし）、CAP_SYS_PTRACEなし／CAP_NET_ADMINなし</li>
+            </ul>
+          </div>
+          <div class="hostStack">
+            <div class="hostBox"><h5>🛡️ hatch-safety（セル外）</h5><p>モデル推論への入出力を検査する独立したモデル群と分類システム。プロンプトインジェクション等を検出。セル外なので攻撃者が無効化できない。</p></div>
+            <div class="hostBox"><h5>🔐 hatch-authd — Secure Credential Storage（セル外）</h5><p>OAuthトークン等をMetaの一元インフラではなくユーザーのVM内に保管。メインエージェントは本物の認証情報を決して見ない。セル内にはサロゲート（代理）トークンだけが見え、実際の通信時にSentinelが本物へ差し替える。</p></div>
+            <div class="hostBox sentinel"><h5>🚦 Sentinel（セル外）— 唯一の許可権限</h5><p>コネクターのアクションとネットワーク送信（イーグレス）の許可はSentinelだけができる。ポリシーを評価し、許可／拒否／ユーザーへの問い合わせを決める。L4/L7評価、SSRF検証、TLS検査、認証情報の挿入も担う。</p></div>
+            <div class="hostBox"><h5>⚙️ その他のホスト側サービス（別々のsystemdユニット）</h5><p><b>privsep + broker</b>：組み込みコネクターの実処理をセル外で限定権限で実行。ワーカーごとに認証情報の範囲を制限（例：カレンダー用ワーカーはメール認証情報を要求できない）。ブラウザのCDP接続もセル外のブローカーが管理。<br><b>postgres</b>：永続的なアプリ設定を、セル・認証情報ストアとは別のDBに保存。<br><b>Inference proxy / telemetry proxy</b>：外部インフラへの制限された経路。</p></div>
+          </div>
+        </div>
+        <p class="ipcNote">セル ⇔ ホスト側サービスの通信はすべて <b>Unixドメインソケット ＋ SO_PEERCRED ＋ ピアACL</b>（カーネル認証の最小権限IPC）</p>
+      </div>
+      <div class="zone extZone">
+        <h4>🌐 External Services（外部サービス）</h4>
+        <div class="mini"><b>Model Inference</b>モデルの推論</div>
+        <div class="mini"><b>1st &amp; 3rd party APIs</b>メール、カレンダー、SNSなど（email, calendar, social etc.）</div>
+        <div class="mini"><b>Product Systems</b>健全性・監査・分析など</div>
+      </div>
+    </div>
+    <div class="flowStrip" aria-label="提案から実行までの流れ">
+      <div class="fstep">① Museがアクションを提案</div><span class="farr">→</span>
+      <div class="fstep">② Sentinelがポリシーを評価</div><span class="farr">→</span>
+      <div class="fstep">③ 許可 ／ 拒否 ／ ユーザーへ問い合わせ</div><span class="farr">→</span>
+      <div class="fstep">④ 許可された場合のみ実行<br><span style="font-weight:400;font-size:12px">privsepワーカー／イーグレス経由</span></div>
+    </div>
+    <div class="secAnimIntro">下の3つのアニメーションで、この図の動きを追います。操作はこのページの他のアニメーションと同じです（<b>前へ／再生／次へ／最初から</b>＋ステップ解説）。いずれも公式ブログの記述に基づく、一般的な流れの図解です。</div>
+  </div>
+
+  <!-- Sec Anim 1: until execution -->
+  <div class="stageCard secAnim" id="secAnim1">
+    <div class="stageHead">
+      <div><h3>アニメーション1：「実行されるまで」— 提案から実行まで</h3><p>Museは提案するだけ。許可できるのはSentinelだけです</p></div>
+      <span class="btag official">公式情報</span>
+    </div>
+    <div class="stage secStage">
+      <div class="actors"></div>
+      <div class="secPacket"></div>
+      <div class="extraVisual"></div>
+    </div>
+    <div class="stepText"><span class="st"></span><h4></h4><p></p></div>
+    <div class="controls">
+      <button class="btn btnPrev">← 前へ</button>
+      <button class="btn primary btnPlay">▶ 再生</button>
+      <button class="btn btnNext">次へ →</button>
+      <button class="btn btnReset">最初から</button>
+      <select class="speedSel" aria-label="再生速度"><option value="0.75">ゆっくり</option><option value="1" selected>標準</option><option value="1.6">速い</option></select>
+      <div class="progress"><div class="progressBar"><i></i></div><div class="stepCount"></div><div class="dots"></div></div>
+    </div>
+  </div>
+
+  <!-- Sec Anim 2: surrogate token -->
+  <div class="stageCard secAnim" id="secAnim2" style="margin-top:14px">
+    <div class="stageHead">
+      <div><h3>アニメーション2：認証情報のサロゲート（代理トークン）の流れ</h3><p>本物の認証情報は、ランタイムセルの中に決して現れません</p></div>
+      <span class="btag official">公式情報</span>
+    </div>
+    <div class="stage secStage">
+      <div class="actors"></div>
+      <div class="secPacket"></div>
+      <div class="extraVisual"></div>
+    </div>
+    <div class="stepText"><span class="st"></span><h4></h4><p></p></div>
+    <div class="controls">
+      <button class="btn btnPrev">← 前へ</button>
+      <button class="btn primary btnPlay">▶ 再生</button>
+      <button class="btn btnNext">次へ →</button>
+      <button class="btn btnReset">最初から</button>
+      <select class="speedSel" aria-label="再生速度"><option value="0.75">ゆっくり</option><option value="1" selected>標準</option><option value="1.6">速い</option></select>
+      <div class="progress"><div class="progressBar"><i></i></div><div class="stepCount"></div><div class="dots"></div></div>
+    </div>
+  </div>
+
+  <!-- Sec Anim 3: prompt injection -->
+  <div class="stageCard secAnim" id="secAnim3" style="margin-top:14px">
+    <div class="stageHead">
+      <div><h3>アニメーション3：プロンプトインジェクションが止まる流れ</h3><p>「致命的な3要素」の組み合わせを、層ごとに断ち切ります</p></div>
+      <span class="btag official">公式情報</span>
+    </div>
+    <div class="stage secStage">
+      <div class="actors"></div>
+      <div class="secPacket"></div>
+      <div class="extraVisual"></div>
+    </div>
+    <div class="stepText"><span class="st"></span><h4></h4><p></p></div>
+    <div class="controls">
+      <button class="btn btnPrev">← 前へ</button>
+      <button class="btn primary btnPlay">▶ 再生</button>
+      <button class="btn btnNext">次へ →</button>
+      <button class="btn btnReset">最初から</button>
+      <select class="speedSel" aria-label="再生速度"><option value="0.75">ゆっくり</option><option value="1" selected>標準</option><option value="1.6">速い</option></select>
+      <div class="progress"><div class="progressBar"><i></i></div><div class="stepCount"></div><div class="dots"></div></div>
+    </div>
+  </div>
+
+  <div class="secCards">
+    <div class="secCard">
+      <h3>承認の仕組み（公式どおり） <span class="btag official">公式情報</span></h3>
+      <p>Sentinelがユーザーに問い合わせると判断すると、実行は停止し、保留中の承認が作られます。承認ダイアログは<strong>Museとの会話経由ではなく、クライアントUI内に直接</strong>表示され、ユーザーの回答も<strong>Sentinelへ直接</strong>送られます。会話上の提案ではなく、厳格な機能としての承認です。</p>
+      <p style="margin-top:8px">付与は特定のコネクターやリンク先、ユースケースに限定され、範囲つきで与えられます。Sentinelが選べる付与タイプを決め、以降の呼び出しが付与された範囲と正確に一致することを保証します。</p>
+      <div class="scopeChips"><span>1回限り</span><span>セッション</span><span>タスク</span><span>期間（時間制限）</span><span>無期限</span></div>
+      <p style="margin-top:8px"><b>人の介入なしに進むもの：</b>読み取り専用のアクション、すでに許可されたアクション、低リスクと証明されたアクション。すべてを尋ねるわけではなく、同意が重要な場合にだけ手続き上の障壁を設ける設計です。</p>
+    </div>
+    <div class="secCard">
+      <h3>tainted egress（汚染追跡） <span class="btag official">公式情報</span></h3>
+      <p>ユーザーデータを読んだプロセスは「汚染（tainted）」されます。各ツールの実行プロセスはクリーンな状態で始まり、ユーザーデータを読み込むと汚染されます。</p>
+      <ul>
+        <li>クリーンで、狭い自動許可ポリシーに適合し、URLチェックも通過したリクエストだけが、ユーザーを煩わすことなく自動許可される</li>
+        <li>汚染された／検証できないリクエストは自動許可を失い、通常の承認フローへ戻る</li>
+        <li>実装はeBPFによるネットワーク遮断・プロセス帰属・汚染伝播（LSMフック）</li>
+      </ul>
+    </div>
+    <div class="secCard">
+      <h3>最小権限 <span class="btag official">公式情報</span></h3>
+      <ul>
+        <li>APIキーをモデルに決して見せない（見る必要がないものは見せない）</li>
+        <li>読み取りと書き込みのアクセスを分離できる（基盤サービスが対応する場合）</li>
+        <li>OAuthの粗いスコープを超えて、コネクター／プロセス／認証情報／リクエスト単位で細かく制御できる</li>
+        <li>メールコネクターは、ワンタイムコード、パスワードリセットリンク、ログインマジックリンクを決定性フィルターと分類モデルで除外する</li>
+      </ul>
+    </div>
+    <div class="secCard">
+      <h3>多層防御 —「致命的な3要素」を断つ <span class="btag official">公式情報</span></h3>
+      <p>Simon Willisonの「致命的な3要素」＝<b>プライベートデータへのアクセス × 信頼できないコンテンツ × 外部通信</b>の組み合わせを断つ設計です。</p>
+      <ul>
+        <li>モデルレベルのトレーニングと、外部データへの「信頼できない入力」ラベル付け</li>
+        <li>独立した検出分類システム群（hatch-safety）</li>
+        <li>VMからデータを移すアクションへの人間承認</li>
+        <li>ランタイムセル／privsep／authd／Sentinelによる決定論的な境界</li>
+      </ul>
+    </div>
+    <div class="secCard">
+      <h3>ブラウザと購入 <span class="btag official">公式情報</span></h3>
+      <ul>
+        <li>CDP接続はセル外のブローカーが管理。ブラウザ用サブエージェントは生のDOMではなくアクセシビリティツリーのスナップショットだけを見る。ページ内JavaScript実行はできない</li>
+        <li>パスワードは専用UIからauthdへ直接送られ、エージェントには見えない</li>
+        <li>購入はチェックアウト検知で毎回ユーザー承認が必須。ウォレット（Stripe Link等）では使い捨てカード番号が加盟店に渡り、認証情報は加盟店・金額・有効期間に紐づく</li>
+      </ul>
+    </div>
+    <div class="secCard">
+      <h3>データポリシーと Confidential VM <span class="btag official">公式情報</span></h3>
+      <ul>
+        <li>ファイルや記憶はすべてユーザーのVMに保存され、検証・編集・ダウンロード可能。会話やデータを広告システムと共有しない</li>
+        <li>推論の軌跡は個人情報を除去したうえでモデル改善に使われることがあるが、設定でオプトアウト可能</li>
+        <li><b>Muse Confidential VM</b>：Meta自身もVM内データにアクセスできないようにする機密VMを開発中（今年中に提供予定、外部監査つき）</li>
+        <li>正直な留保：現行アーキテクチャでは、運用上必要な場合のMetaのアクセスは阻止されない</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3. Flow animations ============ -->
+<section>
+  <div class="secHead">
+    <h2>3. 仕事の流れアニメーション</h2>
+    <p>「頼んだ仕事がどう流れるか」を2つの例で見ます。上のタブで例を切り替え、「再生」か「次へ」でステップを進めてください。</p>
+  </div>
+  <div class="flowTabs" role="tablist">
+    <button class="ftab on" id="tabA" role="tab">例A：チャットでの依頼（旅行調べ）</button>
+    <button class="ftab" id="tabB" role="tab">例B：毎朝のメールチェック（自動実行）</button>
+  </div>
+
+  <div class="stageCard">
+    <div class="stageHead">
+      <h3 id="flowTitle">例A：旅行のホテルを調べる</h3>
+      <p id="flowSub">チャットで頼むと、Museが計画→確認→調査→報告まで進めます</p>
+    </div>
+    <div class="stage" id="stage">
+      <div class="actors" id="actors"></div>
+      <div id="packet"></div>
+    </div>
+    <div class="stepText">
+      <span class="st" id="stepLabel">STEP 1</span>
+      <h4 id="stepTitle"></h4>
+      <p id="stepBody"></p>
+    </div>
+    <div class="controls">
+      <button class="btn" id="btnPrev">← 前へ</button>
+      <button class="btn primary" id="btnPlay">▶ 再生</button>
+      <button class="btn" id="btnNext">次へ →</button>
+      <button class="btn" id="btnReset">最初から</button>
+      <select id="speed" aria-label="再生速度">
+        <option value="0.75">ゆっくり</option>
+        <option value="1" selected>標準</option>
+        <option value="1.6">速い</option>
+      </select>
+      <div class="progress">
+        <div class="progressBar"><i id="progFill"></i></div>
+        <div class="stepCount" id="stepCount"></div>
+        <div class="dots" id="dots"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4. Component cards ============ -->
+<section>
+  <div class="secHead">
+    <h2>4. 各部品の解説</h2>
+    <p>図の部品ごとに、役割と一般的な利用例をまとめました。各カードの右下のラベルは、その説明の根拠の種類です（詳しくは最後の「この図の根拠」）。</p>
+  </div>
+  <div class="cards" id="cards"></div>
+</section>
+
+<!-- ============ 5. Myths ============ -->
+<section>
+  <div class="secHead">
+    <h2>5. よくある誤解の解消</h2>
+  </div>
+  <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">
+    <div class="myth">
+      <h3><span class="q">誤解：</span>普通のチャットAIと何が違うの？</h3>
+      <p>大きな違いは3つです。<b>自分のコンピュータと作業場所がある</b>ので、作ったファイルやページが会話を閉じても残ります。<b>覚えている</b>ので、決めごとや好みを次の会話でも使えます。そして<b>頼まれれば定期的に勝手に動く</b>ので、毎朝のメール確認のような定期的な仕事を人なしで回せます。</p>
+    </div>
+    <div class="myth">
+      <h3><span class="q">誤解：</span>メモリは無限に覚えていられる？</h3>
+      <p>無限ではありません。「今の会話の文脈」は有限で、会話が長くなると古い部分は<b>要約に圧縮</b>されます。ずっと残るのは、ファイルに書き出された長期メモリ（決めごと・好み・人間関係など）です。だから大事な条件は「覚えておいて」と言ってファイルに残すのが確実です。</p>
+    </div>
+    <div class="myth">
+      <h3><span class="q">誤解：</span>何でも勝手にやってしまうの？</h3>
+      <p>いいえ。Museがアクションを提案しても、実行を許可できるのはセル外の<b>Sentinelだけ</b>です。問い合わせが必要な場合は、承認ダイアログが<b>会話ではなくクライアントUIに直接</b>表示され、回答もSentinelへ直接送られます。承認は1回限り／セッション／タスク／期間／無期限といった範囲つきで、購入は毎回承認が必須です。一方、読み取り専用や許可済み・低リスクのアクションは人の介入なしに進みます。</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6. Basis ============ -->
+<section>
+  <div class="secHead">
+    <h2>6. この図の根拠</h2>
+    <p>この図は「盛って」描いたものではありません。説明の出どころを4種類に分けて明示します。各部品のカードにつけたラベルも、この分類に対応しています。</p>
+  </div>
+  <div class="basisGrid">
+    <div class="basisBox">
+      <h3><span class="btag official">公式情報</span></h3>
+      <p>Metaの公式ブログ <a href="https://muse.ai/blog/security-and-safety-for-ai-agents-our-approach-with-muse" target="_blank" rel="noopener">「Security and safety for AI agents: our approach with Muse」（muse.ai/blog）</a> で公開されていることです。<strong>VM内部の分離構成は、このブログで公開されています。</strong></p>
+      <ul>
+        <li>VMは2つのセキュリティ領域：ランタイムセル（systemd-nspawn）と、セル外のホスト側安全サービス</li>
+        <li>hatch-safety／hatch-authd（サロゲート）／Sentinel（唯一の許可権限）／privsep／Postgres／推論・テレメトリプロキシ、Unixソケット＋SO_PEERCRED＋ピアACL</li>
+        <li>承認はクライアントUIに直接表示され、範囲つき付与（1回限り／セッション／タスク／期間／無期限）が可能。読み取り専用・許可済み・低リスクは人の介入なし</li>
+        <li>tainted egress、最小権限、メールコネクターの保護、多層防御と「致命的な3要素」、ブラウザブローカー、購入時の毎回承認</li>
+        <li>データポリシー（ファイル・記憶はユーザーのVMに保存、広告システムと共有しない、軌跡のオプトアウト可能）と、開発中のMuse Confidential VM</li>
+        <li>ユーザーごとに専用のエージェントとコンピュータ、コネクタの存在、モデルはMetaのMuseモデルファミリーであること</li>
+      </ul>
+    </div>
+    <div class="basisBox">
+      <h3><span class="btag actual">利用実態で確認できること</span></h3>
+      <p>このユーザーが実際に使っていて、目に見えていることです。</p>
+      <ul>
+        <li>毎朝のメール確認のような定期的な作業が、スケジュールで自動実行されている</li>
+        <li>メモリに希望を言うと保存され、次の会話で使われる</li>
+        <li>作ったページやファイルが残り、後から開ける</li>
+        <li>サブエージェントに分けた仕事の結果が返ってくる</li>
+        <li>購入や送信の前に承認カードで確認される</li>
+      </ul>
+    </div>
+    <div class="basisBox">
+      <h3><span class="btag concept">概念的な説明</span></h3>
+      <p>仕組みを分かりやすくするためのモデル化・言い換えであり、Metaの内部実装そのものではありません。</p>
+      <ul>
+        <li>「専用のコンピュータ」「手順書」といった言い換え</li>
+        <li>部品の分け方や、矢印で示した情報の流れ</li>
+        <li>メモリを「2層」と整理して描く見取り図</li>
+      </ul>
+    </div>
+    <div class="basisBox">
+      <h3>分からないこと</h3>
+      <p>公式ブログでも触れられていない範囲に絞ります。推測で埋めず、この図でも描いていません。</p>
+      <ul>
+        <li>Muse Confidential VMの詳細な実装や、外部監査の具体的な結果（提供予定・監査中とだけ公開されている）</li>
+        <li>ブログに載っていないMetaのサーバー側内部インフラの詳細構成</li>
+        <li>分類システム群のモデル構成や閾値など、ブログが開示していない運用の細部</li>
+      </ul>
+    </div>
+  </div>
+  <p class="srcs"><b>参照先：</b>Meta公式ブログ <a href="https://muse.ai/blog/security-and-safety-for-ai-agents-our-approach-with-muse" target="_blank" rel="noopener">Security and safety for AI agents: our approach with Muse（muse.ai/blog）</a> と、その公式アーキテクチャ図（User control／User's VM／External Services）、Muse公式サイトなどの公式情報、およびこのユーザーの実際の利用状況をもとにしています。</p>
+  <div class="note">このページ自体も、Museが専用のコンピュータの上で作り、成果物の置き場に残したものの一例です。</div>
+</section>
+
+<footer>勉強会向け解説ページ：Museのアーキテクチャ（構成図・仕事の流れ・根拠の区別）</footer>
+</div>
+
+<script>
+/* ================= component data ================= */
+var BASIS = {
+  official:{cls:'official', label:'公式情報'},
+  actual:{cls:'actual', label:'利用実態で確認'},
+  concept:{cls:'concept', label:'概念的な説明'}
+};
+var COMPONENTS = {
+  user:{icon:'👤', name:'ユーザー', basis:['actual'],
+    role:'すべての入り口です。iOSアプリ／Web／Macアプリ／WhatsAppなど、使いやすいチャネルから話しかけます。依頼は文章のほか、写真やファイルを添えても伝えられます。',
+    ex:'チャットで「旅行のホテルを調べて」と頼んだり、写真を送って相談したり。'},
+  anko:{icon:'🧠', name:'Muse（エージェント本体）', basis:['official','concept'],
+    role:'Museのモデルが考え・判断し、仕事を進める中心です。依頼を理解して計画を立て、メモリやスキル、道具（ブラウザやコネクタ）を使い分けながら、結果の報告までを運びます。',
+    ex:'旅行調べでは「条件の確認→候補の調査→比較→報告」という段取りを自分で組み立てて進めます。'},
+  computer:{icon:'💻', name:'Muse専用のコンピュータ', basis:['official','concept'],
+    role:'Museが作業するための専用のコンピュータ（ユーザーのVM）です。中ではHatchデーモンやワークスペース、ツールがランタイムセル（systemd-nspawnコンテナ）で動き、安全を担うhatch-safety／hatch-authd／Sentinelなどはセルの外にあります（詳しくは「2. セキュリティのアーキテクチャ」）。ファイルと作業場所、ターミナル、本物のブラウザを持ち、会話が終わっても成果物はここに残ります。',
+    ex:'作った解説ページや資料、調べ物の結果ファイルなどが、会話を閉じた後も残り続けます。'},
+  memory:{icon:'🗂️', name:'メモリ（2層）', basis:['actual','concept'],
+    role:'2層あります。長期メモリは、決めごと・好み・人間関係などをファイルに残し、会話をまたいで保持するもの。会話の文脈は、今の会話の流れそのもので、有限なので長くなると要約に圧縮されます。',
+    ex:'「好みの条件はこれ」「予算の上限はこのくらい」といった条件を覚えていて、次の相談でも使います。'},
+  skill:{icon:'📖', name:'スキル', basis:['concept','actual'],
+    role:'作業の手順書です。調べ方や進め方の型が書かれていて、Museは仕事の種類に応じて必要なスキルを読み込んでから取りかかります。手順が型になっているぶん、毎回同じ品質で進められます。',
+    ex:'旅行調べ、買い物比較、メール整理など、作業ごとに手順書があり、それに沿って進めます。'},
+  connector:{icon:'🔌', name:'コネクタ', basis:['official'],
+    role:'Gmail、Googleカレンダー、GitHubなど、外部サービスとの接続口です。ユーザーが連携したサービスだけが使えます。組み込みコネクターの実処理はセル外のprivsepワーカーが限定権限で実行し、すべてのアクションはSentinelの許可を通ります。本物の認証情報はhatch-authdが保管し、Museにはサロゲートだけが見えます。',
+    ex:'Gmailコネクタで新着メールの確認、Googleカレンダーで予定の確認、GitHubでファイルの管理。'},
+  subagent:{icon:'👥', name:'サブエージェント', basis:['actual'],
+    role:'独立した仕事を並行して任せられる分身です。本体とは別の文脈で作業し、結果だけが本体に返ってきます。調べ物を分けると、全体が速く終わります。',
+    ex:'ホテル候補を複数に分けて同時に調べさせ、結果を本体が集約して比較します。'},
+  schedule:{icon:'⏰', name:'スケジュール実行', basis:['actual'],
+    role:'頼まれた仕事を、決まった時刻に自動で回す仕組みです。チャットで頼まなくても、時刻が来ればMuseが起動して仕事をし、結果があれば報告します。',
+    ex:'「毎朝、メールの新着を確認して、対応が必要なものだけを知らせる」といった定期実行がこれで動きます。'},
+  background:{icon:'🌙', name:'バックグラウンドの仕組み', basis:['actual'],
+    role:'表の会話とは別に、裏で動く仕組みです。フィードの記事づくり、目標や関係性の整理、メモリの自己改善などが、頼まれた仕事の合間に進みます。',
+    ex:'フィードに読める記事が用意されていたり、覚えた情報が整理されていたりするのは、この働きです。'},
+  device:{icon:'📱', name:'ペアリングしたデバイス', basis:['actual'],
+    role:'iPhoneなど、ペアリング（ひも付け）したデバイスです。位置情報やデバイスのデータの取得に使います。',
+    ex:'iPhoneの位置やデバイスのデータを、必要なときに参照します。'},
+  outputs:{icon:'🗄️', name:'成果物の置き場', basis:['official'],
+    role:'作ったページやドキュメント（ライブラリ）、フィード、目標タブなど、ユーザーが開いて見る場所です。成果物はコンピュータに残るので、ここからいつでも開き直せます。',
+    ex:'作った解説ページや資料がここに並びます。'}
+};
+function basisTags(keys){
+  return '<span class="basisTags">'+keys.map(function(k){
+    return '<span class="btag '+BASIS[k].cls+'">'+BASIS[k].label+'</span>';
+  }).join('')+'</span>';
+}
+
+/* diagram detail */
+var detailEl = document.getElementById('detail');
+function selectComponent(key){
+  var c = COMPONENTS[key]; if(!c) return;
+  document.querySelectorAll('#diagram .node, #compHead').forEach(function(n){
+    n.classList.toggle('selected', n.dataset.k===key);
+  });
+  document.getElementById('compHead').classList.toggle('sel', key==='computer');
+  detailEl.innerHTML = '<h3>'+c.icon+' '+c.name+'</h3><p class="role">'+c.role+'</p>'+
+    '<p class="ex"><b>例：</b>'+c.ex+'</p>'+basisTags(c.basis);
+}
+document.querySelectorAll('#diagram [data-k]').forEach(function(n){
+  n.addEventListener('click', function(){ selectComponent(n.dataset.k); });
+});
+selectComponent('anko');
+
+/* cards */
+document.getElementById('cards').innerHTML = Object.keys(COMPONENTS).map(function(k){
+  var c = COMPONENTS[k];
+  return '<article class="ccard" data-k="'+k+'"><div class="chead"><span class="ic">'+c.icon+'</span><h3>'+c.name+'</h3></div>'+
+    '<p>'+c.role+'</p><p class="ex"><b>例：</b>'+c.ex+'</p>'+basisTags(c.basis)+'</article>';
+}).join('');
+
+/* ================= flow players ================= */
+var FLOWS = {
+  A:{title:'例A：旅行のホテルを調べる', sub:'チャットで頼むと、Museが計画→確認→調査→報告まで進めます',
+    actors:[
+      {id:'user', icon:'👤', name:'ユーザー', sub:'チャットで依頼'},
+      {id:'anko', icon:'🧠', name:'Muse', sub:'計画と実行の中心'},
+      {id:'memory', icon:'🗂️', name:'メモリ', sub:'条件・好み'},
+      {id:'skill', icon:'📖', name:'スキル', sub:'旅行調べの手順書'},
+      {id:'tool', icon:'🌐', name:'ブラウザ／コネクタ', sub:'実際に調べる道具'},
+      {id:'sub', icon:'👥', name:'サブエージェント', sub:'並行調査の分身'}
+    ],
+    steps:[
+      {active:['user','anko'], from:'user', to:'anko', packet:'「旅行のホテルを調べて」',
+       title:'チャットで依頼する', body:'ユーザーがチャットで「旅行のホテルを調べて」と頼みます。依頼はここから始まります。'},
+      {active:['anko'], from:'anko', to:'anko', packet:'計画を立てる',
+       title:'Museが計画を立てる', body:'何を・どの順で調べるかを分解します。「条件の確認→候補探し→料金と空きの確認→比較→報告」という段取りです。'},
+      {active:['anko','memory'], from:'anko', to:'memory', packet:'条件を確認',
+       title:'メモリで条件を確認する', body:'長期メモリにある予算や好みなどの条件（例：食事の条件、立地の希望）を読み、調べる条件に反映します。いちいち聞き直しません。'},
+      {active:['anko','skill'], from:'anko', to:'skill', packet:'手順書を読む',
+       title:'スキル（手順書）を読む', body:'旅行調べのスキルを読み込み、調べ方と比べ方の型に沿って進めます。'},
+      {active:['anko','tool'], from:'anko', to:'tool', packet:'候補を調べる',
+       title:'ブラウザやコネクタで調べる', body:'本物のブラウザやコネクタで、候補ホテルの料金・空き状況・条件を実際に確認します。'},
+      {active:['anko','sub'], from:'anko', to:'sub', packet:'候補ごとに分担',
+       title:'並行部分はサブエージェントへ', body:'候補が多い部分はサブエージェントに分けて同時に調べます。結果は本体に返ってきて、Museが集約します。'},
+      {active:['anko','user'], from:'anko', to:'user', packet:'比較して報告',
+       title:'成果をまとめて報告する', body:'候補を比較してチャットで報告します。必要なら比較ページを作って成果物の置き場に残します。購入や予約のような大事な操作は、承認を得てからです。'}
+    ]},
+  B:{title:'例B：毎朝のメールチェック', sub:'スケジュール実行で、頼まなくても時刻になれば自動で動きます',
+    actors:[
+      {id:'sched', icon:'⏰', name:'スケジュール', sub:'決まった時刻に起動'},
+      {id:'anko', icon:'🧠', name:'Muse', sub:'自動で目覚める'},
+      {id:'memory', icon:'🗂️', name:'メモリ', sub:'ルールと条件'},
+      {id:'gmail', icon:'🔌', name:'メールコネクタ', sub:'新着メールを読む'},
+      {id:'user', icon:'👤', name:'ユーザー', sub:'必要なときだけ報告'}
+    ],
+    steps:[
+      {active:['sched'], from:'sched', to:'sched', packet:'時刻になった',
+       title:'決まった時刻になる', body:'毎朝の決まった時刻になると、スケジュール実行がMuseを起動します。チャットでの依頼は要りません。'},
+      {active:['sched','anko'], from:'sched', to:'anko', packet:'自動で起動',
+       title:'Museが自動で目覚める', body:'頼まれていた仕事（メールチェック）を思い出し、作業を始めます。'},
+      {active:['anko','memory'], from:'anko', to:'memory', packet:'ルールを読む',
+       title:'ルールとメモリを読む', body:'何をチェックし、何を報告するかのルールと、メモリにある条件（例：報告から除く種類のメール）を読みます。'},
+      {active:['anko','gmail'], from:'anko', to:'gmail', packet:'新着を読む',
+       title:'メールコネクタで新着を読む', body:'連携済みのメールコネクタ経由で、夜間の新着メールを確認します。'},
+      {active:['anko'], from:'anko', to:'anko', packet:'要対応だけを判定',
+       title:'要対応だけを判定する', body:'新着の中から、返信や対応が必要なものだけを選び分けます。重要でないものは流します。'},
+      {active:['anko','user'], from:'anko', to:'user', packet:'あれば報告／なければ静かに終了',
+       title:'あれば報告、なければ静かに終了', body:'要対応があればチャットで報告します。なければ通知せず、そのまま静かに終わります。毎朝うるさくならないための設計です。'}
+    ]}
+};
+var curFlow='A', curStep=0, timer=null, playing=false;
+var actorsEl=document.getElementById('actors'), packetEl=document.getElementById('packet'),
+    stageEl=document.getElementById('stage');
+
+function renderActors(){
+  var f=FLOWS[curFlow];
+  actorsEl.className='actors n'+f.actors.length;
+  actorsEl.innerHTML=f.actors.map(function(a){
+    return '<div class="actor" data-a="'+a.id+'" id="actor-'+a.id+'"><div class="icon">'+a.icon+'</div><h4>'+a.name+'</h4><div class="sub">'+a.sub+'</div></div>';
+  }).join('');
+  document.getElementById('dots').innerHTML=f.steps.map(function(_,i){
+    return '<button data-i="'+i+'" aria-label="ステップ'+(i+1)+'">'+(i+1)+'</button>';
+  }).join('');
+  document.querySelectorAll('#dots button').forEach(function(b){
+    b.addEventListener('click', function(){ stopPlay(); showStep(+b.dataset.i); });
+  });
+}
+function centerOf(el){
+  var s=stageEl.getBoundingClientRect(), r=el.getBoundingClientRect();
+  return {x:r.left-s.left+r.width/2, y:r.top-s.top+34};
+}
+function movePacket(step){
+  var from=document.getElementById('actor-'+step.from), to=document.getElementById('actor-'+step.to);
+  if(!from||!to) return;
+  var a=centerOf(from), b=centerOf(to);
+  packetEl.textContent=step.packet;
+  packetEl.style.transition='none';
+  packetEl.style.left=a.x+'px'; packetEl.style.top=a.y+'px';
+  packetEl.classList.add('show');
+  void packetEl.offsetWidth;
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    packetEl.style.left=b.x+'px'; packetEl.style.top=b.y+'px'; return;
+  }
+  packetEl.style.transition='left .8s ease, top .8s ease';
+  packetEl.style.left=b.x+'px'; packetEl.style.top=b.y+'px';
+}
+function showStep(i){
+  var f=FLOWS[curFlow];
+  curStep=Math.max(0, Math.min(i, f.steps.length-1));
+  var s=f.steps[curStep];
+  document.querySelectorAll('.actor').forEach(function(el){
+    el.classList.toggle('active', s.active.indexOf(el.dataset.a)>=0);
+  });
+  document.getElementById('stepLabel').textContent='STEP '+(curStep+1)+' / '+f.steps.length;
+  document.getElementById('stepTitle').textContent=s.title;
+  document.getElementById('stepBody').textContent=s.body;
+  document.getElementById('progFill').style.width=((curStep+1)/f.steps.length*100)+'%';
+  document.getElementById('stepCount').textContent='ステップ '+(curStep+1)+' / '+f.steps.length;
+  document.querySelectorAll('#dots button').forEach(function(b,j){
+    b.classList.toggle('done', j<curStep);
+    b.classList.toggle('current', j===curStep);
+  });
+  movePacket(s);
+}
+function stopPlay(){
+  playing=false; clearInterval(timer); timer=null;
+  document.getElementById('btnPlay').textContent='▶ 再生';
+}
+function startPlay(){
+  var f=FLOWS[curFlow];
+  if(curStep>=f.steps.length-1) showStep(0);
+  playing=true;
+  document.getElementById('btnPlay').textContent='⏸ 一時停止';
+  var interval=2600/parseFloat(document.getElementById('speed').value);
+  timer=setInterval(function(){
+    if(curStep>=f.steps.length-1){ stopPlay(); return; }
+    showStep(curStep+1);
+    if(curStep>=f.steps.length-1) stopPlay();
+  }, interval);
+}
+document.getElementById('btnPlay').addEventListener('click', function(){ playing?stopPlay():startPlay(); });
+document.getElementById('btnNext').addEventListener('click', function(){ stopPlay(); showStep(curStep+1); });
+document.getElementById('btnPrev').addEventListener('click', function(){ stopPlay(); showStep(curStep-1); });
+document.getElementById('btnReset').addEventListener('click', function(){ stopPlay(); showStep(0); });
+document.getElementById('speed').addEventListener('change', function(){ if(playing){ stopPlay(); startPlay(); } });
+function setFlow(k){
+  stopPlay(); curFlow=k;
+  document.getElementById('tabA').classList.toggle('on', k==='A');
+  document.getElementById('tabB').classList.toggle('on', k==='B');
+  document.getElementById('flowTitle').textContent=FLOWS[k].title;
+  document.getElementById('flowSub').textContent=FLOWS[k].sub;
+  renderActors(); showStep(0);
+}
+document.getElementById('tabA').addEventListener('click', function(){ setFlow('A'); });
+document.getElementById('tabB').addEventListener('click', function(){ setFlow('B'); });
+window.addEventListener('resize', function(){ movePacket(FLOWS[curFlow].steps[curStep]); });
+renderActors(); showStep(0);
+
+/* ================= security animations ================= */
+var SEC_FLOWS = {
+secAnim1:{
+  actors:[
+    {id:'anko', icon:'🧠', name:'Muse', sub:'ランタイムセル内・提案する'},
+    {id:'sentinel', icon:'🚦', name:'Sentinel', sub:'セル外・唯一の許可権限'},
+    {id:'clientui', icon:'👤', name:'クライアントUI', sub:'承認ダイアログ'},
+    {id:'privsep', icon:'⚙️', name:'privsepワーカー', sub:'セル外・限定権限で実行'},
+    {id:'extsvc', icon:'🌐', name:'外部サービス', sub:'コネクターの接続先'}
+  ],
+  steps:[
+    {active:['anko'], from:'anko', to:'anko', packet:'操作を提案する',
+     title:'ステップ1：Museがコネクター操作を提案する',
+     body:'ランタイムセル内のMuseが、外部サービスへのコネクター操作を提案します（例：外部サービスのデータを読み取る、メッセージを送信する）。ここで大事なのは、Muse自身には実行を許可する権限がないことです。あくまで「提案」までです。',
+     extra:'<div class="branchGrid"><div class="branchBox on"><b>🟩 ランタイムセル内</b>Museとツールコードが動く領域。信頼できないデータの処理が想定されるため、権限はここに集めません。</div><div class="branchBox dim"><b>🟪 セル外</b>Sentinelやprivsepワーカーなど、安全を担うサービスはセルの外にあります。</div></div>'},
+    {active:['anko','sentinel'], from:'anko', to:'sentinel', packet:'リクエスト → Sentinel',
+     title:'ステップ2：リクエストがSentinelに届く',
+     body:'セル内のコネクターツールが起動し、コネクターの説明、呼び出すメソッド、アクションのクラス、範囲、ユーザーの要求の背景情報を含むリクエストがSentinelに送られます。Sentinelは、そのアクションの「ユーザーに表示される目的」も生成します。',
+     extra:'<div class="tokenNote">リクエストに含まれるもの：<b>どのコネクターか／どのメソッドか／アクションのクラスと範囲／要求の背景</b> — Sentinelはこれらを見て判断します。</div>'},
+    {active:['sentinel'], from:'sentinel', to:'sentinel', packet:'ポリシーを評価中',
+     title:'ステップ3：Sentinelがコネクターポリシーを評価する',
+     body:'セル外のSentinelが、ユーザーが設定したコネクターポリシーを評価し、アクションを「許可する／拒否する／ユーザーに問い合わせる」のどれにするかを決めます。許可を出せるのはSentinelだけです。',
+     extra:'<div class="branchGrid"><div class="branchBox"><b>許可</b>ポリシーに適合すれば、そのまま実行へ進みます。</div><div class="branchBox"><b>拒否／問い合わせ</b>ポリシーに合わない、または同意が必要なら、実行は進みません。次の2ステップで分岐を見ます。</div></div>'},
+    {active:['sentinel','privsep'], from:'sentinel', to:'privsep', packet:'自動で許可 → 実行へ',
+     title:'ステップ4（分岐A）：許可済み・低リスクなら、人の介入なしに進む',
+     body:'読み取り専用のアクション、すでに許可されたアクション、低リスクと証明されたアクションは、人の介入なしに実行できます。すべてに承認を求めるのではなく、同意が重要な場合にだけ手続き上の障壁を設けるのが目標です。',
+     extra:'<div class="branchGrid"><div class="branchBox on"><b>✅ 分岐A：そのまま進む</b>読み取り専用／すでに許可済み／低リスクと証明済み → 承認ダイアログは出ません。</div><div class="branchBox dim"><b>分岐B：ユーザーに問い合わせる</b>同意が必要な場合は次のステップへ。</div></div>'},
+    {active:['sentinel','clientui'], from:'sentinel', to:'clientui', packet:'承認ダイアログを表示',
+     title:'ステップ5（分岐B）：同意が必要なら、UIに直接ダイアログが出る',
+     body:'問い合わせが必要な場合、Sentinelは保留中の承認を作って実行を停止します。ダイアログはクライアントUI内に直接表示され、ユーザーの回答もSentinelへ直接送られます。Museとの会話を通じてではありません — 会話の中で「いいよ」と言っても、それは承認にはなりません。承認は範囲つきの厳格な機能です（1回限り／セッション／タスク／期間／無期限）。',
+     extra:'<div class="dialogMock"><h5>この操作を許可しますか？</h5><p>外部サービスへの操作の内容と目的が、ここに正確に表示されます。</p><div class="dbtns"><span class="allow">許可する</span><span>拒否する</span></div></div><p class="dialogNote">↑ これは会話画面ではなく、クライアントUIに直接出るダイアログです</p>'},
+    {active:['privsep','extsvc'], from:'privsep', to:'extsvc', packet:'限定権限で実行',
+     title:'ステップ6：承認後、privsepワーカーが限定権限で実行する',
+     body:'許可されると、実際の処理はセル内ではなく、セル外のprivsepワーカーが限定された権限で実行します。ワーカーごとに使える認証情報の許可リストが決まっており、リクエストのパラメーターを変えるだけでは、担当外の認証情報（例：別サービス用）を要求できません。',
+     extra:'<div class="tokenNote"><b>実行するのはセル外のワーカー、権限は最小限。</b>セル内のコードが書き換えられても、ワーカーの権限範囲までは広がりません。</div>'},
+    {active:['privsep','anko'], from:'privsep', to:'anko', packet:'結果が返る',
+     title:'ステップ7：結果がMuseに返る',
+     body:'実行の結果だけがMuseに返り、Museはそれを使って作業を続け、ユーザーに報告します。本物の認証情報や許可の仕組みそのものがセル内に戻ることはありません。',
+     extra:'<div class="branchGrid"><div class="branchBox on"><b>返るもの</b>操作の結果（読み取ったデータ、送信できたかどうか等）。</div><div class="branchBox"><b>返らないもの</b>本物の認証情報、Sentinelのポリシーや状態。</div></div>'}
+  ]},
+secAnim2:{
+  actors:[
+    {id:'anko', icon:'🧠', name:'Muse／ツールコード', sub:'ランタイムセル内'},
+    {id:'authd', icon:'🔐', name:'hatch-authd', sub:'セル外・認証情報を保管'},
+    {id:'sentinel', icon:'🚦', name:'Sentinel', sub:'セル外・差し替えを行う'},
+    {id:'extsvc', icon:'🌐', name:'外部サービス', sub:'実際の接続先'}
+  ],
+  steps:[
+    {active:['authd'], from:'authd', to:'authd', packet:'サロゲートを発行',
+     title:'ステップ1：authdがサロゲート（代理トークン）を発行する',
+     body:'本物の認証情報（接続したサービスのOAuthトークン等）は、セル外のhatch-authdが、Metaの一元インフラではなくユーザーのVM内に保管しています。authdは、本物の代わりに使う「サロゲート（代理）トークン」を発行します。形と色の違いに注目してください — この先、2種類のトークンが登場します。',
+     extra:'<div class="tokenDemo"><div class="tokenZone cell"><h6>🟩 セル内から見えるもの</h6><span class="tokenPill surrogate">▭ SURROGATE-xxxx（代理）</span><p style="margin:6px 0 0">角のある破線の札 ＝ 代理トークン。本物ではありません。</p></div><div class="tokenArrow">／</div><div class="tokenZone outside"><h6>🟪 セル外（authd内）</h6><span class="tokenPill real">● REAL-TOKEN（本物）</span><p style="margin:6px 0 0">丸い濃色の札 ＝ 本物の認証情報。セル外にだけあります。</p></div></div>'},
+    {active:['authd','anko'], from:'authd', to:'anko', packet:'代理トークンだけ渡す',
+     title:'ステップ2：セル内ではサロゲートだけが見える',
+     body:'ランタイムセル内のMuseやツールコードが見ているのは、サロゲートだけです。本物のトークンはセル内には存在しないので、セル内のコードが何を出力しても、本物が漏れることは構造的にありません。',
+     extra:'<div class="tokenDemo"><div class="tokenZone cell"><h6>🟩 ランタイムセル内</h6><span class="tokenPill surrogate">▭ SURROGATE-xxxx（代理）</span><p style="margin:6px 0 0">Museが見られるのはこれだけです。</p></div><div class="tokenArrow">✕</div><div class="tokenZone outside"><h6>セル内には無いもの</h6><span class="tokenPill none">本物のトークン：セル内に存在しない</span></div></div>'},
+    {active:['anko','sentinel'], from:'anko', to:'sentinel', packet:'代理トークンでリクエスト',
+     title:'ステップ3：サロゲートを使って通信しようとする',
+     body:'外部サービスへの具体的なネットワークリクエストが発生します。セル内のコードは、持っているサロゲートを付けてリクエストを送ります。通信はフォワードプロキシ経由でSentinelに届きます。',
+     extra:'<div class="tokenNote">リクエストに付いているのはまだ <b>▭ 代理トークン</b> のままです。この時点では本物はどこにも出ていません。</div>'},
+    {active:['sentinel','authd'], from:'sentinel', to:'authd', packet:'本物を取得して差し替え',
+     title:'ステップ4：通信の瞬間に、Sentinelが本物へ差し替える',
+     body:'リクエストが承認されると、Sentinelがサロゲートを、authdから取得した本物の認証情報に差し替えます。差し替えが起きるのはセル外のSentinelの中だけです。トークンの形と色がここで変わります — 破線の代理札から、丸い本物の札へ。',
+     extra:'<div class="tokenDemo"><div class="tokenZone"><h6>差し替え前（セルから出た時点）</h6><span class="tokenPill surrogate">▭ SURROGATE-xxxx（代理）</span></div><div class="tokenArrow">→</div><div class="tokenZone outside"><h6>差し替え後（Sentinel内）</h6><span class="tokenPill real">● REAL-TOKEN（本物）</span><p style="margin:6px 0 0">差し替えはセル外でのみ起きます。</p></div></div>'},
+    {active:['sentinel','extsvc'], from:'sentinel', to:'extsvc', packet:'本物で外部サービスへ',
+     title:'ステップ5：本物は外部サービスへ — セル内には決して現れない',
+     body:'本物の認証情報を付けたリクエストが、外部サービスへ送られます。本物が通るのは「Sentinel → 外部サービス」の区間だけです。ランタイムセルの中を本物が通過することは一度もありません。',
+     extra:'<div class="tokenDemo"><div class="tokenZone cell"><h6>🟩 ランタイムセル内</h6><span class="tokenPill none">本物は一度も入ってこない</span></div><div class="tokenArrow">→</div><div class="tokenZone outside"><h6>🌐 外部サービス</h6><span class="tokenPill real">● REAL-TOKEN（本物）</span><p style="margin:6px 0 0">本物を受け取るのは接続先のサービスだけです。</p></div></div>'},
+    {active:['anko','sentinel'], from:'sentinel', to:'anko', packet:'結果だけが返る',
+     title:'ステップ6：だから、漏らさせようとしても無駄',
+     body:'通信の結果だけがセル内のMuseに返ります。プロンプトインジェクションなどで「本物のトークンを表示しろ」とMuseを騙そうとしても、Museは本物を見たことがないので、表示しようがありません。見せないのではなく、見えない — それがこの仕組みの要点です。',
+     extra:'<div class="tokenNote"><b>まとめ：</b>セル内 ＝ 代理トークンだけ ／ セル外のSentinelで差し替え ／ 本物はセル内に決して現れない。</div>'}
+  ]},
+secAnim3:{
+  actors:[
+    {id:'evil', icon:'☠️', name:'信頼できないコンテンツ', sub:'Webページ／メール等'},
+    {id:'anko', icon:'🧠', name:'Muse', sub:'コンテキストに入る'},
+    {id:'safety', icon:'🛡️', name:'hatch-safety', sub:'セル外・独立した検出'},
+    {id:'sentinel', icon:'🚦', name:'Sentinel＋人間承認', sub:'セル外・送信を止める'},
+    {id:'boundary', icon:'🧱', name:'決定論的境界', sub:'セル／privsep／authd'}
+  ],
+  steps:[
+    {active:['evil','anko'], from:'evil', to:'anko', packet:'悪意ある指示が紛れ込む',
+     title:'ステップ1：信頼できないコンテンツがコンテキストに入る',
+     body:'悪意あるWebページやメールなど、攻撃者がコントロールするテキスト（または画像）が、調べ物やメール確認を通じてMuseのコンテキストに入ります。中には「データを外部へ送れ」といった、ユーザーではない第三者の指示が紛れ込んでいることがあります。ここから「致命的な3要素」がそろいかけます。',
+     extra:'<div class="trifecta"><div class="tri"><b>① プライベートデータへのアクセス</b>ツールの本来の目的として存在<span class="st" style="color:#dc2626">そろっている</span></div><span class="plus">×</span><div class="tri"><b>② 信頼できないコンテンツ</b>攻撃者のテキストが入ってきた<span class="st" style="color:#dc2626">そろってしまった</span></div><span class="plus">×</span><div class="tri"><b>③ 外部通信</b>データを外へ送る手段<span class="st">まだ使われていない</span></div></div><p class="tokenNote">3つが組み合わさると、エージェントを騙してデータを盗ませることができます。以下の層が、この組み合わせを順に断ち切ります。</p>'},
+    {active:['anko'], from:'anko', to:'anko', packet:'「信頼できない入力」とラベル付け',
+     title:'ステップ2（前提）：外部データには「信頼できない入力」のラベルが付く',
+     body:'外部ソースからモデルのコンテキストに入るデータは、「信頼できない入力」としてラベル付けされます。ユーザーの指示と、外部データの中の文章は、最初から別物として扱われます。',
+     extra:'<div class="layerStrip"><span class="on">前提：信頼できない入力ラベル</span><span>第1層：モデル</span><span>第2層：検出分類</span><span>第3層：Sentinel＋承認</span><span>第4層：決定論的境界</span></div>'},
+    {active:['anko'], from:'anko', to:'anko', packet:'指示とデータを区別する',
+     title:'ステップ3（第1層）：モデルのトレーニングで、指示とデータを区別する',
+     body:'Metaのモデルは、プロンプトインジェクションを認識して防御できるようトレーニングされています。ラベル付けと合わせて、「従うべき指示」と「ただのデータとして扱うべき文章」を区別する能力が、悪意あるデータがある場面で強められます。多くの注入はここで無力化されます。',
+     extra:'<div class="layerStrip"><span>前提：ラベル付け</span><span class="on">第1層：モデルが区別 ✓</span><span>第2層：検出分類</span><span>第3層：Sentinel＋承認</span><span>第4層：決定論的境界</span></div><div class="trifecta" style="margin-top:10px"><div class="tri cut"><b>② 信頼できないコンテンツ</b><span class="st" style="color:#dc2626">「指示」としては無力化</span></div></div>'},
+    {active:['safety','anko'], from:'safety', to:'anko', packet:'注入の試みを検出',
+     title:'ステップ4（第2層）：独立した検出分類システムが試みを検出する',
+     body:'hatch-safetyなど、モデルとは独立に訓練された複数のプロンプトインジェクション検出分類システムが、ファイルやツール呼び出しを通じて入ってくる外部データを検査します。モデル自身の判断とは別の目で見るため、全体の精度が上がります。セル外で動くので、攻撃者がこの検査を無効化することもできません。',
+     extra:'<div class="layerStrip"><span>前提：ラベル付け</span><span>第1層：モデル</span><span class="on">第2層：hatch-safetyが検出 ✓</span><span>第3層：Sentinel＋承認</span><span>第4層：決定論的境界</span></div>'},
+    {active:['anko','sentinel'], from:'anko', to:'sentinel', packet:'外へ送ろうとしても止まる',
+     title:'ステップ5（第3層）：仮に騙されても、Sentinelと人間承認で止まる',
+     body:'仮にMuseが騙されてデータを外へ送ろうとしても、その送信はSentinelの評価を通らなければ実行できません。ここで効くのがtainted egressです：ユーザーデータを読んだプロセスは「汚染」され、そのプロセスからの通信は自動許可を失い、人間による承認が必要になります。承認ダイアログはUIに直接出るので、ユーザーが気づけます。',
+     extra:'<div class="layerStrip"><span>前提：ラベル付け</span><span>第1層：モデル</span><span>第2層：検出分類</span><span class="block">第3層：汚染された送信は承認必須で停止</span><span>第4層：決定論的境界</span></div><div class="trifecta" style="margin-top:10px"><div class="tri cut"><b>③ 外部通信</b><span class="st" style="color:#dc2626">tainted egressで遮断 — 承認なしには出ていかない</span></div></div>'},
+    {active:['boundary'], from:'boundary', to:'boundary', packet:'境界が被害を限定する',
+     title:'ステップ6（第4層）：決定論的境界が、最後の被害を限定する',
+     body:'モデルの判断に頼らない、決定論的な境界も重なっています。ランタイムセルがシステムアクセスを制限し、privsepが「どのコードがどの認証情報を見られるか」を制限し、authdがACL（アクセス制御）を適用し、Sentinelがすべてのアクションと送信を評価します。上の層をすり抜けても、できること自体が狭く限定されています。',
+     extra:'<div class="layerStrip"><span>前提：ラベル付け</span><span>第1層：モデル</span><span>第2層：検出分類</span><span>第3層：Sentinel＋承認</span><span class="on">第4層：セル／privsep／authdの境界 ✓</span></div><div class="trifecta" style="margin-top:10px"><div class="tri cut"><b>① プライベートデータへのアクセス</b><span class="st" style="color:#dc2626">境界で範囲が限定 — 手が届く範囲自体が狭い</span></div></div>'},
+    {active:['safety','sentinel','boundary'], from:'sentinel', to:'sentinel', packet:'組み合わせが断ち切られた',
+     title:'ステップ7：まとめ —「致命的な3要素」の組み合わせが断ち切られる',
+     body:'どの層も単独では完全ではありません。だからこそ、層を重ねます。信頼できないコンテンツは「指示」として無力化され（第1・2層）、外部通信は承認なしには通らず（第3層）、アクセスできる範囲自体も境界で狭められています（第4層）。3要素の組み合わせが成立しないこと — それが多層防御の狙いです。公式ブログも「Museは完全に安全ではない」と明記しており、だからこそ1つの層に頼らない設計になっています。',
+     extra:'<div class="trifecta"><div class="tri cut"><b>① プライベートデータ</b><span class="st" style="color:#dc2626">第4層で範囲を限定</span></div><span class="plus">✕</span><div class="tri cut"><b>② 信頼できないコンテンツ</b><span class="st" style="color:#dc2626">第1・2層で無力化・検出</span></div><span class="plus">✕</span><div class="tri cut"><b>③ 外部通信</b><span class="st" style="color:#dc2626">第3層で承認必須に</span></div></div><p class="tokenNote"><b>3要素の掛け算が、どこか1層でも残れば成立しません。</b>各層が別々の要素を断っています。</p>'}
+  ]}
+};
+function createSecPlayer(rootId, cfg){
+  var root=document.getElementById(rootId); if(!root) return;
+  var actorsEl=root.querySelector('.actors'), packetEl=root.querySelector('.secPacket'),
+      stageEl=root.querySelector('.secStage'), extraEl=root.querySelector('.extraVisual'),
+      stEl=root.querySelector('.stepText .st'), titleEl=root.querySelector('.stepText h4'),
+      bodyEl=root.querySelector('.stepText p'), fillEl=root.querySelector('.progressBar i'),
+      countEl=root.querySelector('.stepCount'), dotsEl=root.querySelector('.dots'),
+      btnPlay=root.querySelector('.btnPlay'), speedSel=root.querySelector('.speedSel');
+  var cur=0, timer=null, playing=false;
+  actorsEl.className='actors n'+cfg.actors.length;
+  actorsEl.innerHTML=cfg.actors.map(function(a){
+    return '<div class="actor" data-a="'+a.id+'" id="'+rootId+'-actor-'+a.id+'"><div class="icon">'+a.icon+'</div><h4>'+a.name+'</h4><div class="sub">'+a.sub+'</div></div>';
+  }).join('');
+  dotsEl.innerHTML=cfg.steps.map(function(_,i){ return '<button data-i="'+i+'" aria-label="ステップ'+(i+1)+'">'+(i+1)+'</button>'; }).join('');
+  function centerOf(el){ var s=stageEl.getBoundingClientRect(), r=el.getBoundingClientRect(); return {x:r.left-s.left+r.width/2, y:r.top-s.top+34}; }
+  function movePacket(step){
+    var from=document.getElementById(rootId+'-actor-'+step.from), to=document.getElementById(rootId+'-actor-'+step.to);
+    if(!from||!to) return;
+    var a=centerOf(from), b=centerOf(to);
+    packetEl.textContent=step.packet;
+    packetEl.style.transition='none'; packetEl.style.left=a.x+'px'; packetEl.style.top=a.y+'px';
+    packetEl.classList.add('show'); void packetEl.offsetWidth;
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){ packetEl.style.left=b.x+'px'; packetEl.style.top=b.y+'px'; return; }
+    packetEl.style.transition='left .8s ease, top .8s ease'; packetEl.style.left=b.x+'px'; packetEl.style.top=b.y+'px';
+  }
+  function show(i){
+    cur=Math.max(0, Math.min(i, cfg.steps.length-1));
+    var s=cfg.steps[cur];
+    root.querySelectorAll('.actor').forEach(function(el){ el.classList.toggle('active', s.active.indexOf(el.dataset.a)>=0); });
+    stEl.textContent='STEP '+(cur+1)+' / '+cfg.steps.length;
+    titleEl.textContent=s.title; bodyEl.textContent=s.body;
+    extraEl.innerHTML=s.extra||'';
+    fillEl.style.width=((cur+1)/cfg.steps.length*100)+'%';
+    countEl.textContent='ステップ '+(cur+1)+' / '+cfg.steps.length;
+    dotsEl.querySelectorAll('button').forEach(function(b,j){ b.classList.toggle('done', j<cur); b.classList.toggle('current', j===cur); });
+    movePacket(s);
+  }
+  function stop(){ playing=false; clearInterval(timer); timer=null; btnPlay.textContent='▶ 再生'; }
+  function start(){
+    if(cur>=cfg.steps.length-1) show(0);
+    playing=true; btnPlay.textContent='⏸ 一時停止';
+    var interval=3000/parseFloat(speedSel.value);
+    timer=setInterval(function(){ if(cur>=cfg.steps.length-1){ stop(); return; } show(cur+1); if(cur>=cfg.steps.length-1) stop(); }, interval);
+  }
+  btnPlay.addEventListener('click', function(){ playing?stop():start(); });
+  root.querySelector('.btnNext').addEventListener('click', function(){ stop(); show(cur+1); });
+  root.querySelector('.btnPrev').addEventListener('click', function(){ stop(); show(cur-1); });
+  root.querySelector('.btnReset').addEventListener('click', function(){ stop(); show(0); });
+  speedSel.addEventListener('change', function(){ if(playing){ stop(); start(); } });
+  dotsEl.querySelectorAll('button').forEach(function(b){ b.addEventListener('click', function(){ stop(); show(+b.dataset.i); }); });
+  window.addEventListener('resize', function(){ movePacket(cfg.steps[cur]); });
+  show(0);
+}
+createSecPlayer('secAnim1', SEC_FLOWS.secAnim1);
+createSecPlayer('secAnim2', SEC_FLOWS.secAnim2);
+createSecPlayer('secAnim3', SEC_FLOWS.secAnim3);
+</script>
+</body>
+</html>
