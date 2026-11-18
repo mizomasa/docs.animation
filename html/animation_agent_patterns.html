@@ -1,0 +1,836 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>AIエージェントのデザインパターン集</title>
+<style>
+:root{
+  --bg:#FAF8F2; --surface:#FFFFFF; --surface2:#F1EEE5; --ink:#1B2333; --muted:#5C6577; --line:#E3DED0;
+  --plan:#0E7C6B; --plan-bg:#E2F2EE;
+  --refl:#B45F0E; --refl-bg:#FBECD8;
+  --eval:#2563A8; --eval-bg:#E1ECF7;
+  --router:#B23A5E; --router-bg:#F9E3EA;
+  --ok:#1E7D46; --ng:#C0392B;
+  --radius:14px;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#12151A; --surface:#1B1F27; --surface2:#232833; --ink:#ECE9E1; --muted:#9BA4B5; --line:#2E3442;
+    --plan:#3EC6AE; --plan-bg:#17352F;
+    --refl:#E8A04C; --refl-bg:#3D2C14;
+    --eval:#6FA8DC; --eval-bg:#1B3049;
+    --router:#E87A9A; --router-bg:#3D1F2C;
+    --ok:#4CC07A; --ng:#E87A6A;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic UI","Noto Sans JP",system-ui,sans-serif;line-height:1.75;font-size:16px}
+h1,h2,h3{font-family:"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif;line-height:1.35;margin:0}
+a{color:var(--eval)}
+.wrap{max-width:1060px;margin:0 auto;padding:0 20px 72px}
+button,select{min-height:40px;font:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--eval);outline-offset:2px}
+
+/* hero */
+.hero{padding:52px 0 8px}
+.hero .kicker{font-size:.82rem;letter-spacing:.14em;font-weight:700;color:var(--muted);text-transform:none}
+.hero h1{font-size:clamp(1.9rem,5.5vw,3rem);margin:10px 0 14px;font-weight:700}
+.hero p.lead{font-size:1.08rem;max-width:44em;margin:0;color:var(--ink)}
+.hero .sub{color:var(--muted);max-width:44em;margin:14px 0 0}
+.loop-diagram{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:26px 0 6px}
+.loop-diagram .node{background:var(--surface);border:1.5px solid var(--line);border-radius:999px;padding:8px 16px;font-weight:700;font-size:.92rem}
+.loop-diagram .node.hot{border-color:var(--refl);background:var(--refl-bg)}
+.loop-diagram .arr{color:var(--muted);font-weight:700}
+.note-box{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin:22px 0 0}
+.note-box strong{color:var(--refl)}
+
+/* nav chips */
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:28px 0 0}
+.toc a{display:inline-flex;align-items:center;min-height:40px;padding:6px 14px;border-radius:999px;background:var(--surface);border:1px solid var(--line);color:var(--ink);text-decoration:none;font-size:.9rem;font-weight:600}
+.toc a .dot{width:9px;height:9px;border-radius:50%;margin-right:8px;flex:none}
+
+/* sections */
+section{margin-top:56px}
+.sec-head{border-top:3px solid var(--ink);padding-top:18px;margin-bottom:8px}
+.sec-head .no{font-size:.8rem;font-weight:700;letter-spacing:.12em;color:var(--muted)}
+.sec-head h2{font-size:clamp(1.4rem,3.5vw,1.9rem);margin:4px 0 8px}
+.sec-head p{color:var(--muted);margin:0;max-width:46em}
+
+/* map */
+.map-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px}
+.map-col{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.map-col h3{font-family:inherit;font-size:.95rem;margin-bottom:10px}
+.map-col ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.map-col li{border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:.92rem;background:var(--surface2)}
+.map-col li b{display:block;font-size:.95rem}
+.map-col li span{color:var(--muted);font-size:.82rem;line-height:1.5;display:block}
+.map-col li.target{border-width:2px;background:var(--surface)}
+.map-col li.target .tag{display:inline-block;font-size:.7rem;font-weight:700;color:#fff;border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:2px}
+.tag-plan{background:var(--plan)} .tag-refl{background:var(--refl)} .tag-eval{background:var(--eval)} .tag-router{background:var(--router)}
+.b-plan{border-color:var(--plan)!important}.b-refl{border-color:var(--refl)!important}.b-eval{border-color:var(--eval)!important}.b-router{border-color:var(--router)!important}
+
+/* pattern blocks */
+.pattern{margin-top:64px}
+.pat-head{display:flex;gap:16px;align-items:flex-start;border-top:3px solid var(--ink);padding-top:18px}
+.pat-badge{flex:none;width:52px;height:52px;border-radius:14px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:1.25rem;font-family:inherit}
+.pat-head h2{font-size:clamp(1.35rem,3.5vw,1.85rem)}
+.pat-head .en{font-size:.85rem;color:var(--muted);font-weight:700;letter-spacing:.06em}
+.pat-head p{margin:6px 0 0;color:var(--muted);max-width:46em}
+.keyline{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px 18px;margin:16px 0;font-size:.98rem}
+.keyline b{margin-right:.4em}
+
+/* animation player */
+.anim{background:var(--surface);border:1px solid var(--line);border-radius:18px;overflow:hidden;margin-top:18px}
+.anim-stage{position:relative;min-height:340px;padding:22px;background:var(--surface2);overflow:hidden}
+.anim-caption{padding:16px 20px 4px}
+.anim-caption .step-label{font-size:.78rem;font-weight:800;letter-spacing:.1em;color:var(--muted)}
+.anim-caption h3{font-family:inherit;font-size:1.12rem;margin:2px 0 4px}
+.anim-caption p{margin:0;color:var(--muted);font-size:.95rem;min-height:3.2em}
+.anim-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:14px 20px 18px}
+.anim-controls button{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:6px 16px;font-weight:700;font-size:.92rem}
+.anim-controls button.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.anim-controls select{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:6px 10px}
+.anim-controls .spacer{flex:1}
+.progress{height:6px;background:var(--line);border-radius:99px;margin:0 20px;overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--ink);border-radius:99px;transition:width .4s ease}
+.dots{display:flex;gap:6px;align-items:center}
+.dots button{width:36px;height:36px;min-height:36px;padding:0;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-size:.78rem;font-weight:700;display:grid;place-items:center}
+.dots button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+/* generic stage pieces */
+.chip{display:inline-block;font-size:.74rem;font-weight:700;border-radius:999px;padding:2px 10px;background:var(--surface);border:1px solid var(--line)}
+.card{background:var(--surface);border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;font-size:.9rem}
+.card h4{margin:0 0 4px;font-size:.92rem}
+.mut{color:var(--muted);font-size:.84rem}
+.fade{opacity:0;transform:translateY(8px);transition:opacity .45s ease,transform .45s ease;pointer-events:none}
+.on{opacity:1;transform:none;pointer-events:auto}
+
+/* --- Plan stage --- */
+.plan-layout{display:grid;grid-template-columns:1fr 1.35fr 1fr;gap:14px;align-items:start}
+.plan-item{display:flex;gap:10px;align-items:flex-start;border:1.5px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px;background:var(--surface);font-size:.88rem;transition:all .4s}
+.plan-item .box{flex:none;width:20px;height:20px;border-radius:6px;border:2px solid var(--muted);display:grid;place-items:center;font-size:.8rem;color:#fff;margin-top:2px}
+.plan-item.done{border-color:var(--plan)}
+.plan-item.done .box{background:var(--plan);border-color:var(--plan)}
+.plan-item.warn{border-color:var(--ng);background:#FDECEA}
+@media (prefers-color-scheme: dark){.plan-item.warn{background:#3A1E1A}}
+.plan-item.new{border-color:var(--plan);border-style:dashed}
+.plan-item s{color:var(--muted)}
+.alert-card{border-color:var(--ng)!important;background:#FDECEA!important}
+@media (prefers-color-scheme: dark){.alert-card{background:#3A1E1A!important}}
+.report-done{border-color:var(--plan)!important;background:var(--plan-bg)!important}
+
+/* --- Reflection stage --- */
+.refl-layout{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+.agent-banner{display:flex;gap:10px;align-items:center;background:var(--refl-bg);border:1.5px solid var(--refl);border-radius:12px;padding:10px 14px;font-size:.9rem;margin-bottom:14px}
+.issue{display:flex;gap:8px;border:1px solid var(--line);border-left:5px solid var(--ng);border-radius:8px;padding:8px 11px;margin-bottom:8px;background:var(--surface);font-size:.88rem}
+.fix{display:flex;gap:8px;border:1px solid var(--line);border-left:5px solid var(--plan);border-radius:8px;padding:8px 11px;margin-bottom:8px;background:var(--surface);font-size:.88rem}
+
+/* --- Eval stage --- */
+.eval-layout{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+.rubric{width:100%;border-collapse:collapse;font-size:.86rem}
+.rubric th,.rubric td{border:1px solid var(--line);padding:6px 9px;text-align:left}
+.rubric th{background:var(--surface2)}
+.pill{font-weight:800;font-size:.78rem;border-radius:999px;padding:1px 9px}
+.pill-ok{background:var(--plan-bg);color:var(--plan)}
+.pill-ng{background:#FDECEA;color:var(--ng)}
+@media (prefers-color-scheme: dark){.pill-ng{background:#3A1E1A}}
+.loop-note{margin-top:12px}
+
+/* --- Router stage --- */
+.router-flow{display:grid;grid-template-columns:1fr;gap:12px}
+.router-core{justify-self:center;text-align:center;border:2px solid var(--router);background:var(--router-bg);border-radius:14px;padding:12px 22px;font-weight:700;max-width:420px;width:100%}
+.branches{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.branch{border-radius:12px;padding:12px 14px;font-size:.88rem;border:1.5px solid var(--line);background:var(--surface);transition:all .4s}
+.branch h4{margin:0 0 4px;font-size:.92rem}
+.branch.lit-a{border-color:#0E7C6B;background:var(--plan-bg)}
+.branch.lit-b{border-color:var(--eval);background:var(--eval-bg)}
+.branch.lit-c{border-color:var(--router);background:var(--router-bg)}
+.costbar{display:flex;align-items:center;gap:10px;font-size:.85rem;margin-top:6px}
+.costbar .bar{flex:1;height:10px;border-radius:99px;background:var(--line);overflow:hidden}
+.costbar .bar i{display:block;height:100%;width:0;transition:width .7s ease}
+.inbox-row{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+
+/* fit cards */
+.fit-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:18px}
+.fit{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.fit h3{font-family:inherit;font-size:.98rem;margin-bottom:6px}
+.fit p,.fit li{font-size:.92rem;color:var(--muted);margin:0}
+.fit ul{margin:0;padding-left:1.1em;color:var(--muted);font-size:.92rem}
+.fit .cost{font-size:1.05rem;color:var(--ink);font-weight:700}
+
+/* comparison table */
+.cmp{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-top:18px;font-size:.93rem}
+.cmp th,.cmp td{border-bottom:1px solid var(--line);padding:12px 14px;text-align:left;vertical-align:top}
+.cmp thead th{background:var(--surface2);font-size:.9rem}
+.cmp tbody th{white-space:nowrap}
+.cmp td{color:var(--muted)}
+.cmp tr:last-child th,.cmp tr:last-child td{border-bottom:none}
+
+/* choose steps */
+.choose{display:grid;gap:0;margin-top:20px}
+.choose-step{display:flex;gap:16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;margin-bottom:12px;align-items:flex-start}
+.choose-step .num{flex:none;width:38px;height:38px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:800}
+.choose-step h3{font-family:inherit;font-size:1.02rem}
+.choose-step p{margin:2px 0 0;color:var(--muted);font-size:.94rem}
+.choose-step .when{font-size:.82rem;font-weight:700}
+
+/* glossary */
+.gloss{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.gloss div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.gloss dt{font-weight:800;margin-bottom:2px}
+.gloss dd{margin:0;color:var(--muted);font-size:.92rem}
+
+footer{margin-top:64px;border-top:1px solid var(--line);padding-top:18px;color:var(--muted);font-size:.88rem}
+
+@media (max-width:760px){
+  .map-grid,.fit-grid,.branches{grid-template-columns:1fr}
+  .plan-layout,.refl-layout,.eval-layout{grid-template-columns:1fr}
+  .gloss{grid-template-columns:1fr}
+  .anim-stage{min-height:300px;padding:16px}
+  .anim-caption p{min-height:0}
+  .cmp,.cmp thead,.cmp tbody,.cmp tr,.cmp th,.cmp td{display:block;width:100%}
+  .cmp thead{display:none}
+  .cmp tr{border-bottom:2px solid var(--line);padding:8px 0}
+  .cmp th,.cmp td{border-bottom:none;padding:5px 14px}
+  .cmp tbody th{font-size:1rem}
+  .cmp td::before{content:attr(data-l) "：";font-weight:700;color:var(--ink);font-size:.82rem}
+}
+@media (prefers-reduced-motion: reduce){
+  *{transition:none!important;animation:none!important}
+  html{scroll-behavior:auto}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 1. 導入 -->
+  <header class="hero">
+    <div class="kicker">AIエージェント設計の型カタログ</div>
+    <h1>AIエージェントの<br>デザインパターン集</h1>
+    <p class="lead">パターンとは、<strong>「エージェントの頭の動かし方の型」</strong>です。新しい技術の名前ではなく、タスクの進め方・品質の上げ方・振り分け方の、再利用できる設計の単位です。</p>
+    <p class="sub">出発点は、推論してツールを呼び、結果を見て次を考える単純なループ（ReAct）。このページは、そのループだけでは足りなくなったときに「足す部品」として4つのパターンを、アニメーションで解説します。</p>
+    <div class="loop-diagram" aria-label="ReActループの図">
+      <span class="node">考える</span><span class="arr">→</span>
+      <span class="node">ツールを実行</span><span class="arr">→</span>
+      <span class="node">結果を観察</span><span class="arr">→</span>
+      <span class="node hot">また考える…</span>
+    </div>
+    <div class="note-box">
+      <strong>読み方：</strong>まず全体マップで「どの層のパターンか」を掴み、次に4本のアニメーションで動きを追ってください。すでに別ページで扱った連携パターン（司令塔型・ハンドオフ・パイプライン）や土台（RAG・メモリ）は、マップでの位置づけのみに留めています。
+    </div>
+    <nav class="toc" aria-label="目次">
+      <a href="#map">全体マップ</a>
+      <a href="#plan"><span class="dot" style="background:var(--plan)"></span>Plan-and-Execute</a>
+      <a href="#reflection"><span class="dot" style="background:var(--refl)"></span>Reflection</a>
+      <a href="#evaluator"><span class="dot" style="background:var(--eval)"></span>Evaluator-Optimizer</a>
+      <a href="#router"><span class="dot" style="background:var(--router)"></span>Router</a>
+      <a href="#compare">比較表</a>
+      <a href="#choose">選び方</a>
+      <a href="#glossary">用語解説</a>
+    </nav>
+  </header>
+
+  <!-- 2. 全体マップ -->
+  <section id="map">
+    <div class="sec-head">
+      <div class="no">MAP</div>
+      <h2>パターン全体マップ</h2>
+      <p>パターンは3つの層に分かれます。1つのエージェントの頭の動かし方（単体）、複数エージェントの組み方（連携）、そしてそれらを支える土台です。今回アニメーションで深掘りするのは、色枠の4つです。</p>
+    </div>
+    <div class="map-grid">
+      <div class="map-col">
+        <h3>単体パターン ― 1体の頭の動かし方</h3>
+        <ul>
+          <li><b>ReAct</b><span>推論→実行→観察の基本ループ。すべての土台</span></li>
+          <li class="target b-plan"><b>Plan-and-Execute<span class="tag tag-plan">今回</span></b><span>先に計画を立て、計画どおりに実行する</span></li>
+          <li class="target b-refl"><b>Reflection<span class="tag tag-refl">今回</span></b><span>自分の出力を自分で批判し、直す</span></li>
+          <li class="target b-eval"><b>Evaluator-Optimizer<span class="tag tag-eval">今回</span></b><span>生成役と評価役を分け、合格まで回す</span></li>
+        </ul>
+      </div>
+      <div class="map-col">
+        <h3>連携パターン ― 複数体の組み方</h3>
+        <ul>
+          <li><b>司令塔型（Orchestrator-Workers）</b><span>司令塔が分解し、作業役が並行実行</span></li>
+          <li><b>ハンドオフ</b><span>担当が別の専門エージェントへ引き継ぐ</span></li>
+          <li><b>パイプライン</b><span>工程が固定の直列処理。各段を型で縛る</span></li>
+          <li class="target b-router"><b>Router<span class="tag tag-router">今回</span></b><span>入力を見て処理先を振り分ける</span></li>
+        </ul>
+      </div>
+      <div class="map-col">
+        <h3>土台 ― パターンを支える部品</h3>
+        <ul>
+          <li><b>ツール / MCP</b><span>外部操作の手段と、その標準インターフェース</span></li>
+          <li><b>RAG</b><span>検索で根拠を集めてから生成する</span></li>
+          <li><b>メモリ</b><span>短期（会話内）・長期（永続化）の記憶</span></li>
+          <li><b>構造化出力</b><span>出力をスキーマで縛り、機械処理可能にする</span></li>
+          <li><b>上限・ガードレール</b><span>ループ回数・コストの上限と、入出力の検証層</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ A. Plan-and-Execute ============ -->
+  <article class="pattern" id="plan">
+    <div class="pat-head">
+      <div class="pat-badge" style="background:var(--plan)">P</div>
+      <div>
+        <div class="en">PLAN-AND-EXECUTE</div>
+        <h2>Plan-and-Execute ― 先に計画、後で実行</h2>
+        <p>題材：市場調査レポートの作成。ReActが「一歩ずつ考えながら進む」のに対し、こちらは最初に全体の計画を立ててから、計画に沿って実行します。</p>
+      </div>
+    </div>
+    <div class="keyline"><b>要点</b>計画（Planner）と実行（Executor）を分離するのが肝です。そして計画は絶対視しない ― 途中で想定外が起きたら、計画そのものを書き換える「リプランニング」を挟みます。</div>
+
+    <div class="anim" data-anim="plan">
+      <div class="anim-stage" id="stage-plan" data-step="0">
+        <div class="plan-layout">
+          <div>
+            <div class="card fade" data-p="task">
+              <h4>📋 タスク</h4>
+              「ある製品分野の市場調査レポートを作成して」
+              <div class="mut">納期：本日中 ／ 形式：比較表つき</div>
+            </div>
+            <div class="card fade" data-p="planner" style="margin-top:10px">
+              <h4>🧭 Planner（計画役）</h4>
+              <span class="mut">全体を見て手順を設計する。実行はしない</span>
+            </div>
+            <div class="card fade alert-card" data-p="alert" style="margin-top:10px">
+              <h4>⚠ 想定外</h4>
+              必要な市場規模データが見つからない
+            </div>
+          </div>
+          <div class="card fade" data-p="board">
+            <h4>🗂 計画ボード</h4>
+            <div class="plan-item" data-pi="1"><span class="box"></span><span>市場規模・成長率のデータを集める</span></div>
+            <div class="plan-item" data-pi="2"><span class="box"></span><span>主要プレイヤーを比較表にまとめる</span></div>
+            <div class="plan-item" data-pi="3"><span class="box"></span><span class="old3">市場規模の数字を根拠に本文を執筆する</span><span class="new3" style="display:none">公開事例と推定の断り書きつきで本文を執筆する</span></div>
+            <div class="plan-item new fade" data-pi="4"><span class="box"></span><span>代替データ（公開事例・統計の二次資料）を補完収集する</span></div>
+            <div class="plan-item" data-pi="5"><span class="box"></span><span>全体を通読し、レポートとして仕上げる</span></div>
+          </div>
+          <div>
+            <div class="card fade" data-p="executor">
+              <h4>🔧 Executor（実行役）</h4>
+              <span class="mut">計画の項目を上から順にこなす</span>
+            </div>
+            <div class="card fade" data-p="report" style="margin-top:10px">
+              <h4>📄 レポート</h4>
+              <span class="mut" data-p="report-state">未着手</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="anim-caption">
+        <div class="step-label"></div><h3></h3><p></p>
+      </div>
+      <div class="progress"><i></i></div>
+      <div class="anim-controls">
+        <button type="button" data-act="prev">← 前へ</button>
+        <button type="button" data-act="play" class="primary">▶ 再生</button>
+        <button type="button" data-act="next">次へ →</button>
+        <button type="button" data-act="reset">最初から</button>
+        <select data-act="speed" aria-label="再生速度">
+          <option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+        </select>
+        <span class="spacer"></span>
+        <div class="dots"></div>
+      </div>
+    </div>
+
+    <div class="fit-grid">
+      <div class="fit"><h3>向いている用途</h3><ul><li>手順が多い長めのタスク（調査、レポート、移行作業）</li><li>途中の進捗を人間が見て確認したい仕事</li><li>実行前に計画レビューを挟みたい場面</li></ul></div>
+      <div class="fit"><h3>向いていない場面</h3><ul><li>数ステップで終わる短いタスク（計画の手間が勝つ）</li><li>進めながらでないと方針が決まらない探索的な仕事</li></ul></div>
+      <div class="fit"><h3>コスト感</h3><p class="cost">中</p><p>計画立案と、場合により再計画の分だけ呼び出しが増える。ただし無駄な試行錯誤が減るため、長いタスクでは総量が下がることも多い。</p></div>
+    </div>
+  </article>
+
+  <!-- ============ B. Reflection ============ -->
+  <article class="pattern" id="reflection">
+    <div class="pat-head">
+      <div class="pat-badge" style="background:var(--refl)">R</div>
+      <div>
+        <div class="en">REFLECTION / SELF-CRITIQUE</div>
+        <h2>Reflection ― 自分の出力を自分で批判する</h2>
+        <p>題材：案内文の下書き作成。生成した直後に「批判する視点」に切り替えて自分の出力を点検し、直してから出す、という一往復のパターンです。</p>
+      </div>
+    </div>
+    <div class="keyline"><b>要点</b>生成と批判を<strong>同じエージェント</strong>が担います。分業はしません。その代わり「書き手のつもり」から「読み手・校正者のつもり」へ視点を切り替える指示が効きどころです。</div>
+
+    <div class="anim" data-anim="reflection">
+      <div class="anim-stage" id="stage-reflection" data-step="0">
+        <div class="agent-banner fade" data-r="banner">
+          <span style="font-size:1.3rem">🤖</span>
+          <span><b>エージェントは1体だけ</b> ― 生成役と批判役を、同じエージェントが帽子を替えて担います</span>
+        </div>
+        <div class="refl-layout">
+          <div>
+            <div class="card fade" data-r="draft1">
+              <h4>✍ 下書き v1</h4>
+              「当施設は来月リニューアルオープンします。営業時間は9時から17時までです。ぜひお越しください。」
+              <div class="mut">…一見ふつう。でも点検すると問題が3つ</div>
+            </div>
+            <div class="card fade" data-r="draft2" style="margin-top:10px">
+              <h4>✍ 書き直し v2</h4>
+              「当施設は<strong>4月1日</strong>にリニューアルオープンします。営業時間は9時〜17時（<strong>最終入館16時30分</strong>）です。<strong>休館日は毎週火曜</strong>です。皆さまのお越しをお待ちしています。」
+            </div>
+            <div class="card fade report-done" data-r="final" style="margin-top:10px">
+              <h4>✅ 改善版を出力</h4>
+              <span class="mut">問題点3件すべてに対応済み</span>
+            </div>
+          </div>
+          <div>
+            <div class="card fade" data-r="critique">
+              <h4>🔍 批判フェーズ ― チェック観点</h4>
+              <span class="chip">事実の誤りはないか</span> <span class="chip">抜けている情報はないか</span> <span class="chip">トーンは適切か</span>
+            </div>
+            <div class="fade" data-r="issues" style="margin-top:10px">
+              <div class="issue"><span>✗</span><span>「来月」が曖昧 ― 具体的な日付がない（事実・明確さ）</span></div>
+              <div class="issue"><span>✗</span><span>最終入館時刻と休館日が抜けている（抜け）</span></div>
+              <div class="issue"><span>✗</span><span>結びが事務的で、案内文として冷たい（トーン）</span></div>
+            </div>
+            <div class="fade" data-r="fixes" style="margin-top:10px">
+              <div class="fix"><span>→</span><span>修正指示1：日付を「4月1日」と明記する</span></div>
+              <div class="fix"><span>→</span><span>修正指示2：最終入館16時30分・火曜休館を追記する</span></div>
+              <div class="fix"><span>→</span><span>修正指示3：結びを歓迎の表現に変える</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="anim-caption">
+        <div class="step-label"></div><h3></h3><p></p>
+      </div>
+      <div class="progress"><i></i></div>
+      <div class="anim-controls">
+        <button type="button" data-act="prev">← 前へ</button>
+        <button type="button" data-act="play" class="primary">▶ 再生</button>
+        <button type="button" data-act="next">次へ →</button>
+        <button type="button" data-act="reset">最初から</button>
+        <select data-act="speed" aria-label="再生速度">
+          <option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+        </select>
+        <span class="spacer"></span>
+        <div class="dots"></div>
+      </div>
+    </div>
+
+    <div class="fit-grid">
+      <div class="fit"><h3>向いている用途</h3><ul><li>文章・コードなど「下書きの質」を1段上げたい生成タスク</li><li>評価基準を細かく固定しなくてもよい場面</li><li>手軽に導入したい品質改善（構成が最小）</li></ul></div>
+      <div class="fit"><h3>向いていない場面</h3><ul><li>自分では気づけない種類の誤りが多い領域（同じ盲点を共有する）</li><li>合否を厳密に判定しなければならない場面</li></ul></div>
+      <div class="fit"><h3>コスト感</h3><p class="cost">低〜中</p><p>生成1回＋批判・修正で、おおむね呼び出し2〜3回分。1体で完結するため構成コストは最小です。</p></div>
+    </div>
+  </article>
+
+  <!-- ============ C. Evaluator-Optimizer ============ -->
+  <article class="pattern" id="evaluator">
+    <div class="pat-head">
+      <div class="pat-badge" style="background:var(--eval)">E</div>
+      <div>
+        <div class="en">EVALUATOR-OPTIMIZER</div>
+        <h2>Evaluator-Optimizer ― 評価役を分けて合格まで回す</h2>
+        <p>題材：仕様書に沿ったコード生成。生成役（Optimizer）とは別の評価役（Evaluator）が、あらかじめ固定された評価基準で採点し、合格するまで差し戻します。</p>
+      </div>
+    </div>
+    <div class="keyline"><b>Reflectionとの違い</b>①評価役が<strong>別エージェント</strong>で、自分の盲点を共有しない　②評価基準（ルーブリック）が<strong>事前に固定</strong>され、ブレない　③合否判定が明示的で、ループに<strong>回数上限</strong>を設ける。</div>
+
+    <div class="anim" data-anim="evaluator">
+      <div class="anim-stage" id="stage-evaluator" data-step="0">
+        <div class="eval-layout">
+          <div>
+            <div class="card fade" data-e="gen">
+              <h4>🛠 生成役（Optimizer）</h4>
+              <span class="mut">仕様書：「入力チェックつきのユーザー登録関数を作る」</span>
+            </div>
+            <div class="card fade" data-e="v1" style="margin-top:10px">
+              <h4>成果物 v1</h4>
+              <span class="mut">登録関数は完成。ただしメール形式チェックがなく、エラー時の戻り値が仕様と違う</span>
+            </div>
+            <div class="card fade" data-e="v2" style="margin-top:10px">
+              <h4>成果物 v2（修正版）</h4>
+              <span class="mut">NG項目2件を修正：形式チェックを追加し、エラー形式を仕様どおりに統一</span>
+            </div>
+            <div class="card fade report-done" data-e="out" style="margin-top:10px">
+              <h4>✅ 合格 ― 出力</h4>
+              <span class="mut">全項目クリアのため、この成果物を採用</span>
+            </div>
+          </div>
+          <div>
+            <div class="card fade" data-e="evaluator">
+              <h4>📏 評価役（Evaluator）― 生成役とは別エージェント</h4>
+              <span class="mut">固定のルーブリックで機械的に採点する</span>
+            </div>
+            <div class="card fade" data-e="score1" style="margin-top:10px">
+              <h4>採点結果（1回目）</h4>
+              <table class="rubric">
+                <tr><th>評価項目</th><th>判定</th></tr>
+                <tr><td>必須項目：登録処理が動く</td><td><span class="pill pill-ok">OK</span></td></tr>
+                <tr><td>必須項目：メール形式チェック</td><td><span class="pill pill-ng">NG</span></td></tr>
+                <tr><td>形式：エラー戻り値の形式</td><td><span class="pill pill-ng">NG</span></td></tr>
+                <tr><td>禁止事項：平文でのパスワード保存</td><td><span class="pill pill-ok">OK</span></td></tr>
+              </table>
+            </div>
+            <div class="card fade alert-card" data-e="sendback" style="margin-top:10px">
+              <h4>↩ 差し戻し</h4>
+              <span class="mut">NG項目のリストを添えて生成役へ返却</span>
+            </div>
+            <div class="card fade" data-e="score2" style="margin-top:10px">
+              <h4>再評価（2回目）</h4>
+              <span class="mut">全項目 </span><span class="pill pill-ok">OK</span><span class="mut"> ― 合格</span>
+            </div>
+          </div>
+        </div>
+        <div class="card fade loop-note" data-e="limit">
+          <h4>⛔ ループ回数の上限</h4>
+          <span class="mut">合格しないまま上限（例：3回）に達したら、ループを止めて「最良の版を出す」「人間にエスカレーションする」など、必ず出口を用意します。無限ループはコスト事故のもとです。</span>
+        </div>
+      </div>
+      <div class="anim-caption">
+        <div class="step-label"></div><h3></h3><p></p>
+      </div>
+      <div class="progress"><i></i></div>
+      <div class="anim-controls">
+        <button type="button" data-act="prev">← 前へ</button>
+        <button type="button" data-act="play" class="primary">▶ 再生</button>
+        <button type="button" data-act="next">次へ →</button>
+        <button type="button" data-act="reset">最初から</button>
+        <select data-act="speed" aria-label="再生速度">
+          <option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+        </select>
+        <span class="spacer"></span>
+        <div class="dots"></div>
+      </div>
+    </div>
+
+    <div class="fit-grid">
+      <div class="fit"><h3>向いている用途</h3><ul><li>仕様・規約など、合否基準を言語化できる成果物（コード、定型文書、翻訳）</li><li>品質を「なんとなく」ではなく基準で担保したい場面</li><li>テストや検証を自動化できる領域</li></ul></div>
+      <div class="fit"><h3>向いていない場面</h3><ul><li>評価基準そのものを作れない・曖昧なタスク</li><li>1回で十分な品質が出る単純な生成（往復が無駄になる）</li></ul></div>
+      <div class="fit"><h3>コスト感</h3><p class="cost">中〜高</p><p>1往復ごとに生成＋評価の2回分。往復回数に比例して増えるため、上限設定とセットで導入します。</p></div>
+    </div>
+  </article>
+
+  <!-- ============ D. Router ============ -->
+  <article class="pattern" id="router">
+    <div class="pat-head">
+      <div class="pat-badge" style="background:var(--router)">Rt</div>
+      <div>
+        <div class="en">ROUTER / ROUTING</div>
+        <h2>Router ― 入力を見て処理先を振り分ける</h2>
+        <p>題材：社内問い合わせ対応。すべての入力を同じ相手に渡すのではなく、入り口で内容を判定し、難易度と種類に応じた処理先へ振り分けます。</p>
+      </div>
+    </div>
+    <div class="keyline"><b>要点</b>狙いは「全部を高性能モデルで処理しない」こと。簡単な質問に高いコストを払わず、難しい相談には十分な能力を当てる ― <strong>コストと品質の配分</strong>を入り口で決めるパターンです。判定にはキーワード等のルール、軽量な分類モデル、LLMによる判定などを組み合わせます。</div>
+
+    <div class="anim" data-anim="router">
+      <div class="anim-stage" id="stage-router" data-step="0">
+        <div class="router-flow">
+          <div class="inbox-row fade" data-t="inbox">
+            <span class="chip" style="border-color:#0E7C6B">✉「パスワードのリセット方法は？」</span>
+            <span class="chip" style="border-color:var(--eval)">✉「新制度への移行計画を相談したい」</span>
+            <span class="chip" style="border-color:var(--router)">✉「給与明細の金額が先月と違う」</span>
+          </div>
+          <div class="router-core fade" data-t="core">
+            🚦 Router ― 内容を判定して振り分け
+            <div class="fade" data-t="criteria" style="margin-top:8px">
+              <span class="chip">キーワード・ルール</span> <span class="chip">分類モデル</span> <span class="chip">LLMによる判定</span>
+            </div>
+          </div>
+          <div class="branches">
+            <div class="branch fade" data-t="b1">
+              <h4>⚡ 軽量モデル</h4>
+              <span class="mut">定型・簡単な質問を即答</span>
+              <div class="fade" data-t="a1" style="margin-top:6px">回答：「手順ページのリンク＋手順3行」で完了</div>
+            </div>
+            <div class="branch fade" data-t="b2">
+              <h4>🧠 高性能モデル</h4>
+              <span class="mut">複雑な相談にじっくり対応</span>
+              <div class="fade" data-t="a2" style="margin-top:6px">回答：現状整理と移行ステップ案を提示</div>
+            </div>
+            <div class="branch fade" data-t="b3">
+              <h4>👤 専門エージェント</h4>
+              <span class="mut">給与・人事など専門領域専用（権限つき）</span>
+              <div class="fade" data-t="a3" style="margin-top:6px">回答：明細を確認し、差異の理由を説明</div>
+            </div>
+          </div>
+          <div class="card fade" data-t="compare">
+            <h4>振り分けの効果 ― もし全部を高性能モデルで処理したら</h4>
+            <div class="costbar"><span style="width:9em">全件・高性能モデル</span><span class="bar"><i data-w="100" style="background:var(--ng)"></i></span><span class="mut">コスト 100 ／ 遅い</span></div>
+            <div class="costbar"><span style="width:9em">Routerで振り分け</span><span class="bar"><i data-w="38" style="background:var(--plan)"></i></span><span class="mut">コスト 約38 ／ 簡単な質問は高速に</span></div>
+            <div class="mut" style="margin-top:6px">※比率は説明用のイメージです。実際の削減幅は問い合わせの内訳によります。</div>
+          </div>
+        </div>
+      </div>
+      <div class="anim-caption">
+        <div class="step-label"></div><h3></h3><p></p>
+      </div>
+      <div class="progress"><i></i></div>
+      <div class="anim-controls">
+        <button type="button" data-act="prev">← 前へ</button>
+        <button type="button" data-act="play" class="primary">▶ 再生</button>
+        <button type="button" data-act="next">次へ →</button>
+        <button type="button" data-act="reset">最初から</button>
+        <select data-act="speed" aria-label="再生速度">
+          <option value="0.75">0.75×</option>
+          <option value="1" selected>1×</option>
+          <option value="1.5">1.5×</option>
+          <option value="2">2×</option>
+        </select>
+        <span class="spacer"></span>
+        <div class="dots"></div>
+      </div>
+    </div>
+
+    <div class="fit-grid">
+      <div class="fit"><h3>向いている用途</h3><ul><li>問い合わせ対応など、量が多く種類もばらばらな入力</li><li>難易度の偏りが大きいワークロード（大半は簡単、少数が難しい）</li><li>専門領域ごとに権限や知識を分けたい場面</li></ul></div>
+      <div class="fit"><h3>向いていない場面</h3><ul><li>入力の種類がほぼ均一（振り分ける意味がない）</li><li>量が少なく、全件を高性能モデルで処理しても困らない規模</li><li>誤振り分けのコストが極端に高い場面（判定精度の検証が先）</li></ul></div>
+      <div class="fit"><h3>コスト感</h3><p class="cost">導入後は下がる</p><p>判定処理の分だけ入り口で小さなコストが増えますが、大半の入力を軽量な処理に流せるため、全体では大きく下がるのが普通です。</p></div>
+    </div>
+  </article>
+
+  <!-- 5. 比較表 -->
+  <section id="compare">
+    <div class="sec-head">
+      <div class="no">COMPARE</div>
+      <h2>比較表 ― 5パターンを並べる</h2>
+      <p>基準のReActを含めた5つを、複雑さ・コスト・品質向上の効き方・失敗しやすい点で比較します。</p>
+    </div>
+    <table class="cmp">
+      <thead><tr><th>パターン</th><th>複雑さ</th><th>コスト</th><th>品質向上の効き方</th><th>失敗しやすい点</th></tr></thead>
+      <tbody>
+        <tr><th>ReAct（基準）</th><td data-l="複雑さ">低 ― ループ1つ</td><td data-l="コスト">低〜中（歩数に比例）</td><td data-l="品質向上">その場の試行錯誤で徐々に</td><td data-l="失敗点">長いタスクで迷走・同じ失敗の繰り返し</td></tr>
+        <tr><th>Plan-and-Execute</th><td data-l="複雑さ">中 ― 計画役と実行役の分離</td><td data-l="コスト">中（計画＋再計画の分）</td><td data-l="品質向上">全体の見通しと手順の抜け防止</td><td data-l="失敗点">最初の計画が実態とずれると引きずる。再計画を省くと脆い</td></tr>
+        <tr><th>Reflection</th><td data-l="複雑さ">低 ― 1体に批判フェーズ追加</td><td data-l="コスト">低〜中（＋1〜2回）</td><td data-l="品質向上">書きっぱなしの粗を一往復で除去</td><td data-l="失敗点">自分の盲点は自分では見えない。改善が表面的になりがち</td></tr>
+        <tr><th>Evaluator-Optimizer</th><td data-l="複雑さ">中〜高 ― 2体＋基準設計</td><td data-l="コスト">中〜高（往復回数に比例）</td><td data-l="品質向上">固定基準で合否を担保。ブレが小さい</td><td data-l="失敗点">基準の設計ミスがそのまま品質の天井になる。上限なしだと無限ループ</td></tr>
+        <tr><th>Router</th><td data-l="複雑さ">中 ― 入り口に判定層</td><td data-l="コスト">全体では低下（配分の最適化）</td><td data-l="品質向上">難しい入力に十分な能力を当てられる</td><td data-l="失敗点">誤振り分け。難しい相談が軽量側に流れると品質事故になる</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- 6. 選び方 -->
+  <section id="choose">
+    <div class="sec-head">
+      <div class="no">HOW TO CHOOSE</div>
+      <h2>選び方 ― 足し算の順番</h2>
+      <p>最初から全部入りを目指さず、困りごとが出た順に足していくのが実務的です。</p>
+    </div>
+    <div class="choose">
+      <div class="choose-step"><div class="num">1</div><div><span class="when">まず ― すべての出発点</span><h3>ReActで始める</h3><p>単純なループ＋ツール＋構造化出力＋上限設定。これで解けるタスクは意外に多い。複雑なパターンは、ここで困ってから足します。</p></div></div>
+      <div class="choose-step"><div class="num">2</div><div><span class="when">タスクが長く、手順が多いなら</span><h3>＋ Plan-and-Execute</h3><p>迷走や手順の抜けが出てきたら、計画と実行を分離。再計画の仕組みもセットで入れます。</p></div></div>
+      <div class="choose-step"><div class="num">3</div><div><span class="when">出力の品質が要るなら</span><h3>＋ Evaluator-Optimizer（手軽さ優先なら Reflection）</h3><p>合否基準を言語化できるなら評価役を分けるEvaluator-Optimizerが本命。基準がまだ曖昧なら、まずReflectionで一往復させるだけでも効きます。</p></div></div>
+      <div class="choose-step"><div class="num">4</div><div><span class="when">量と種類が増えてきたら</span><h3>＋ Router</h3><p>入力の種類が増え、コストや応答速度が課題になったら入り口に振り分けを置く。専門エージェントへの分岐もここで生まれます。</p></div></div>
+    </div>
+    <div class="note-box"><strong>共通の土台：</strong>どのパターンを選んでも、ループ回数・コスト・時間の上限、実行トレースの記録、不可逆な操作の前の人間承認（Human-in-the-Loop）は別途必要です。パターンは「頭の動かし方」であり、安全装置はその外側に置きます。</div>
+  </section>
+
+  <!-- 7. 用語解説 -->
+  <section id="glossary">
+    <div class="sec-head">
+      <div class="no">GLOSSARY</div>
+      <h2>用語解説</h2>
+    </div>
+    <dl class="gloss">
+      <div><dt>ReAct</dt><dd>推論（Reasoning）と行動（Acting）を交互に繰り返す基本ループ。考えてツールを呼び、結果を見てまた考える。</dd></div>
+      <div><dt>リプランニング（再計画）</dt><dd>実行中の想定外を受けて、残りの計画を立て直すこと。Plan-and-Executeの耐久性を決める要素。</dd></div>
+      <div><dt>ルーブリック</dt><dd>評価項目と判定基準を並べた採点表。Evaluator-Optimizerでは事前に固定し、評価のブレを抑える。</dd></div>
+      <div><dt>差し戻し</dt><dd>評価でNGとなった成果物を、NG項目の指摘つきで生成役へ返すこと。指摘の具体性が修正の質を決める。</dd></div>
+      <div><dt>ループ上限</dt><dd>生成⇔評価などの反復に設ける最大回数。上限到達時の出口（最良版の採用、人間へのエスカレーション）も併せて設計する。</dd></div>
+      <div><dt>振り分け（ルーティング）</dt><dd>入力の内容・難易度に応じて処理先（モデル、プロンプト、専門エージェント）を選ぶこと。判定にはルール、分類モデル、LLM判定を使う。</dd></div>
+      <div><dt>軽量モデル / 高性能モデル</dt><dd>高速・低コストだが能力は控えめなモデルと、低速・高コストだが難しい処理に強いモデルの対比。Routerの振り分け先の典型。</dd></div>
+      <div><dt>専門エージェント</dt><dd>特定領域の知識・ツール・権限だけを持つエージェント。Routerやハンドオフの受け先になる。</dd></div>
+      <div><dt>構造化出力</dt><dd>出力をJSONスキーマ等で縛り、プログラムから確実に処理できる形にすること。連携パターンの段と段をつなぐ前提になる。</dd></div>
+      <div><dt>Human-in-the-Loop</dt><dd>送信・削除・購入など不可逆な操作の前に、人間の承認を挟む設計。パターンの外側に置く安全装置。</dd></div>
+    </dl>
+  </section>
+
+  <footer>
+    AIエージェントのデザインパターン集 ― 例はすべて汎用的な題材で構成しています。各パターンは単独でも、組み合わせても使えます（例：Routerで振り分けた先でPlan-and-Executeを回し、成果物をEvaluator-Optimizerで検査する）。
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var BASE = 2800;
+
+  function show(el, on){ if(!el) return; el.classList.toggle("on", !!on); }
+  function q(stage, sel){ return stage.querySelector(sel); }
+  function qa(stage, sel){ return Array.prototype.slice.call(stage.querySelectorAll(sel)); }
+
+  /* ---------- stage renderers: fn(stage, step) ---------- */
+  var renderers = {
+    plan: function(st, s){
+      show(q(st,'[data-p="task"]'), s>=0);
+      show(q(st,'[data-p="planner"]'), s>=1);
+      show(q(st,'[data-p="board"]'), s>=1);
+      show(q(st,'[data-p="executor"]'), s>=2);
+      show(q(st,'[data-p="report"]'), s>=2);
+      show(q(st,'[data-p="alert"]'), s>=3 && s<=4);
+      var items = {1:q(st,'[data-pi="1"]'),2:q(st,'[data-pi="2"]'),3:q(st,'[data-pi="3"]'),4:q(st,'[data-pi="4"]'),5:q(st,'[data-pi="5"]')};
+      [1,2,3,4,5].forEach(function(k){ if(items[k]) items[k].classList.remove("done","warn"); });
+      qa(st,'.plan-item .box').forEach(function(b){ b.textContent=""; });
+      function done(k){ if(items[k]){ items[k].classList.add("done"); items[k].querySelector(".box").textContent="✓"; } }
+      if(s>=2){ done(1); done(2); }
+      if(s===3){ if(items[3]) items[3].classList.add("warn"); }
+      /* replan: swap item3 text, show new item4 */
+      var old3=q(st,'.old3'), new3=q(st,'.new3');
+      if(old3&&new3){
+        if(s>=4){ old3.style.textDecoration="line-through"; old3.style.color="var(--muted)"; new3.style.display=""; }
+        else { old3.style.textDecoration=""; new3.style.display="none"; }
+      }
+      show(q(st,'[data-pi="4"]'), s>=4);
+      if(s>=5){ done(4); done(3); }
+      if(s>=6){ done(5); }
+      var rs=q(st,'[data-p="report-state"]');
+      var rep=q(st,'[data-p="report"]');
+      if(rep) rep.classList.toggle("report-done", s>=6);
+      if(rs) rs.textContent = s>=6 ? "完成 ― 比較表つきレポート（データの制約は注記済み）" : (s>=2 ? "作成中…" : "未着手");
+    },
+    reflection: function(st, s){
+      show(q(st,'[data-r="banner"]'), s>=0);
+      show(q(st,'[data-r="draft1"]'), s>=0);
+      show(q(st,'[data-r="critique"]'), s>=1);
+      show(q(st,'[data-r="issues"]'), s>=2);
+      show(q(st,'[data-r="fixes"]'), s>=3);
+      show(q(st,'[data-r="draft2"]'), s>=4);
+      show(q(st,'[data-r="final"]'), s>=5);
+    },
+    evaluator: function(st, s){
+      show(q(st,'[data-e="gen"]'), s>=0);
+      show(q(st,'[data-e="v1"]'), s>=0);
+      show(q(st,'[data-e="evaluator"]'), s>=1);
+      show(q(st,'[data-e="score1"]'), s>=1);
+      show(q(st,'[data-e="sendback"]'), s>=2);
+      show(q(st,'[data-e="v2"]'), s>=3);
+      show(q(st,'[data-e="score2"]'), s>=4);
+      show(q(st,'[data-e="out"]'), s>=5);
+      show(q(st,'[data-e="limit"]'), s>=5);
+    },
+    router: function(st, s){
+      show(q(st,'[data-t="inbox"]'), s>=0);
+      show(q(st,'[data-t="core"]'), s>=1);
+      show(q(st,'[data-t="criteria"]'), s>=1);
+      show(q(st,'[data-t="b1"]'), s>=2);
+      show(q(st,'[data-t="b2"]'), s>=2);
+      show(q(st,'[data-t="b3"]'), s>=2);
+      var b1=q(st,'[data-t="b1"]'),b2=q(st,'[data-t="b2"]'),b3=q(st,'[data-t="b3"]');
+      [b1,b2,b3].forEach(function(b){ if(b) b.classList.remove("lit-a","lit-b","lit-c"); });
+      if(s>=2){ if(b1)b1.classList.add("lit-a"); if(b2)b2.classList.add("lit-b"); if(b3)b3.classList.add("lit-c"); }
+      show(q(st,'[data-t="a1"]'), s>=3);
+      show(q(st,'[data-t="a2"]'), s>=3);
+      show(q(st,'[data-t="a3"]'), s>=3);
+      show(q(st,'[data-t="compare"]'), s>=4);
+      qa(st,'[data-t="compare"] .bar i').forEach(function(i){
+        i.style.width = s>=4 ? (i.getAttribute("data-w")+"%") : "0";
+      });
+    }
+  };
+
+  var DATA = {
+    plan: [
+      {t:"タスク投入", d:"「市場調査レポートを作成して」という依頼が入ります。ReActならこのまま手探りで動き始めますが、Plan-and-Executeはまず立ち止まります。"},
+      {t:"計画立案 ― Plannerが手順を設計", d:"計画役が全体を見渡し、調査→比較→執筆→仕上げのステップ一覧を計画ボードに並べます。実行はまだしません。「計画」と「実行」を分けるのがこのパターンの骨格です。"},
+      {t:"計画どおり順に実行", d:"実行役がボードの上から順にこなし、終わった項目にチェックが付いていきます。進捗がボードで一目瞭然なのも利点です。"},
+      {t:"想定外の発生", d:"執筆の前提だった市場規模データが見つかりません。計画どおり進めることが、ここで破綻しました。"},
+      {t:"リプランニング ― 計画を書き換える", d:"計画役が再登場し、ボードを書き換えます。元の手順を取り消し、「代替データを補完収集する」ステップを差し込み、執筆の前提も「推定＋注記つき」に変更しました。計画は守るものではなく、更新するものです。"},
+      {t:"残りを実行", d:"新しい計画に沿って残りのステップを実行。補完収集→執筆→仕上げと進みます。"},
+      {t:"レポート完成", d:"データの制約を注記したうえで、比較表つきレポートが完成。計画・実行・再計画の3役が回った結果です。"}
+    ],
+    reflection: [
+      {t:"生成役が下書きを書く", d:"エージェントが案内文の下書きv1を書きます。一見ふつうですが、このまま出すのが「生成して終わり」の素朴な構成です。"},
+      {t:"自分で批判する ― 視点を切り替える", d:"同じエージェントが「書き手」から「校正者」に切り替わり、事実の誤り／情報の抜け／トーンの3観点で下書きを点検します。"},
+      {t:"問題点リストが出る", d:"日付の曖昧さ、最終入館時刻と休館日の抜け、結びの冷たさ ― 3件の問題が具体的に挙がりました。批判は感想ではなく、直せる形の指摘にすることが大事です。"},
+      {t:"修正指示に変換する", d:"問題点を、そのまま実行できる修正指示に変換します。「もっと良く」ではなく「何をどう変えるか」の粒度に落とすのがコツです。"},
+      {t:"書き直す", d:"指示に沿ってv2を執筆。指摘された3点がすべて反映されました。"},
+      {t:"改善版を出力", d:"改善版を最終出力として返します。生成→批判→修正の一往復で、品質が1段上がりました。なお批判も生成も同じエージェント ― 分業していない点が次のEvaluator-Optimizerとの違いです。"}
+    ],
+    evaluator: [
+      {t:"生成役が作る", d:"生成役（Optimizer）が仕様書に沿ってコードv1を作成します。"},
+      {t:"評価役がルーブリックで採点", d:"別エージェントの評価役（Evaluator）が、固定の評価基準 ― 必須項目・禁止事項・形式 ― で採点。メール形式チェックとエラー形式の2件がNGになりました。基準が固定なので、評価がその日の気分でブレません。"},
+      {t:"NG項目つきで差し戻し", d:"「ダメ」だけではなく、NG項目のリストを添えて生成役へ返します。何を直せば合格かが明確なのが差し戻しの要点です。"},
+      {t:"生成役が修正する", d:"生成役は指摘された2件だけを狙って修正し、v2を提出します。"},
+      {t:"再評価", d:"評価役が同じルーブリックで再採点。今度は全項目OKになりました。"},
+      {t:"合格で出力 ― そして上限の話", d:"合格した成果物を出力して終了。もし合格しないまま上限回数（例：3回）に達したら、ループを止めて最良の版を出すか人間に渡します。「合格まで無限に回す」設計にしないことが、コスト面の鉄則です。"}
+    ],
+    router: [
+      {t:"問い合わせが届く", d:"社内問い合わせが3件届きました。パスワードの聞き方（簡単）、制度移行の相談（複雑）、給与明細の確認（専門領域）― 難易度も種類もばらばらです。"},
+      {t:"Routerが内容を判定", d:"入り口のRouterが各問い合わせを判定します。判定材料は、キーワードや送信元などのルール、軽量な分類モデル、LLMによる内容判定の組み合わせです。"},
+      {t:"3方向へ振り分け", d:"簡単な質問は軽量モデルへ、複雑な相談は高性能モデルへ、専門案件は専門エージェントへ。色分けのとおり、行き先が分かれました。"},
+      {t:"それぞれが回答", d:"各処理先が自分の担当を回答。簡単な質問は即答され、複雑な相談には十分な能力が使われ、専門案件は権限のあるエージェントが明細を確認して答えます。"},
+      {t:"コストと速度の比較", d:"全件を高性能モデルで処理する場合と比べ、振り分け後はコストが大きく下がり、簡単な質問の応答も速くなります。Routerの価値は「賢さ」ではなく「配分」にあります。"}
+    ]
+  };
+
+  function Player(root){
+    var name = root.getAttribute("data-anim");
+    this.root = root; this.name = name;
+    this.steps = DATA[name]; this.render = renderers[name];
+    this.stage = root.querySelector(".anim-stage");
+    this.idx = 0; this.playing = false; this.timer = null; this.speed = 1;
+    this.label = root.querySelector(".step-label");
+    this.title = root.querySelector(".anim-caption h3");
+    this.desc = root.querySelector(".anim-caption p");
+    this.bar = root.querySelector(".progress i");
+    this.playBtn = root.querySelector('[data-act="play"]');
+    var dotsBox = root.querySelector(".dots");
+    this.dots = [];
+    var self = this;
+    this.steps.forEach(function(_, i){
+      var b = document.createElement("button");
+      b.type = "button"; b.textContent = i+1;
+      b.setAttribute("aria-label", "ステップ"+(i+1)+"へ");
+      b.addEventListener("click", function(){ self.stop(); self.go(i); });
+      dotsBox.appendChild(b); self.dots.push(b);
+    });
+    root.querySelector('[data-act="prev"]').addEventListener("click", function(){ self.stop(); self.go(self.idx-1); });
+    root.querySelector('[data-act="next"]').addEventListener("click", function(){ self.stop(); self.go(self.idx+1); });
+    root.querySelector('[data-act="reset"]').addEventListener("click", function(){ self.stop(); self.go(0); });
+    this.playBtn.addEventListener("click", function(){ self.playing ? self.stop() : self.play(); });
+    root.querySelector('[data-act="speed"]').addEventListener("change", function(e){
+      self.speed = parseFloat(e.target.value);
+      if(self.playing){ self.stop(); self.play(); }
+    });
+    this.go(0);
+  }
+  Player.prototype.go = function(i){
+    this.idx = Math.max(0, Math.min(this.steps.length-1, i));
+    var s = this.steps[this.idx];
+    this.render(this.stage, this.idx);
+    this.stage.setAttribute("data-step", this.idx);
+    this.label.textContent = "STEP " + (this.idx+1) + " / " + this.steps.length;
+    this.title.textContent = s.t;
+    this.desc.textContent = s.d;
+    this.bar.style.width = ((this.idx+1)/this.steps.length*100) + "%";
+    var self = this;
+    this.dots.forEach(function(d, j){ d.classList.toggle("on", j===self.idx); });
+    if(this.idx === this.steps.length-1) this.stop();
+  };
+  Player.prototype.play = function(){
+    var self = this;
+    if(this.idx === this.steps.length-1) this.go(0);
+    this.playing = true;
+    this.playBtn.textContent = "⏸ 一時停止";
+    this.timer = setInterval(function(){ self.go(self.idx+1); }, BASE/this.speed);
+  };
+  Player.prototype.stop = function(){
+    this.playing = false;
+    this.playBtn.textContent = "▶ 再生";
+    if(this.timer){ clearInterval(this.timer); this.timer = null; }
+  };
+
+  Array.prototype.slice.call(document.querySelectorAll(".anim")).forEach(function(el){ new Player(el); });
+})();
+</script>
+</body>
+</html>

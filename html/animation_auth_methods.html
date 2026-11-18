@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<link rel="icon" href="data:," />
+<title>認証方式の体系整理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Noto+Serif+JP:wght@700;900&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:#f4f6f5; --surface:#ffffff; --surface2:#eef2f0; --ink:#17211d; --ink2:#46534d; --line:#d7dedb;
+  --teal:#0f766e; --teal-soft:#e0f2ef; --amber:#b45309; --amber-soft:#fdf0e0;
+  --know:#2563eb; --know-soft:#e3ecfd; --have:#0f766e; --have-soft:#dff3f0; --bio:#c2410c; --bio-soft:#fdeadd;
+  --ok:#15803d; --ok-soft:#e2f4e7; --ng:#b91c1c; --ng-soft:#fbe4e4;
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#101614; --surface:#1a2220; --surface2:#232d2a; --ink:#e8efec; --ink2:#a9bab3; --line:#33413c;
+    --teal:#2dd4bf; --teal-soft:#123832; --amber:#f0a04b; --amber-soft:#3d2c14;
+    --know:#7aa7f8; --know-soft:#1d2c4d; --have:#2dd4bf; --have-soft:#123832; --bio:#f59a6b; --bio-soft:#42240f;
+    --ok:#4ade80; --ok-soft:#14301d; --ng:#f87171; --ng-soft:#3d1717;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans JP",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.75;font-size:16px}
+button,select{min-height:2.25rem}
+.wrap{max-width:920px;margin:0 auto;padding:0 18px 72px}
+h1,h2,h3{line-height:1.4}
+h2{font-family:"Noto Serif JP",serif;font-size:1.55rem;font-weight:900;margin:0 0 6px}
+h3{font-size:1.12rem;font-weight:700;margin:0 0 8px}
+p{margin:0 0 12px}
+.sec{margin-top:56px}
+.sec-head{border-bottom:3px solid var(--teal);padding-bottom:10px;margin-bottom:20px}
+.sec-head .no{font-size:.8rem;font-weight:700;letter-spacing:.14em;color:var(--teal)}
+.sec-head p{color:var(--ink2);margin:4px 0 0}
+.hero{padding:44px 0 8px}
+.hero .kicker{font-size:.82rem;font-weight:700;letter-spacing:.16em;color:var(--teal);margin-bottom:10px}
+.hero h1{font-family:"Noto Serif JP",serif;font-size:2.1rem;font-weight:900;margin:0 0 14px;line-height:1.35}
+.hero .lead{font-size:1.05rem;color:var(--ink2);max-width:44em}
+.axis{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:26px 0 6px}
+.axis-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+.axis-card .axis-q{font-family:"Noto Serif JP",serif;font-size:1.12rem;font-weight:700;margin-bottom:6px}
+.axis-card p{color:var(--ink2);font-size:.93rem;margin:0}
+.axis-vs{display:flex;align-items:center;justify-content:center;font-weight:900;color:var(--amber);font-size:1rem}
+.note{background:var(--amber-soft);border-radius:var(--radius);padding:16px 20px;margin:18px 0}
+.note .note-title{font-weight:700;color:var(--amber);margin-bottom:4px}
+.note p{margin:0;font-size:.95rem}
+.callout{background:var(--surface);border:2px solid var(--amber);border-radius:var(--radius);padding:18px 20px;margin:18px 0}
+.callout .note-title{font-weight:700;color:var(--amber);margin-bottom:6px}
+.callout p{margin:0 0 8px;font-size:.95rem}
+.callout p:last-child{margin-bottom:0}
+.grid5{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.class-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px}
+.class-card .num{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:var(--teal);color:#fff;font-weight:900;font-size:.95rem;margin-bottom:8px}
+@media (prefers-color-scheme: dark){.class-card .num{color:#0b1512}}
+.class-card h3{margin-bottom:2px}
+.class-card .en{font-size:.8rem;color:var(--ink2);font-weight:700;letter-spacing:.04em;margin-bottom:10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-block;background:var(--surface2);border:1px solid var(--line);border-radius:999px;padding:2px 11px;font-size:.85rem;font-weight:500}
+.chip.k{background:var(--know-soft);border-color:transparent;color:var(--know);font-weight:700}
+.chip.h{background:var(--have-soft);border-color:transparent;color:var(--have);font-weight:700}
+.chip.b{background:var(--bio-soft);border-color:transparent;color:var(--bio);font-weight:700}
+/* tables */
+.twrap{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin:12px 0 20px}
+table{width:100%;border-collapse:collapse;font-size:.94rem}
+thead th{background:var(--surface2);text-align:left;padding:10px 14px;font-size:.82rem;letter-spacing:.05em;color:var(--ink2);border-bottom:1px solid var(--line)}
+tbody td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+tbody tr:last-child td{border-bottom:none}
+td.name{font-weight:700;white-space:nowrap}
+.verdict{font-weight:900;font-size:1.15rem;text-align:center}
+.verdict.ok{color:var(--ok)} .verdict.ng{color:var(--ng)}
+.prio{display:inline-block;background:var(--teal-soft);color:var(--teal);font-weight:700;border-radius:8px;padding:1px 10px;font-size:.85rem;white-space:nowrap}
+@media (max-width:640px){
+  .axis{grid-template-columns:1fr}
+  .hero h1{font-size:1.7rem}
+  .twrap{border:none;background:transparent;overflow:visible}
+  table,tbody,tr,td{display:block;width:100%}
+  thead{display:none}
+  tbody tr{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:10px;padding:8px 4px}
+  tbody td{border-bottom:none;padding:5px 14px}
+  td.name{white-space:normal;font-size:1rem}
+  td[data-label]::before{content:attr(data-label);display:block;font-size:.72rem;font-weight:700;letter-spacing:.06em;color:var(--ink2);margin-bottom:1px}
+  td.name::before{display:none}
+  .verdict{text-align:left}
+}
+/* animation panels */
+.anim{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px;margin:16px 0 24px}
+.anim-title{font-weight:900;font-size:1.02rem;margin-bottom:4px}
+.anim-sub{font-size:.88rem;color:var(--ink2);margin-bottom:16px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:16px}
+.controls button{background:var(--teal);color:#fff;border:none;border-radius:9px;padding:6px 16px;font-weight:700;font-size:.9rem;cursor:pointer;font-family:inherit}
+.controls button.ghost{background:var(--surface2);color:var(--ink);border:1px solid var(--line)}
+.controls button:disabled{opacity:.4;cursor:default}
+.controls select{border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);padding:4px 8px;font-family:inherit;font-size:.88rem}
+.progress{height:8px;background:var(--surface2);border-radius:99px;overflow:hidden;margin-top:14px}
+.progress > div{height:100%;background:var(--teal);width:0;transition:width .45s ease}
+.step-count{font-size:.82rem;color:var(--ink2);margin-top:6px;font-weight:700}
+.caption{background:var(--surface2);border-radius:10px;padding:12px 16px;font-size:.94rem;margin-top:14px;min-height:3.2em}
+/* A: layers */
+.layers{display:flex;flex-direction:column-reverse;gap:8px}
+.layer{display:flex;gap:12px;align-items:center;border:2px dashed var(--line);border-radius:12px;padding:12px 16px;opacity:.45;transition:opacity .4s,border-color .4s,background .4s;flex-wrap:wrap}
+.layer .lnum{font-weight:900;font-size:1.05rem;width:1.6em;text-align:center;flex:none}
+.layer .lname{font-weight:700;min-width:11em}
+.layer .lterms{font-size:.85rem;color:var(--ink2);flex:1;min-width:10em}
+.layer .lex{font-weight:900;background:var(--teal);color:#fff;border-radius:8px;padding:3px 12px;font-size:.9rem;opacity:0;transform:translateY(4px);transition:opacity .4s,transform .4s}
+@media (prefers-color-scheme: dark){.layer .lex{color:#0b1512}}
+.layer.on{opacity:1;border-style:solid;border-color:var(--teal);background:var(--teal-soft)}
+.layer.on .lex{opacity:1;transform:none}
+.layer.current{box-shadow:0 0 0 3px var(--teal-soft),0 0 0 5px var(--teal)}
+/* B: MFA rows */
+.mfa-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:10px;opacity:0;transform:translateY(6px);transition:opacity .4s,transform .4s}
+.mfa-row.show{opacity:1;transform:none}
+.mfa-row .combo{font-weight:700;min-width:12em}
+.mfa-row .judge{margin-left:auto;font-weight:900;font-size:1.5rem;width:2.2rem;height:2.2rem;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:none}
+.mfa-row .judge.ok{background:var(--ok-soft);color:var(--ok)}
+.mfa-row .judge.ng{background:var(--ng-soft);color:var(--ng)}
+.mfa-row .why{width:100%;font-size:.85rem;color:var(--ink2)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.85rem;margin-bottom:14px;color:var(--ink2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.dot{width:12px;height:12px;border-radius:50%;display:inline-block}
+.dot.k{background:var(--know)} .dot.h{background:var(--have)} .dot.b{background:var(--bio)}
+.mfa-empty{color:var(--ink2);font-size:.92rem;border:1px dashed var(--line);border-radius:12px;padding:14px 16px;text-align:center}
+/* C: risk */
+.meter{margin:6px 0 18px}
+.meter-track{height:22px;border-radius:99px;background:linear-gradient(90deg,#22c55e 0%,#eab308 55%,#ef4444 100%);position:relative;opacity:.9}
+.meter-mask{position:absolute;top:0;right:0;bottom:0;background:var(--surface);border-radius:0 99px 99px 0;transition:width .7s ease}
+.meter-labels{display:flex;justify-content:space-between;font-size:.78rem;color:var(--ink2);margin-top:4px}
+.risk-now{font-weight:900;font-size:1.05rem;margin-bottom:12px}
+.risk-now .lvl{color:var(--amber)}
+.scenario{display:flex;gap:12px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:10px;opacity:.45;transition:opacity .4s,border-color .4s,background .4s;flex-wrap:wrap}
+.scenario .sit{font-weight:700;flex:1;min-width:10em}
+.scenario .resp{font-weight:900;border-radius:8px;padding:3px 12px;font-size:.9rem;background:var(--surface2)}
+.scenario.on{opacity:1;border-color:var(--amber);background:var(--amber-soft)}
+.scenario.on .resp{background:var(--amber);color:#fff}
+@media (prefers-color-scheme: dark){.scenario.on .resp{color:#1c1206}}
+/* contrast cards */
+.vs{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:stretch;margin:16px 0}
+.vs-card{border-radius:var(--radius);padding:18px 20px;border:2px solid var(--line);background:var(--surface)}
+.vs-card.oauth{border-color:var(--know)} .vs-card.oidc{border-color:var(--teal)}
+.vs-card .vs-name{font-weight:900;font-size:1.05rem;margin-bottom:6px}
+.vs-card .vs-q{font-family:"Noto Serif JP",serif;font-size:1.15rem;font-weight:700;margin-bottom:8px}
+.vs-card p{font-size:.9rem;color:var(--ink2);margin:0}
+.vs-mid{display:flex;align-items:center;justify-content:center;font-weight:900;color:var(--ink2);font-size:1.1rem}
+@media (max-width:640px){.vs{grid-template-columns:1fr}.vs-mid{padding:2px 0}}
+.tech-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+.tech-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.tech-card .tname{font-weight:900;font-size:1.02rem;margin-bottom:6px}
+.tech-card p{font-size:.9rem;color:var(--ink2);margin:6px 0 0}
+.q3{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin:16px 0}
+.q3-card{background:var(--teal-soft);border-radius:var(--radius);padding:18px 20px}
+.q3-card .qn{font-weight:900;color:var(--teal);font-size:.85rem;letter-spacing:.1em;margin-bottom:4px}
+.q3-card p{font-family:"Noto Serif JP",serif;font-weight:700;font-size:1.02rem;margin:0}
+.refs{font-size:.92rem;color:var(--ink2)}
+.refs li{margin-bottom:4px}
+footer{margin-top:56px;border-top:1px solid var(--line);padding-top:18px;color:var(--ink2);font-size:.85rem}
+.sub-h{margin:34px 0 4px;font-size:1.18rem}
+.sub-h .sub-no{color:var(--teal);font-weight:900;margin-right:.4em}
+.lead-note{color:var(--ink2);font-size:.95rem}
+@media (prefers-reduced-motion: reduce){
+  html{scroll-behavior:auto}
+  *{transition:none !important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 導入 -->
+  <header class="hero">
+    <div class="kicker">ITアーキテクトの視点で整理する</div>
+    <h1>認証方式の体系整理</h1>
+    <p class="lead">認証方式はかなり種類があります。ただ、整理するときに重要なのは、「何を使って本人を確認するのか」と「どのような仕組みで認証するのか」は別の話だということです。例えば、パスワード認証、パスキー認証、OAuth 2.0、SAML認証などは、同じ階層の概念ではありません。</p>
+    <div class="axis">
+      <div class="axis-card">
+        <div class="axis-q">軸1：「何を使って」本人を確認するのか</div>
+        <p>知識・所持・生体といった「認証要素」の話。パスワードや指紋はこちら側に属します。</p>
+      </div>
+      <div class="axis-card">
+        <div class="axis-q">軸2：「どのような仕組みで」認証するのか</div>
+        <p>認証の実装技術や、認証情報を他システムへ連携する方式の話。OAuth 2.0やSAMLはこちら側に属します。</p>
+      </div>
+    </div>
+    <p class="lead-note">この2つの軸を分けて考えることが、全体を理解する出発点です。以下、現在使われている認証方式を体系的に整理します。</p>
+  </header>
+
+  <!-- 1. 全体像 -->
+  <section class="sec" id="overview">
+    <div class="sec-head">
+      <div class="no">SECTION 1</div>
+      <h2>認証方式の全体像 ― 5つの分類</h2>
+      <p>まず、大きく5つの分類で考えると理解しやすいです。</p>
+    </div>
+    <div class="grid5">
+      <div class="class-card">
+        <span class="num">1</span>
+        <h3>知識情報</h3>
+        <div class="en">Something you know</div>
+        <div class="chips"><span class="chip">パスワード</span><span class="chip">PIN</span><span class="chip">秘密の質問</span></div>
+      </div>
+      <div class="class-card">
+        <span class="num">2</span>
+        <h3>所持情報</h3>
+        <div class="en">Something you have</div>
+        <div class="chips"><span class="chip">SMS認証</span><span class="chip">メール認証コード</span><span class="chip">OTP</span><span class="chip">認証アプリ</span><span class="chip">ハードウェアセキュリティキー</span><span class="chip">パスキー</span></div>
+      </div>
+      <div class="class-card">
+        <span class="num">3</span>
+        <h3>生体情報</h3>
+        <div class="en">Something you are</div>
+        <div class="chips"><span class="chip">指紋</span><span class="chip">顔</span><span class="chip">虹彩</span><span class="chip">静脈</span><span class="chip">声紋</span></div>
+      </div>
+      <div class="class-card">
+        <span class="num">4</span>
+        <h3>行動・環境情報</h3>
+        <div class="en">Context / Behavior</div>
+        <div class="chips"><span class="chip">端末情報</span><span class="chip">IPアドレス・位置情報</span><span class="chip">操作パターン</span><span class="chip">キーストローク・マウス操作</span></div>
+      </div>
+      <div class="class-card">
+        <span class="num">5</span>
+        <h3>暗号技術・フェデレーションによる認証</h3>
+        <div class="en">Cryptography / Federation</div>
+        <div class="chips"><span class="chip">公開鍵認証</span><span class="chip">クライアント証明書認証</span><span class="chip">Kerberos</span><span class="chip">SAML</span><span class="chip">OpenID Connect（OIDC）</span></div>
+      </div>
+    </div>
+    <div class="note">
+      <div class="note-title">※ 分類軸の違いに注意</div>
+      <p>⑤は①〜④と分類軸が異なります。認証の実装技術や認証情報の連携方式として整理しています。</p>
+    </div>
+  </section>
+
+  <!-- 階層モデル（核） -->
+  <section class="sec" id="layers">
+    <div class="sec-head">
+      <div class="no">CORE ― アーキテクチャ設計で整理しておきたいこと</div>
+      <h2>階層モデル ― 用語を階層に分けると混乱しない</h2>
+      <p>ここが一番重要です。認証に関する用語は、以下のように階層を分けて考えると混乱しません。</p>
+    </div>
+
+    <div class="anim" id="animA">
+      <div class="anim-title">アニメーションA：5層の階層モデルに構成例を当てはめる</div>
+      <div class="anim-sub">構成例 ― 認証要素：所持＋生体／認証方式：パスキー／プロトコル：WebAuthn／認証連携：OpenID Connect／セッション：Cookie／認可：RBAC</div>
+      <div class="layers" id="aLayers">
+        <div class="layer" data-i="0"><span class="lnum">①</span><span class="lname">認証要素</span><span class="lterms">知識・所持・生体</span><span class="lex">例：所持＋生体</span></div>
+        <div class="layer" data-i="1"><span class="lnum">②</span><span class="lname">認証方式・認証器</span><span class="lterms">パスワード・OTP・パスキー・証明書</span><span class="lex">例：パスキー</span></div>
+        <div class="layer" data-i="2"><span class="lnum">③</span><span class="lname">認証プロトコル・連携方式</span><span class="lterms">WebAuthn・Kerberos・OIDC・SAML・mTLS</span><span class="lex">例：WebAuthn ＋ OIDC</span></div>
+        <div class="layer" data-i="3"><span class="lnum">④</span><span class="lname">認証後のセッション・トークン</span><span class="lterms">Cookie・Session ID・ID Token・Access Token</span><span class="lex">例：Cookie</span></div>
+        <div class="layer" data-i="4"><span class="lnum">⑤</span><span class="lname">認可（Authorization）</span><span class="lterms">RBAC・ABAC・ACL・スコープ</span><span class="lex">例：RBAC</span></div>
+      </div>
+      <div class="caption" id="aCaption"></div>
+      <div class="controls">
+        <button type="button" class="ghost" id="aPrev">← 前へ</button>
+        <button type="button" id="aPlay">▶ 再生</button>
+        <button type="button" class="ghost" id="aNext">次へ →</button>
+        <button type="button" class="ghost" id="aReset">最初から</button>
+        <label>速度 <select id="aSpeed"><option value="0.5">0.5倍</option><option value="1" selected>1倍</option><option value="1.5">1.5倍</option><option value="2">2倍</option></select></label>
+      </div>
+      <div class="progress"><div id="aBar"></div></div>
+      <div class="step-count" id="aCount"></div>
+    </div>
+    <p>例えば上記の構成では、各層がそれぞれ別の役割を担っています。「パスキーで認証する」と言っても、要素・方式・プロトコル・セッション・認可はすべて別の話です。</p>
+  </section>
+
+  <!-- 2. 具体的な認証方式一覧 -->
+  <section class="sec" id="catalog">
+    <div class="sec-head">
+      <div class="no">SECTION 2</div>
+      <h2>具体的な認証方式一覧</h2>
+      <p>実際のシステム開発で登場する方式を一覧にします。</p>
+    </div>
+
+    <h3 class="sub-h"><span class="sub-no">2-1</span>パスワード・知識ベース認証</h3>
+    <div class="twrap"><table>
+      <thead><tr><th>方式</th><th>概要</th><th>主な用途</th></tr></thead>
+      <tbody>
+        <tr><td class="name">パスワード認証</td><td data-label="概要">IDとパスワードで確認</td><td data-label="主な用途">Webサービス</td></tr>
+        <tr><td class="name">PIN認証</td><td data-label="概要">数字などの暗証番号</td><td data-label="主な用途">ATM、端末</td></tr>
+        <tr><td class="name">パスフレーズ認証</td><td data-label="概要">複数の単語を組み合わせる</td><td data-label="主な用途">セキュリティ強化</td></tr>
+        <tr><td class="name">秘密の質問</td><td data-label="概要">あらかじめ登録した回答</td><td data-label="主な用途">アカウント復旧など</td></tr>
+      </tbody>
+    </table></div>
+    <p class="lead-note">秘密の質問は、現在では単独の本人認証手段としては推奨しにくい方式です。</p>
+
+    <h3 class="sub-h"><span class="sub-no">2-2</span>ワンタイムパスワード・所持認証</h3>
+    <div class="twrap"><table>
+      <thead><tr><th>方式</th><th>概要</th><th>主な用途</th></tr></thead>
+      <tbody>
+        <tr><td class="name">SMS OTP</td><td data-label="概要">SMSで認証コードを送信</td><td data-label="主な用途">銀行、Webサービス</td></tr>
+        <tr><td class="name">Email OTP</td><td data-label="概要">メールで認証コードを送信</td><td data-label="主な用途">会員登録、ログイン</td></tr>
+        <tr><td class="name">HOTP</td><td data-label="概要">カウンター方式のOTP</td><td data-label="主な用途">認証トークン</td></tr>
+        <tr><td class="name">TOTP</td><td data-label="概要">時刻ベースのOTP</td><td data-label="主な用途">Google Authenticatorなど</td></tr>
+        <tr><td class="name">プッシュ認証</td><td data-label="概要">スマホに通知して承認</td><td data-label="主な用途">Microsoft Authenticatorなど</td></tr>
+        <tr><td class="name">ハードウェアトークン</td><td data-label="概要">専用端末で認証コードを生成</td><td data-label="主な用途">金融機関、企業</td></tr>
+        <tr><td class="name">セキュリティキー</td><td data-label="概要">物理キーを使った公開鍵認証</td><td data-label="主な用途">FIDO2、YubiKeyなど</td></tr>
+      </tbody>
+    </table></div>
+    <div class="note">
+      <div class="note-title">HOTPとTOTPの違い</div>
+      <p>HOTP：カウンターの値を使ってコードを生成／TOTP：現在時刻を使ってコードを生成</p>
+    </div>
+
+    <h3 class="sub-h"><span class="sub-no">2-3</span>生体認証</h3>
+    <div class="twrap"><table>
+      <thead><tr><th>方式</th><th>概要</th><th>主な用途</th></tr></thead>
+      <tbody>
+        <tr><td class="name">指紋認証</td><td data-label="概要">指紋の特徴を照合</td><td data-label="主な用途">スマホ、PC</td></tr>
+        <tr><td class="name">顔認証</td><td data-label="概要">顔の特徴を照合</td><td data-label="主な用途">スマホ、入退室</td></tr>
+        <tr><td class="name">虹彩認証</td><td data-label="概要">虹彩パターンを照合</td><td data-label="主な用途">高セキュリティ施設</td></tr>
+        <tr><td class="name">静脈認証</td><td data-label="概要">指・手の静脈パターンを照合</td><td data-label="主な用途">銀行ATMなど</td></tr>
+        <tr><td class="name">声紋認証</td><td data-label="概要">声の特徴を照合</td><td data-label="主な用途">コールセンター</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout">
+      <div class="note-title">コラム：生体情報はサーバーへ送られるとは限らない</div>
+      <p>注意したいのは、指紋認証やFace IDなどは、それ自体がサーバーに送信される認証情報とは限らないことです。</p>
+      <p>例えばパスキーでは、端末内で指紋や顔による本人確認を行い、その結果を利用して秘密鍵による署名を実行します。サーバーは公開鍵でその署名を検証します。</p>
+    </div>
+
+    <h3 class="sub-h"><span class="sub-no">2-4</span>公開鍵暗号方式・証明書認証</h3>
+    <div class="twrap"><table>
+      <thead><tr><th>方式</th><th>概要</th><th>主な用途</th></tr></thead>
+      <tbody>
+        <tr><td class="name">公開鍵認証</td><td data-label="概要">秘密鍵で署名し、公開鍵で検証</td><td data-label="主な用途">SSH、FIDO2</td></tr>
+        <tr><td class="name">クライアント証明書認証</td><td data-label="概要">クライアント証明書で本人・端末を確認</td><td data-label="主な用途">企業システム、金融</td></tr>
+        <tr><td class="name">mTLS</td><td data-label="概要">クライアントとサーバー双方が証明書で認証</td><td data-label="主な用途">API、マイクロサービス</td></tr>
+        <tr><td class="name">スマートカード認証</td><td data-label="概要">ICカード内の秘密鍵などを利用</td><td data-label="主な用途">社員認証、行政</td></tr>
+        <tr><td class="name">PIV認証</td><td data-label="概要">個人識別用の証明書・スマートカードを利用</td><td data-label="主な用途">官公庁、企業</td></tr>
+      </tbody>
+    </table></div>
+    <p class="lead-note">このあたりは、エンタープライズや金融機関のシステムで重要になります。</p>
+
+    <h3 class="sub-h"><span class="sub-no">2-5</span>パスワードレス認証</h3>
+    <div class="twrap"><table>
+      <thead><tr><th>方式</th><th>概要</th><th>主な用途</th></tr></thead>
+      <tbody>
+        <tr><td class="name">パスキー</td><td data-label="概要">公開鍵暗号を使ったパスワードレス認証</td><td data-label="主な用途">Web・モバイル</td></tr>
+        <tr><td class="name">FIDO2</td><td data-label="概要">WebAuthnとCTAPを組み合わせた規格</td><td data-label="主な用途">Web認証</td></tr>
+        <tr><td class="name">Windows Hello</td><td data-label="概要">PINや生体認証で端末内の認証情報を利用</td><td data-label="主な用途">Windows</td></tr>
+        <tr><td class="name">WebAuthn</td><td data-label="概要">ブラウザと認証器を連携するWeb標準API</td><td data-label="主な用途">Webサービス</td></tr>
+      </tbody>
+    </table></div>
+    <p>特に重要なのがパスキーです。従来のパスワード認証と違い、サーバー側にパスワードを保存せず、公開鍵を登録しておきます。認証時には、サーバーからのチャレンジに対して端末内の秘密鍵で署名し、サーバーが公開鍵で検証します。フィッシング耐性があることも大きな特徴です。</p>
+
+    <h3 class="sub-h"><span class="sub-no">2-6</span>シングルサインオン・認証連携</h3>
+    <p class="lead-note">ここは少し分類が違います。これらは、認証そのものというより、認証結果やユーザー情報を別のシステムに連携するための仕組みです。</p>
+    <div class="twrap"><table>
+      <thead><tr><th>方式・規格</th><th>概要</th><th>主な用途</th></tr></thead>
+      <tbody>
+        <tr><td class="name">SAML 2.0</td><td data-label="概要">XMLベースの認証情報連携</td><td data-label="主な用途">企業SSO</td></tr>
+        <tr><td class="name">OpenID Connect</td><td data-label="概要">OAuth 2.0を拡張した認証プロトコル</td><td data-label="主な用途">Web・モバイルSSO</td></tr>
+        <tr><td class="name">OAuth 2.0</td><td data-label="概要">APIアクセス権限を委譲する仕組み</td><td data-label="主な用途">外部API連携</td></tr>
+        <tr><td class="name">Kerberos</td><td data-label="概要">チケットを利用したネットワーク認証</td><td data-label="主な用途">Active Directory</td></tr>
+        <tr><td class="name">LDAP</td><td data-label="概要">ディレクトリサービスへのアクセスプロトコル</td><td data-label="主な用途">ユーザー情報管理・認証連携</td></tr>
+      </tbody>
+    </table></div>
+    <div class="vs">
+      <div class="vs-card oauth">
+        <div class="vs-name">OAuth 2.0 ― 認可の仕組み</div>
+        <div class="vs-q">「このアプリにAPIを利用させてよいか」</div>
+        <p>APIアクセス権限の委譲を扱います。ユーザーが誰かを確認する仕組みではありません。</p>
+      </div>
+      <div class="vs-mid">VS</div>
+      <div class="vs-card oidc">
+        <div class="vs-name">OpenID Connect ― 認証プロトコル</div>
+        <div class="vs-q">「このユーザーは誰なのか」</div>
+        <p>OAuth 2.0を拡張した認証プロトコルで、Web・モバイルのSSOに使われます。</p>
+      </div>
+    </div>
+    <div class="note">
+      <div class="note-title">混同しやすいポイント</div>
+      <p>OAuth 2.0単体は認証プロトコルではありません。「権限を委譲する仕組み」と「本人を確認する仕組み」は別の役割です。</p>
+    </div>
+
+    <h3 class="sub-h"><span class="sub-no">2-7</span>多要素認証（MFA）</h3>
+    <p>MFAは特定の認証方式ではなく、異なる認証要素を組み合わせる考え方です。重要なのは、認証要素の数ではなく、異なる種類の要素を組み合わせることです。</p>
+    <div class="anim" id="animB">
+      <div class="anim-title">アニメーションB：MFAの組み合わせ判定</div>
+      <div class="anim-sub">要素の「種類」が同じか違うかに注目してください。色は要素の種類を表します。</div>
+      <div class="legend">
+        <span><span class="dot k"></span>知識情報</span>
+        <span><span class="dot h"></span>所持情報</span>
+        <span><span class="dot b"></span>生体情報</span>
+      </div>
+      <div id="bRows">
+        <div class="mfa-empty" id="bEmpty">「次へ」または「再生」で、組み合わせ例を1つずつ判定していきます。</div>
+        <div class="mfa-row"><span class="combo">パスワードのみ</span><span class="chip k">パスワード＝知識</span><span class="judge ng">×</span><span class="why">要素は知識1つだけ。単一要素なのでMFAではありません。</span></div>
+        <div class="mfa-row"><span class="combo">パスワード＋PIN</span><span class="chip k">パスワード＝知識</span><span class="chip k">PIN＝知識</span><span class="judge ng">×</span><span class="why">2つ使っても、どちらも知識情報。種類が同じなのでMFAにはなりません。</span></div>
+        <div class="mfa-row"><span class="combo">パスワード＋SMS OTP</span><span class="chip k">パスワード＝知識</span><span class="chip h">SMS OTP＝所持</span><span class="judge ok">○</span><span class="why">知識＋所持。異なる種類の組み合わせです。</span></div>
+        <div class="mfa-row"><span class="combo">パスワード＋指紋</span><span class="chip k">パスワード＝知識</span><span class="chip b">指紋＝生体</span><span class="judge ok">○</span><span class="why">知識＋生体。異なる種類の組み合わせです。</span></div>
+        <div class="mfa-row"><span class="combo">セキュリティキー＋PIN</span><span class="chip h">セキュリティキー＝所持</span><span class="chip k">PIN＝知識</span><span class="judge ok">○</span><span class="why">所持＋知識。異なる種類の組み合わせです。</span></div>
+        <div class="mfa-row"><span class="combo">パスキー＋生体認証</span><span class="chip h">パスキー＝所持</span><span class="chip b">生体認証＝生体</span><span class="judge ok">○</span><span class="why">所持＋生体による利用者確認。異なる種類の組み合わせです。</span></div>
+      </div>
+      <div class="caption" id="bCaption"></div>
+      <div class="controls">
+        <button type="button" class="ghost" id="bPrev">← 前へ</button>
+        <button type="button" id="bPlay">▶ 再生</button>
+        <button type="button" class="ghost" id="bNext">次へ →</button>
+        <button type="button" class="ghost" id="bReset">最初から</button>
+        <label>速度 <select id="bSpeed"><option value="0.5">0.5倍</option><option value="1" selected>1倍</option><option value="1.5">1.5倍</option><option value="2">2倍</option></select></label>
+      </div>
+      <div class="progress"><div id="bBar"></div></div>
+      <div class="step-count" id="bCount"></div>
+    </div>
+
+    <h3 class="sub-h"><span class="sub-no">2-8</span>リスクベース・適応型認証</h3>
+    <p class="lead-note">最近の企業システムや金融サービスで重要な考え方です。</p>
+    <div class="twrap"><table>
+      <thead><tr><th>方式</th><th>概要</th></tr></thead>
+      <tbody>
+        <tr><td class="name">リスクベース認証</td><td data-label="概要">ログイン状況からリスクを評価</td></tr>
+        <tr><td class="name">アダプティブ認証</td><td data-label="概要">リスクに応じて認証強度を変更</td></tr>
+        <tr><td class="name">ステップアップ認証</td><td data-label="概要">重要操作時に追加認証</td></tr>
+        <tr><td class="name">継続的認証</td><td data-label="概要">ログイン後も状況を評価し続ける</td></tr>
+      </tbody>
+    </table></div>
+    <div class="anim" id="animC">
+      <div class="anim-title">アニメーションC：リスクに応じて認証強度が変わる</div>
+      <div class="anim-sub">状況のリスクが高まるにつれて、求められる対応が強くなっていきます。</div>
+      <div class="meter">
+        <div class="meter-track"><div class="meter-mask" id="cMask" style="width:100%"></div></div>
+        <div class="meter-labels"><span>リスク低</span><span>リスク中</span><span>リスク高</span></div>
+      </div>
+      <div class="risk-now" id="cNow">現在の評価：<span class="lvl">未評価</span></div>
+      <div id="cScenes">
+        <div class="scenario"><span class="sit">普段使っている端末・場所からのログイン</span><span class="resp">通常認証</span></div>
+        <div class="scenario"><span class="sit">海外からのログイン</span><span class="resp">MFA要求</span></div>
+        <div class="scenario"><span class="sit">高額送金などの重要操作</span><span class="resp">追加認証</span></div>
+        <div class="scenario"><span class="sit">不審な操作の検知</span><span class="resp">セッション停止</span></div>
+      </div>
+      <div class="caption" id="cCaption"></div>
+      <div class="controls">
+        <button type="button" class="ghost" id="cPrev">← 前へ</button>
+        <button type="button" id="cPlay">▶ 再生</button>
+        <button type="button" class="ghost" id="cNext">次へ →</button>
+        <button type="button" class="ghost" id="cReset">最初から</button>
+        <label>速度 <select id="cSpeed"><option value="0.5">0.5倍</option><option value="1" selected>1倍</option><option value="1.5">1.5倍</option><option value="2">2倍</option></select></label>
+      </div>
+      <div class="progress"><div id="cBar"></div></div>
+      <div class="step-count" id="cCount"></div>
+    </div>
+    <div class="note">
+      <div class="note-title">補助情報としての位置づけ</div>
+      <p>IPアドレスや位置情報などは、それ単独で本人を証明する認証要素ではなく、リスク判断のための補助情報です。</p>
+    </div>
+
+    <h3 class="sub-h"><span class="sub-no">2-9</span>システム間・サービス間の認証（マシン認証）</h3>
+    <p class="lead-note">ユーザーではなく、アプリケーションやサーバー同士が認証する方式です。</p>
+    <div class="twrap"><table>
+      <thead><tr><th>方式</th><th>概要</th><th>主な用途</th></tr></thead>
+      <tbody>
+        <tr><td class="name">API Key</td><td data-label="概要">固定キーでアクセス元を識別</td><td data-label="主な用途">API</td></tr>
+        <tr><td class="name">Client Secret</td><td data-label="概要">クライアントの共有秘密情報</td><td data-label="主な用途">OAuthクライアント</td></tr>
+        <tr><td class="name">クライアント証明書</td><td data-label="概要">証明書でサービスを識別</td><td data-label="主な用途">mTLS</td></tr>
+        <tr><td class="name">JWT Bearer</td><td data-label="概要">署名付きトークンで認証・情報伝達</td><td data-label="主な用途">API</td></tr>
+        <tr><td class="name">SSH公開鍵認証</td><td data-label="概要">秘密鍵による署名で接続</td><td data-label="主な用途">サーバー管理</td></tr>
+        <tr><td class="name">Workload Identity</td><td data-label="概要">実行環境に紐づくIDで認証</td><td data-label="主な用途">AWS、Azure、GCP</td></tr>
+        <tr><td class="name">SPIFFE/SPIRE</td><td data-label="概要">ワークロードに標準化されたIDを付与</td><td data-label="主な用途">マイクロサービス</td></tr>
+      </tbody>
+    </table></div>
+    <p>最近はAIエージェントにも関係してくる領域です。例えば、AIエージェントがSharePointや社内APIにアクセスするとき、ユーザーのIDを引き継ぐのか、エージェント自身のIDでアクセスするのか、といった設計が必要になります。</p>
+  </section>
+
+  <!-- 3. 比較 -->
+  <section class="sec" id="compare">
+    <div class="sec-head">
+      <div class="no">SECTION 3</div>
+      <h2>認証方式を比較する ― セキュリティと利便性</h2>
+      <p>代表的な方式を、セキュリティと利便性の観点で比較します。</p>
+    </div>
+    <div class="twrap"><table>
+      <thead><tr><th>認証方式</th><th>フィッシング耐性</th><th>利便性</th><th>主な課題</th></tr></thead>
+      <tbody>
+        <tr><td class="name">パスワード</td><td data-label="フィッシング耐性">低い</td><td data-label="利便性">普通</td><td data-label="主な課題">漏洩・使い回し</td></tr>
+        <tr><td class="name">SMS OTP</td><td data-label="フィッシング耐性">低い</td><td data-label="利便性">高い</td><td data-label="主な課題">SIMスワップなど</td></tr>
+        <tr><td class="name">Email OTP</td><td data-label="フィッシング耐性">低い</td><td data-label="利便性">高い</td><td data-label="主な課題">メールアカウント依存</td></tr>
+        <tr><td class="name">TOTP</td><td data-label="フィッシング耐性">低い</td><td data-label="利便性">普通</td><td data-label="主な課題">コードの詐取</td></tr>
+        <tr><td class="name">プッシュ認証</td><td data-label="フィッシング耐性">方式による</td><td data-label="利便性">高い</td><td data-label="主な課題">承認疲れ</td></tr>
+        <tr><td class="name">指紋・顔＋パスキー</td><td data-label="フィッシング耐性">高い</td><td data-label="利便性">高い</td><td data-label="主な課題">端末・アカウント復旧</td></tr>
+        <tr><td class="name">セキュリティキー</td><td data-label="フィッシング耐性">高い</td><td data-label="利便性">普通</td><td data-label="主な課題">紛失・管理</td></tr>
+        <tr><td class="name">クライアント証明書</td><td data-label="フィッシング耐性">高い</td><td data-label="利便性">普通</td><td data-label="主な課題">証明書管理</td></tr>
+        <tr><td class="name">mTLS</td><td data-label="フィッシング耐性">高い</td><td data-label="利便性">低〜普通</td><td data-label="主な課題">運用・証明書管理</td></tr>
+      </tbody>
+    </table></div>
+    <p class="lead-note">※一般的な傾向です。実装や運用条件によって異なります。特に生体認証単体と、パスキーを生体認証で利用するケースは区別が必要です。</p>
+    <p class="lead-note">NISTの2025年版ガイドライン（SP 800-63-4）でも、フィッシング耐性を持つ暗号学的認証が重視されています。手入力するOTPは、フィッシング耐性のある認証には分類されません。</p>
+  </section>
+
+  <!-- 5. 重要技術 -->
+  <section class="sec" id="keytech">
+    <div class="sec-head">
+      <div class="no">SECTION 5</div>
+      <h2>押さえておくべき重要技術</h2>
+      <p>今後のシステム設計・開発で特に重要だと思うものを絞ると、次の8つです。</p>
+    </div>
+    <div class="tech-grid">
+      <div class="tech-card"><div class="tname">パスキー / FIDO2</div><span class="prio">優先度：高</span><p>パスワードレスの中心技術</p></div>
+      <div class="tech-card"><div class="tname">WebAuthn</div><span class="prio">優先度：高</span><p>Web認証の標準</p></div>
+      <div class="tech-card"><div class="tname">OAuth 2.0</div><span class="prio">優先度：高</span><p>APIアクセス制御</p></div>
+      <div class="tech-card"><div class="tname">OpenID Connect</div><span class="prio">優先度：高</span><p>ユーザー認証・SSO</p></div>
+      <div class="tech-card"><div class="tname">SAML 2.0</div><span class="prio">優先度：高</span><p>エンタープライズSSO</p></div>
+      <div class="tech-card"><div class="tname">mTLS</div><span class="prio">優先度：高</span><p>サービス間認証</p></div>
+      <div class="tech-card"><div class="tname">Kerberos</div><span class="prio">優先度：中〜高</span><p>Active Directory環境</p></div>
+      <div class="tech-card"><div class="tname">Workload Identity</div><span class="prio">優先度：高</span><p>クラウド・AIエージェント</p></div>
+    </div>
+  </section>
+
+  <!-- まとめ -->
+  <section class="sec" id="summary">
+    <div class="sec-head">
+      <div class="no">まとめ</div>
+      <h2>設計に直結する3つの問い</h2>
+      <p>認証技術を学ぶなら、単に方式の名前を覚えるよりも、次の3つを理解するとアーキテクチャ設計に直結します。</p>
+    </div>
+    <div class="q3">
+      <div class="q3-card"><div class="qn">問い 1 ― 人の認証</div><p>人間のユーザーをどう認証するか</p></div>
+      <div class="q3-card"><div class="qn">問い 2 ― マシンの認証</div><p>システム・サービス・AIエージェントをどう認証するか</p></div>
+      <div class="q3-card"><div class="qn">問い 3 ― 認可</div><p>認証した主体に何を許可するか（認可）</p></div>
+    </div>
+    <p>特にこれからは、ユーザー認証だけでなく、AIエージェントのアイデンティティ管理や委任認証も重要になってくると思います。</p>
+
+    <h3 class="sub-h">参考資料</h3>
+    <ul class="refs">
+      <li>NIST SP 800-63-4（デジタルアイデンティティガイドライン）</li>
+      <li>NIST Authenticator Examples</li>
+      <li>OWASP Authentication Cheat Sheet</li>
+      <li>NIST SAML / OpenID Connect Guide</li>
+    </ul>
+  </section>
+
+  <footer>認証方式の体系整理 ― 「何を使って確認するのか」と「どのような仕組みで認証するのか」を分けて考えるための資料です。</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  function Animator(cfg){
+    this.max = cfg.max; this.step = 0; this.timer = null; this.render = cfg.render;
+    this.els = cfg.els; this.baseMs = cfg.baseMs || 2400;
+    var self = this;
+    this.els.play.addEventListener("click", function(){ self.toggle(); });
+    this.els.next.addEventListener("click", function(){ self.stop(); self.go(self.step + 1); });
+    this.els.prev.addEventListener("click", function(){ self.stop(); self.go(self.step - 1); });
+    this.els.reset.addEventListener("click", function(){ self.stop(); self.go(0); });
+    this.els.speed.addEventListener("change", function(){ if (self.timer){ self.stop(); self.start(); } });
+    this.render(0);
+    this.sync();
+  }
+  Animator.prototype.go = function(n){
+    this.step = Math.max(0, Math.min(this.max, n));
+    this.render(this.step); this.sync();
+    if (this.step >= this.max) this.stop();
+  };
+  Animator.prototype.sync = function(){
+    this.els.bar.style.width = (this.max ? (this.step / this.max) * 100 : 0) + "%";
+    this.els.count.textContent = "ステップ " + this.step + " / " + this.max;
+    this.els.prev.disabled = this.step <= 0;
+    this.els.next.disabled = this.step >= this.max;
+    this.els.play.textContent = this.timer ? "⏸ 一時停止" : "▶ 再生";
+  };
+  Animator.prototype.start = function(){
+    var self = this;
+    if (this.step >= this.max) this.go(0);
+    var interval = this.baseMs / parseFloat(this.els.speed.value || "1");
+    this.timer = setInterval(function(){
+      if (self.step >= self.max){ self.stop(); return; }
+      self.go(self.step + 1);
+    }, interval);
+    this.sync();
+  };
+  Animator.prototype.stop = function(){
+    if (this.timer){ clearInterval(this.timer); this.timer = null; }
+    this.sync();
+  };
+  Animator.prototype.toggle = function(){ this.timer ? this.stop() : this.start(); };
+  function $(id){ return document.getElementById(id); }
+  function els(p){ return { play:$(p+"Play"), next:$(p+"Next"), prev:$(p+"Prev"), reset:$(p+"Reset"), speed:$(p+"Speed"), bar:$(p+"Bar"), count:$(p+"Count") }; }
+
+  /* --- A: 階層モデル --- */
+  var aLayers = Array.prototype.slice.call(document.querySelectorAll("#aLayers .layer"));
+  var aCap = $("aCaption");
+  var aTexts = [
+    "5つの階層を順に積み上げます。「次へ」または「再生」で、構成例を1層ずつ当てはめていきます。",
+    "① 認証要素 ― 何を使って本人を確認するか。構成例では「所持＋生体」です。",
+    "② 認証方式・認証器 ― 要素を実現する具体的な手段。構成例では「パスキー」です。",
+    "③ 認証プロトコル・連携方式 ― 認証をどうやり取りし、他システムへどう連携するか。構成例ではプロトコルが「WebAuthn」、認証連携が「OpenID Connect」です。",
+    "④ 認証後のセッション・トークン ― 認証済みであることをどう保持するか。構成例では「Cookie」です。",
+    "⑤ 認可（Authorization） ― 認証した主体に何を許可するか。構成例では「RBAC」です。5層すべてが揃いました。これらはそれぞれ別の役割です。"
+  ];
+  new Animator({ max:5, els:els("a"), render:function(step){
+    aLayers.forEach(function(el, i){
+      el.classList.toggle("on", i < step);
+      el.classList.toggle("current", i === step - 1);
+    });
+    aCap.textContent = aTexts[step];
+  }});
+
+  /* --- B: MFA判定 --- */
+  var bRows = Array.prototype.slice.call(document.querySelectorAll("#bRows .mfa-row"));
+  var bEmpty = $("bEmpty"), bCap = $("bCaption");
+  var bTexts = [
+    "組み合わせ例を1つずつ判定します。ポイントは「要素の数」ではなく「種類が異なるか」です。",
+    "パスワードのみ ― 要素は知識1つだけなので × 。多要素ではありません。",
+    "パスワード＋PIN ― 2つ使ってもどちらも知識情報。種類が同じなので × です。",
+    "パスワード＋SMS OTP ― 知識＋所持で種類が異なるため ○ 。これがMFAです。",
+    "パスワード＋指紋 ― 知識＋生体で ○ です。",
+    "セキュリティキー＋PIN ― 所持＋知識で ○ です。",
+    "パスキー＋生体認証 ― 所持＋生体による利用者確認で ○ 。重要なのは要素の数ではなく、異なる種類の組み合わせです。"
+  ];
+  new Animator({ max:6, els:els("b"), render:function(step){
+    bEmpty.style.display = step === 0 ? "block" : "none";
+    bRows.forEach(function(el, i){ el.classList.toggle("show", i < step); });
+    bCap.textContent = bTexts[step];
+  }});
+
+  /* --- C: リスクベース --- */
+  var cScenes = Array.prototype.slice.call(document.querySelectorAll("#cScenes .scenario"));
+  var cMask = $("cMask"), cNow = $("cNow"), cCap = $("cCaption");
+  var cData = [
+    { mask:100, lvl:"未評価", text:"シナリオを順に進めると、状況に応じてリスク評価と対応がどう変わるかが見えます。" },
+    { mask:82, lvl:"低", text:"普段使っている端末・場所 ― いつも通りの状況なので、通常認証でそのままログインできます。" },
+    { mask:42, lvl:"中〜高", text:"海外からのログイン ― 普段と異なる場所のためリスクが上がり、MFA（多要素認証）が要求されます。" },
+    { mask:18, lvl:"高", text:"高額送金 ― 重要操作の実行時には、ステップアップ認証として追加認証が求められます。" },
+    { mask:0, lvl:"最大", text:"不審な操作 ― リスクが最大と判断され、セッションが停止されます。ログイン後も評価し続けるのが継続的認証です。" }
+  ];
+  new Animator({ max:4, els:els("c"), render:function(step){
+    var d = cData[step];
+    cMask.style.width = d.mask + "%";
+    cNow.innerHTML = "現在の評価：<span class=\"lvl\">リスク " + d.lvl + "</span>";
+    cScenes.forEach(function(el, i){ el.classList.toggle("on", i === step - 1); });
+    cCap.textContent = d.text;
+  }});
+})();
+</script>
+</body>
+</html>
