@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>技術アニメーション 目次 | docs.animation</title>
+<style>
+  :root{
+    --bg:#f7f8fa; --card:#ffffff; --ink:#1c2333; --sub:#5b6478;
+    --line:#e3e7ef; --accent:#2563eb; --chip:#eef2ff;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#12151c; --card:#1b2029; --ink:#e8ebf2; --sub:#9aa3b5; --line:#2a303d; --accent:#7aa5ff; --chip:#232a3a; }
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; background:var(--bg); color:var(--ink); }
+  .wrap{ max-width:860px; margin:0 auto; padding:32px 16px 56px; }
+  header{ margin-bottom:8px; }
+  h1{ font-size:26px; margin:0 0 6px; }
+  .lead{ color:var(--sub); font-size:14px; line-height:1.7; margin:0; }
+  h2{ font-size:17px; margin:34px 0 12px; padding-left:10px; border-left:4px solid var(--accent); }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px; }
+  a.card{ display:block; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; text-decoration:none; color:var(--ink); transition:border-color .15s, transform .15s; }
+  a.card:hover{ border-color:var(--accent); transform:translateY(-1px); }
+  .card .t{ font-weight:700; font-size:15px; margin-bottom:4px; }
+  .card .d{ color:var(--sub); font-size:13px; line-height:1.6; }
+  .card .f{ display:inline-block; margin-top:8px; font-size:11px; color:var(--accent); background:var(--chip); border-radius:999px; padding:2px 8px; }
+  footer{ margin-top:40px; color:var(--sub); font-size:12px; line-height:1.7; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>技術アニメーション 目次</h1>
+    <p class="lead">技術の仕組みをステップアニメーションで解説するページ集です。各カードからそれぞれのページへ移動できます。</p>
+  </header>
+
+  <h2>認証・認可</h2>
+  <div class="grid">
+    <a class="card" href="html/animation_passkey.html"><div class="t">パスキーの仕組み</div><div class="d">公開鍵暗号による登録と認証の流れを、画面モック付きで。</div><span class="f">animation_passkey.html</span></a>
+    <a class="card" href="html/animation_oidc.html"><div class="t">OIDCの仕組み</div><div class="d">認可コードフロー＋PKCEと、IDトークン検証の裏側。</div><span class="f">animation_oidc.html</span></a>
+    <a class="card" href="html/animation_oauth2.html"><div class="t">OAuth 2.0の仕組み</div><div class="d">認可コードフロー＋PKCEを9ステップで。同意画面の分岐つき。</div><span class="f">animation_oauth2.html</span></a>
+    <a class="card" href="html/animation_jwt.html"><div class="t">JWTの仕組み</div><div class="d">ヘッダー・ペイロード・署名の組み立て、検証、改ざんデモ。</div><span class="f">animation_jwt.html</span></a>
+    <a class="card" href="html/animation_session.html"><div class="t">セッションとCookieの仕組み</div><div class="d">セッションIDの発行からログアウトでの破棄まで。Cookie属性の解説つき。</div><span class="f">animation_session.html</span></a>
+  </div>
+
+  <h2>Web・通信の仕組み</h2>
+  <div class="grid">
+    <a class="card" href="html/animation_tls.html"><div class="t">TLS（HTTPS）の仕組み</div><div class="d">TLS 1.3ハンドシェイクと証明書検証、なりすまし警告のデモ。</div><span class="f">animation_tls.html</span></a>
+    <a class="card" href="html/animation_dns.html"><div class="t">DNSの仕組み</div><div class="d">ルート→TLD→権威サーバーと辿る名前解決と、キャッシュとTTL。</div><span class="f">animation_dns.html</span></a>
+  </div>
+
+  <h2>AIエージェント</h2>
+  <div class="grid">
+    <a class="card" href="html/animation_agent_sdk.html"><div class="t">Agent SDKの仕組み</div><div class="d">エージェントループを、Claude Agent SDKとOpenAI Agents SDKのコード連動で。</div><span class="f">animation_agent_sdk.html</span></a>
+    <a class="card" href="html/animation_mcp.html"><div class="t">MCPの仕組み</div><div class="d">initialize → tools/list → tools/call。ホスト・クライアント・サーバーの関係。</div><span class="f">animation_mcp.html</span></a>
+    <a class="card" href="html/animation_multiagent.html"><div class="t">マルチエージェントの仕組み</div><div class="d">司令塔がサブエージェントに分担させ、結果を統合する流れ。</div><span class="f">animation_multiagent.html</span></a>
+    <a class="card" href="html/animation_rag.html"><div class="t">RAGの仕組み</div><div class="d">チャンク化とベクトル検索で、根拠を引いて回答するまで。</div><span class="f">animation_rag.html</span></a>
+    <a class="card" href="html/animation_agent_memory.html"><div class="t">エージェントのメモリの仕組み</div><div class="d">短期記憶と長期記憶。書き込み、想起、古い記憶の上書き。</div><span class="f">animation_agent_memory.html</span></a>
+    <a class="card" href="html/animation_langchain_agent_sdk.html"><div class="t">LangChainとAgent SDK</div><div class="d">部品組み立て型とループ内蔵型、フレームワークの動きの比較。</div><span class="f">animation_langchain_agent_sdk.html</span></a>
+    <a class="card" href="html/animation_hermes_agent.html"><div class="t">Hermes Agentまとめ</div><div class="d">ロボットの1日で見る、学習ループを持つOSSエージェントの機能。</div><span class="f">animation_hermes_agent.html</span></a>
+  </div>
+
+  <h2>アーキテクチャ</h2>
+  <div class="grid">
+    <a class="card" href="html/animation_muse.html"><div class="t">Museのアーキテクチャ</div><div class="d">構成図とフロー、セキュリティの仕組み（承認・代理トークン・インジェクション防御）。</div><span class="f">animation_muse.html</span></a>
+    <a class="card" href="html/animation_cqrs.html"><div class="t">CQRSパターンの仕組み</div><div class="d">コマンド側とクエリ側を分ける設計を、フロー図中心で。結果整合性のズレも可視化。</div><span class="f">animation_cqrs.html</span></a>
+  </div>
+
+  <footer>全16ページ。各ページは単体で開ける自己完結HTMLです。</footer>
+</div>
+</body>
+</html>
