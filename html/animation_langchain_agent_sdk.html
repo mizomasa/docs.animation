@@ -1,0 +1,1061 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>LangChainとAgent SDK：フレームワークの動き</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
+      * { box-sizing: border-box; }
+      :root {
+        --bg: #f4f6f5;
+        --surface: #ffffff;
+        --surface-2: #eef2f0;
+        --ink: #17211d;
+        --ink-2: #44534c;
+        --ink-3: #6b7a72;
+        --line: #d5ded9;
+        --accent: #0e7a5f;
+        --accent-ink: #ffffff;
+        --accent-soft: #dff0e9;
+        --dev: #b45309;
+        --dev-ink: #ffffff;
+        --dev-soft: #fdf0dd;
+        --term-bg: #101613;
+        --term-ink: #c9e7d6;
+        --term-dim: #7d968a;
+        --radius: 10px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0e1311;
+          --surface: #161d1a;
+          --surface-2: #1d2622;
+          --ink: #e6ede9;
+          --ink-2: #b3c2ba;
+          --ink-3: #84958c;
+          --line: #2c3833;
+          --accent: #2fbf9a;
+          --accent-ink: #06231a;
+          --accent-soft: #14332a;
+          --dev: #f0a832;
+          --dev-ink: #2a1c05;
+          --dev-soft: #3a2c12;
+          --term-bg: #070a09;
+          --term-ink: #c9e7d6;
+          --term-dim: #71877b;
+          color-scheme: dark;
+        }
+      }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "IBM Plex Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        line-height: 1.75;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { max-width: 960px; margin: 0 auto; padding: 28px 18px 72px; }
+      h1 { font-size: clamp(26px, 5.4vw, 38px); line-height: 1.3; margin: 0 0 10px; letter-spacing: .01em; }
+      .lede { color: var(--ink-2); font-size: 16px; margin: 0 0 6px; max-width: 44em; }
+      .lede strong { color: var(--ink); }
+      h2 { font-size: 21px; margin: 0 0 6px; line-height: 1.4; }
+      h3 { font-size: 16px; margin: 0 0 6px; }
+      .sec-head { margin: 44px 0 14px; }
+      .sec-head p { margin: 0; color: var(--ink-2); font-size: 14.5px; max-width: 44em; }
+      .sec-num { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 1px 10px; margin-bottom: 8px; letter-spacing: .08em; }
+
+      /* ---------- legend ---------- */
+      .legend {
+        display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 12px 16px; margin: 20px 0 4px; font-size: 14px;
+      }
+      .legend .l-item { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+      .swatch { width: 18px; height: 18px; border-radius: 5px; flex: none; border: 1.5px solid; }
+      .swatch.dev { background: var(--dev-soft); border-color: var(--dev); }
+      .swatch.fw { background: var(--accent-soft); border-color: var(--accent); }
+      .swatch.ball { background: var(--ink); border-color: var(--ink); border-radius: 50%; width: 14px; height: 14px; }
+      .legend .l-note { color: var(--ink-3); font-size: 13px; font-weight: 400; }
+
+      /* ---------- controls (series共通) ---------- */
+      .controls {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 10px 12px; margin: 18px 0;
+      }
+      .controls .btn {
+        appearance: none; border: 1px solid var(--line); background: var(--surface-2);
+        color: var(--ink); border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 14.5px; font-weight: 600;
+        cursor: pointer; min-width: 44px;
+      }
+      .controls .btn:hover { border-color: var(--accent); }
+      .controls .btn:focus-visible, .speedsel:focus-visible, .dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .controls .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 92px; }
+      .controls .btn:disabled { opacity: .38; cursor: default; }
+      .controls .btn:disabled:hover { border-color: var(--line); }
+      .controls .btn.primary:disabled:hover { border-color: var(--accent); }
+      .speedwrap { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13.5px; color: var(--ink-2); }
+      .speedsel { font: inherit; font-size: 14px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+      .progress-line { display: flex; align-items: center; gap: 12px; margin: 4px 2px 0; flex-wrap: wrap; }
+      .progress-label { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+      .progress-track { flex: 1 1 140px; height: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+      .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .45s ease; }
+      .dots { display: flex; gap: 6px; flex-wrap: wrap; }
+      .dot { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+      .dot.done { border-color: var(--accent); color: var(--accent); }
+      .dot.now { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+      /* ---------- step card / packet ---------- */
+      .step-card { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px; }
+      .step-card .s-kicker { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent); font-weight: 600; letter-spacing: .06em; }
+      .step-card h3 { font-size: 19px; margin: 4px 0 8px; }
+      .step-card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+      .step-card p .mono { color: var(--ink); font-weight: 600; font-size: .94em; }
+      .packet-bar {
+        margin-top: 14px; border: 1.5px solid var(--ink-3); background: var(--surface);
+        border-radius: var(--radius); padding: 11px 16px;
+      }
+      .packet-bar .p-label { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; color: var(--ink-3); margin-bottom: 2px; }
+      .packet-bar .p-body { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; word-break: break-all; }
+
+      /* ---------- stage & ball ---------- */
+      .stage {
+        position: relative; background: var(--surface); border: 1px solid var(--line);
+        border-radius: var(--radius); padding: 20px 16px 18px; overflow: hidden;
+      }
+      .ball {
+        position: absolute; width: 18px; height: 18px; border-radius: 50%;
+        background: var(--ink); border: 2.5px solid var(--surface);
+        box-shadow: 0 1px 6px rgba(0,0,0,.35);
+        transform: translate(-50%, -50%);
+        transition: left .8s cubic-bezier(.45,.05,.35,1), top .8s cubic-bezier(.45,.05,.35,1), opacity .3s;
+        z-index: 5; pointer-events: none; opacity: 0;
+      }
+      @media (prefers-reduced-motion: reduce) { .ball { transition: none; } }
+
+      /* ---------- part boxes (chain / contrast) ---------- */
+      .owner-tag {
+        display: inline-block; font-size: 10.5px; font-weight: 700; letter-spacing: .06em;
+        border-radius: 999px; padding: 0 8px; line-height: 1.9;
+      }
+      .owner-tag.fw { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+      .owner-tag.dev { background: var(--dev-soft); color: var(--dev); border: 1px solid var(--dev); }
+      .chain { display: flex; align-items: stretch; }
+      .part {
+        flex: 1 1 0; min-width: 0; text-align: center; padding: 12px 5px 10px;
+        border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--surface-2);
+        transition: border-color .3s, background .3s, box-shadow .3s;
+      }
+      .part .p-icon { font-size: 22px; line-height: 1.25; display: block; }
+      .part .p-name { font-weight: 700; font-size: 13px; display: block; margin-top: 3px; line-height: 1.45; }
+      .part .p-sub { font-size: 11px; color: var(--ink-3); display: block; line-height: 1.5; }
+      .part .owner-tag { margin-top: 6px; }
+      .part.active { border-color: var(--ink); background: var(--surface); box-shadow: 0 0 0 3px var(--surface-2), 0 2px 10px rgba(0,0,0,.12); }
+      .part.done { border-color: var(--accent); }
+      .link-arrow { flex: 0 0 20px; display: flex; align-items: center; justify-content: center; color: var(--dev); font-size: 15px; font-weight: 700; }
+      @media (max-width: 700px) {
+        .chain { flex-direction: column; }
+        .link-arrow { transform: rotate(90deg); height: 20px; flex-basis: 20px; margin: 0 auto; }
+      }
+      .flow-note { font-size: 12.5px; color: var(--dev); font-weight: 700; text-align: center; margin: 0 0 12px; }
+      .flow-note.fw-note { color: var(--accent); }
+
+      /* ---------- contrast panels ---------- */
+      .vs-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      @media (min-width: 860px) { .vs-grid { grid-template-columns: 1fr 1fr; } }
+      .vs-panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+      .vs-panel h3 { font-size: 17px; margin: 0 0 2px; }
+      .vs-panel .vs-kind { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 600; color: var(--accent); letter-spacing: .05em; }
+      .vs-panel p { font-size: 14px; color: var(--ink-2); margin: 10px 0 0; }
+      .vs-panel p .mono { color: var(--ink); font-weight: 600; font-size: .94em; }
+      .mini-chain { display: flex; align-items: stretch; margin-top: 14px; }
+      .mini-chain .part { padding: 9px 3px 8px; }
+      .mini-chain .part .p-icon { font-size: 18px; }
+      .mini-chain .part .p-name { font-size: 11.5px; }
+      .mini-chain .link-arrow { flex-basis: 14px; font-size: 12px; }
+      @media (max-width: 700px) {
+        .mini-chain { flex-direction: row; }
+        .mini-chain .link-arrow { transform: none; height: auto; margin: 0; }
+        .mini-chain .part .p-sub { display: none; }
+      }
+      .sdk-frame {
+        margin-top: 14px; border: 2px solid var(--accent); background: var(--accent-soft);
+        border-radius: var(--radius); padding: 12px 14px; text-align: center;
+      }
+      .sdk-frame .f-label { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; color: var(--accent); }
+      .sdk-frame .f-loop { font-weight: 700; font-size: 15px; margin-top: 2px; }
+      .sdk-frame .f-sub { font-size: 12px; color: var(--ink-2); }
+      .dev-inputs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+      .dev-input {
+        flex: 1 1 100px; border: 1.5px solid var(--dev); background: var(--dev-soft); color: var(--ink);
+        border-radius: 8px; padding: 8px 10px; font-size: 13px; font-weight: 700; text-align: center; line-height: 1.5;
+      }
+      .dev-input small { display: block; font-weight: 400; color: var(--ink-2); font-size: 11.5px; }
+      .down-arrow { text-align: center; color: var(--ink-3); font-size: 15px; line-height: 1.4; }
+
+      /* ---------- code block ---------- */
+      .term { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin-top: 16px; }
+      .term-head { padding: 8px 14px; font-size: 12.5px; color: var(--term-dim); background: var(--term-bg); border-bottom: 1px solid #223028; font-family: "IBM Plex Mono", monospace; }
+      .term-body {
+        background: var(--term-bg); color: var(--term-ink); margin: 0; padding: 14px 16px 16px;
+        font-family: "IBM Plex Mono", monospace; font-size: 12.8px; line-height: 1.75;
+        white-space: pre-wrap; word-break: break-all;
+      }
+      .term-body .dim { color: var(--term-dim); }
+      .tok { border-radius: 4px; padding: 0 3px; transition: background .3s, color .3s; }
+      .tok.hl { background: var(--dev); color: #fff; font-weight: 600; }
+      @media (prefers-color-scheme: dark) { .tok.hl { color: #1c1204; } }
+      .fig-cap { font-size: 12.5px; color: var(--ink-3); margin: 8px 2px 0; }
+
+      /* ---------- LangGraph ---------- */
+      .lg-wrap { display: grid; grid-template-columns: 1fr; gap: 14px; }
+      @media (min-width: 820px) { .lg-wrap { grid-template-columns: 1.9fr 1fr; } }
+      .lg-svg-box { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 6px; }
+      .lg-svg-box svg { width: 100%; height: auto; display: block; }
+      .lg-node rect, .lg-node circle, .lg-node polygon {
+        fill: var(--surface); stroke: var(--line); stroke-width: 1.5;
+        transition: stroke .3s, fill .3s;
+      }
+      .lg-node text { fill: var(--ink); font-family: "IBM Plex Sans JP", sans-serif; font-weight: 700; }
+      .lg-node .lg-sub { fill: var(--ink-3); font-weight: 400; }
+      .lg-node.active rect, .lg-node.active circle, .lg-node.active polygon { stroke: var(--ink); stroke-width: 2.5; fill: var(--surface); }
+      .lg-node.done rect, .lg-node.done circle, .lg-node.done polygon { stroke: var(--accent); }
+      .lg-edge { stroke: var(--ink-3); stroke-width: 1.8; fill: none; transition: stroke .3s; }
+      .lg-edge.active { stroke: var(--dev); stroke-width: 3; }
+      .lg-edge-label { fill: var(--ink-3); font-family: "IBM Plex Sans JP", sans-serif; font-size: 12px; }
+      .lg-edge-label.loop { fill: var(--dev); font-weight: 700; }
+      .state-box { background: var(--term-bg); border-radius: 8px; padding: 12px 14px; }
+      .state-box .st-head { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--term-dim); letter-spacing: .08em; margin-bottom: 6px; }
+      .state-box pre {
+        margin: 0; font-family: "IBM Plex Mono", monospace; font-size: 12.6px; line-height: 1.7;
+        color: var(--term-ink); white-space: pre-wrap; word-break: break-all;
+      }
+      .state-box .hl { color: #f0a832; font-weight: 600; }
+      .state-box .dim { color: var(--term-dim); }
+
+      /* ---------- Agent SDK stage ---------- */
+      .sdk-stage { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: stretch; }
+      @media (min-width: 820px) { .sdk-stage { grid-template-columns: 200px 1fr 150px; } }
+      .sdk-col-label { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; color: var(--ink-3); margin-bottom: 8px; text-align: center; }
+      .dev-stack { display: flex; flex-direction: column; gap: 10px; }
+      @media (max-width: 819px) { .dev-stack { flex-direction: row; flex-wrap: wrap; } .dev-stack .part { flex: 1 1 140px; } }
+      .sdk-core {
+        border: 2px solid var(--accent); background: var(--accent-soft); border-radius: var(--radius);
+        padding: 14px; transition: box-shadow .3s;
+      }
+      .sdk-core.active { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 5px var(--accent); }
+      .sdk-core .core-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+      .sdk-core .core-name { font-weight: 700; font-size: 15px; }
+      .loop-count {
+        margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 600;
+        border: 1.5px solid var(--accent); color: var(--accent); background: var(--surface);
+        border-radius: 999px; padding: 2px 12px;
+      }
+      .loop-count.hot { background: var(--accent); color: var(--accent-ink); }
+      .loop-pair { display: flex; align-items: stretch; }
+      .loop-pair .part { background: var(--surface); }
+      .loop-arrows { flex: 0 0 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0 4px; }
+      .loop-arrows .la { font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; color: var(--ink-3); text-align: center; line-height: 1.5; transition: color .3s; }
+      .loop-arrows .la.on { color: var(--dev); }
+      @media (max-width: 700px) {
+        .loop-pair { flex-direction: column; }
+        .loop-arrows { flex-basis: auto; flex-direction: row; gap: 14px; padding: 6px 0; }
+      }
+      .out-box { display: flex; }
+      .out-box .part { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+
+      /* ---------- compare table ---------- */
+      .cmp-wrap { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+      table.cmp { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+      table.cmp th, table.cmp td { padding: 13px 16px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+      table.cmp thead th { background: var(--surface-2); font-size: 15px; }
+      table.cmp thead th .th-sub { display: block; font-size: 12px; font-weight: 400; color: var(--ink-3); }
+      table.cmp tbody th { width: 17%; font-size: 13.5px; color: var(--ink-2); background: var(--surface-2); white-space: nowrap; }
+      table.cmp td { width: 41.5%; color: var(--ink-2); }
+      table.cmp td strong { color: var(--ink); }
+      table.cmp tr:last-child th, table.cmp tr:last-child td { border-bottom: none; }
+      @media (max-width: 700px) {
+        table.cmp, table.cmp tbody, table.cmp tr, table.cmp td { display: block; width: 100%; }
+        table.cmp thead { display: none; }
+        table.cmp tbody th { display: block; width: 100%; white-space: normal; border-bottom: none; padding-bottom: 2px; }
+        table.cmp td { border-bottom: none; padding: 4px 16px 6px; }
+        table.cmp td::before { content: attr(data-h); display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; color: var(--accent); }
+        table.cmp tr { border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+        table.cmp tr:last-child { border-bottom: none; }
+      }
+
+      /* ---------- supplements ---------- */
+      .cards { display: grid; grid-template-columns: 1fr; gap: 14px; }
+      @media (min-width: 720px) { .cards.two { grid-template-columns: 1fr 1fr; } }
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+      .card p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+      .card p + p { margin-top: 8px; }
+      .card .mono { color: var(--ink); font-weight: 600; }
+      dl.glossary { display: grid; grid-template-columns: 1fr; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 0; }
+      @media (min-width: 720px) { dl.glossary { grid-template-columns: 1fr 1fr; } }
+      .glossary .g-item { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+      .glossary dt { font-weight: 700; font-size: 15px; }
+      .glossary dt .mono { font-size: 13px; color: var(--accent); font-weight: 600; margin-left: 6px; }
+      .glossary dd { margin: 4px 0 0; font-size: 14px; color: var(--ink-2); }
+      .note-box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 6px; padding: 14px 18px; font-size: 14.5px; color: var(--ink-2); margin-top: 14px; }
+      .note-box strong { color: var(--ink); }
+      footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .progress-fill { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>LangChainとAgent SDK：フレームワークの動き</h1>
+      <p class="lede">
+        LangChainとAgent SDK（Claude Agent SDK／OpenAI Agents SDK）は、どちらもLLMアプリを作るための枠組みです。
+        違いは「<strong>どこまで枠組みが面倒を見るか</strong>」。
+        このページでは、<strong>開発者が書く部分</strong>と<strong>フレームワークが担う部分</strong>を色で分けながら、
+        部品の流れとループの動きをアニメーションで追います。
+      </p>
+
+      <div class="legend" aria-label="色分けの凡例">
+        <span class="l-item"><span class="swatch dev"></span>開発者が書く・決める部分</span>
+        <span class="l-item"><span class="swatch fw"></span>フレームワークが担う部分</span>
+        <span class="l-item"><span class="swatch ball"></span>流れるデータ（玉）</span>
+        <span class="l-note">この色分けはページ全体で共通です</span>
+      </div>
+
+      <!-- ================= 1. 全体対比 ================= -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 1</span>
+        <h2>全体像：2つの設計思想</h2>
+        <p>LangChainは「部品を組み立てる」発想、Agent SDKは「ループを内蔵する」発想。まず全体の形を並べて見ます。</p>
+      </div>
+
+      <div class="vs-grid">
+        <div class="vs-panel">
+          <span class="vs-kind">LANGCHAIN</span>
+          <h3>部品組み立て型</h3>
+          <div class="mini-chain" aria-hidden="true">
+            <div class="part"><span class="p-icon">📝</span><span class="p-name">プロンプト</span></div>
+            <div class="link-arrow">→</div>
+            <div class="part"><span class="p-icon">🧠</span><span class="p-name">モデル</span></div>
+            <div class="link-arrow">→</div>
+            <div class="part"><span class="p-icon">🔧</span><span class="p-name">ツール</span></div>
+            <div class="link-arrow">→</div>
+            <div class="part"><span class="p-icon">🧹</span><span class="p-name">パーサー</span></div>
+          </div>
+          <p>
+            モデル・プロンプト・ツール・メモリといった<span class="mono">部品</span>はフレームワークが用意します。
+            ただし、<strong>どの部品を・どの順序でつなぐか（流れそのもの）は開発者が設計</strong>します。
+            部品同士は鎖（チェーン）のようにつながり、データはその鎖を順に流れます。
+            流れがコードにそのまま見えるので、途中で何が起きるかを細かく制御できます。
+          </p>
+        </div>
+
+        <div class="vs-panel">
+          <span class="vs-kind">AGENT SDK</span>
+          <h3>ループ内蔵型</h3>
+          <div class="dev-inputs" aria-hidden="true">
+            <div class="dev-input">タスク<small>何をさせるか</small></div>
+            <div class="dev-input">ツール定義<small>使える道具</small></div>
+            <div class="dev-input">許可・制約<small>やっていい範囲</small></div>
+          </div>
+          <div class="down-arrow" aria-hidden="true">↓ 渡す</div>
+          <div class="sdk-frame" aria-hidden="true">
+            <div class="f-label">AGENT SDK（フレームワーク）</div>
+            <div class="f-loop">考える → 道具を使う → 結果を見る → また考える…</div>
+            <div class="f-sub">この繰り返し（エージェントループ）そのものがSDKの中に入っている</div>
+          </div>
+          <p>
+            エージェントループそのものがSDKに組み込まれています。
+            開発者が書くのは<strong>タスク・ツール・制約の3つだけ</strong>で、
+            「モデルに聞く → ツールを実行する → 結果を戻す」という往復の制御は書きません。
+            手順が事前に決まらない仕事を、モデル自身の判断で進められます。
+          </p>
+        </div>
+      </div>
+
+      <!-- ================= 2. LangChain アニメーション ================= -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 2</span>
+        <h2>LangChain：データが鎖を流れる</h2>
+        <p>
+          題材は「質問に答えるチャット」。途中で天気ツールを1回挟む構成です。
+          黒い玉（データ）が部品から部品へ渡っていく様子と、下のLCELコードの対応を見てください。
+          矢印の色（アンバー）が示す通り、<strong>つなぎ方＝流れの設計は開発者の仕事</strong>です。
+        </p>
+      </div>
+
+      <div data-player="chain">
+        <div class="controls" data-controls>
+          <button type="button" class="btn" data-action="prev">← 前へ</button>
+          <button type="button" class="btn primary" data-action="play">▶ 再生</button>
+          <button type="button" class="btn" data-action="next">次へ →</button>
+          <button type="button" class="btn" data-action="reset">最初から</button>
+          <div class="speedwrap">
+            <label>速度
+              <select class="speedsel" data-speed aria-label="再生速度">
+                <option value="0.5">0.5×</option>
+                <option value="1" selected>1×</option>
+                <option value="1.5">1.5×</option>
+                <option value="2">2×</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="progress-line">
+          <span class="progress-label" data-progress-label>ステップ 1 / 8</span>
+          <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+          <div class="dots" data-dots></div>
+        </div>
+
+        <div class="stage" data-stage style="margin-top:14px;">
+          <div class="ball" data-ball></div>
+          <p class="flow-note">― 部品の並べ方・順序は開発者が設計する ―</p>
+          <div class="chain">
+            <div class="part" data-box="input"><span class="p-icon">💬</span><span class="p-name">入力</span><span class="p-sub">質問データ</span><br><span class="owner-tag dev">開発者</span></div>
+            <div class="link-arrow">→</div>
+            <div class="part" data-box="memory"><span class="p-icon">🗂️</span><span class="p-name">メモリ</span><span class="p-sub">会話履歴の読み書き</span><br><span class="owner-tag fw">部品</span></div>
+            <div class="link-arrow">→</div>
+            <div class="part" data-box="prompt"><span class="p-icon">📝</span><span class="p-name">プロンプト<br>テンプレート</span><span class="p-sub">指示文を組み立てる</span><br><span class="owner-tag fw">部品</span></div>
+            <div class="link-arrow">→</div>
+            <div class="part" data-box="model"><span class="p-icon">🧠</span><span class="p-name">モデル</span><span class="p-sub">LLMが生成・判断</span><br><span class="owner-tag fw">部品</span></div>
+            <div class="link-arrow">→</div>
+            <div class="part" data-box="tool"><span class="p-icon">🔧</span><span class="p-name">ツール</span><span class="p-sub">外部API等の実行</span><br><span class="owner-tag fw">部品</span></div>
+            <div class="link-arrow">→</div>
+            <div class="part" data-box="parser"><span class="p-icon">🧹</span><span class="p-name">出力パーサー</span><span class="p-sub">形式を整える</span><br><span class="owner-tag fw">部品</span></div>
+            <div class="link-arrow">→</div>
+            <div class="part" data-box="output"><span class="p-icon">✅</span><span class="p-name">出力</span><span class="p-sub">アプリへ返す</span><br><span class="owner-tag dev">開発者</span></div>
+          </div>
+
+          <div class="packet-bar">
+            <div class="p-label">いま流れているデータ（玉の中身）</div>
+            <div class="p-body" data-packet></div>
+          </div>
+
+          <div class="term">
+            <div class="term-head">LCEL（LangChain Expression Language）— パイプ記法で鎖を書く</div>
+            <pre class="term-body"><span class="dim">from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_openai import ChatOpenAI</span>
+
+<span class="tok" data-tok="prompt">prompt = ChatPromptTemplate.from_template(
+    "会話履歴:\n{history}\n\n質問: {question}")</span>
+<span class="tok" data-tok="model">model = ChatOpenAI()          # 使うモデルを選ぶ</span>
+<span class="tok" data-tok="parser">parser = StrOutputParser()    # 出力を文字列に整える</span>
+
+<span class="dim"># パイプ（|）で部品をつなぐ ＝ 上の図の鎖そのもの</span>
+<span class="tok" data-tok="chain">chain = prompt | model | parser</span>
+<span class="tok" data-tok="invoke">answer = chain.invoke({</span>
+    <span class="tok" data-tok="history">"history": "（メモリ部品が読み出した過去の会話）",</span>
+<span class="tok" data-tok="invoke">    "question": "明日の東京の天気は？傘は要る？"})</span></pre>
+          </div>
+          <p class="fig-cap">※ メモリは「読み出した履歴をプロンプトの <span class="mono">{history}</span> に渡し、終わりに今回のやり取りを保存する」配線として鎖に組み込みます（ステップ2・8）。ツールを使う構成では、モデルにツールを結びつけ、ツール実行の部品を鎖の途中に加えます（ステップ5〜6）。分岐やループが必要になったら、次のLangGraphの出番です。</p>
+        </div>
+
+        <div class="step-card">
+          <div class="s-kicker" data-step-kicker>STEP 1 / 8</div>
+          <h3 data-step-title></h3>
+          <p data-step-desc></p>
+        </div>
+      </div>
+
+      <!-- ================= 3. LangGraph ================= -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 3</span>
+        <h2>LangGraph：分岐とループは「グラフ」で組む</h2>
+        <p>
+          鎖は直線が基本なので、「足りなければ調べ直す」のような分岐・ループは苦手です。
+          LangChain系でそれを扱うのが <span class="mono">LangGraph</span>。
+          処理を<strong>ノード</strong>、遷移を<strong>エッジ</strong>とし、共有されるデータの入れ物＝<strong>状態（State）</strong>がグラフを巡ります。
+          題材は「文書を検索して答える」処理です。
+        </p>
+      </div>
+
+      <div data-player="graph">
+        <div class="controls" data-controls>
+          <button type="button" class="btn" data-action="prev">← 前へ</button>
+          <button type="button" class="btn primary" data-action="play">▶ 再生</button>
+          <button type="button" class="btn" data-action="next">次へ →</button>
+          <button type="button" class="btn" data-action="reset">最初から</button>
+          <div class="speedwrap">
+            <label>速度
+              <select class="speedsel" data-speed aria-label="再生速度">
+                <option value="0.5">0.5×</option>
+                <option value="1" selected>1×</option>
+                <option value="1.5">1.5×</option>
+                <option value="2">2×</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="progress-line">
+          <span class="progress-label" data-progress-label>ステップ 1 / 5</span>
+          <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+          <div class="dots" data-dots></div>
+        </div>
+
+        <div class="stage" style="margin-top:14px;">
+          <div class="lg-wrap">
+            <div class="lg-svg-box">
+              <svg viewBox="0 0 720 252" role="img" aria-label="LangGraphのノードとエッジの図">
+                <defs>
+                  <marker id="lg-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M0,0 L10,5 L0,10 z" fill="#7d8a83"></path>
+                  </marker>
+                  <marker id="lg-ah-dev" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M0,0 L10,5 L0,10 z" fill="#c2701d"></path>
+                  </marker>
+                </defs>
+                <!-- edges -->
+                <line class="lg-edge" data-edge="e-start" x1="72" y1="105" x2="106" y2="105" marker-end="url(#lg-ah)"></line>
+                <line class="lg-edge" data-edge="e-retrieve" x1="222" y1="105" x2="252" y2="105" marker-end="url(#lg-ah)"></line>
+                <line class="lg-edge" data-edge="e-grade" x1="408" y1="105" x2="476" y2="105" marker-end="url(#lg-ah)"></line>
+                <line class="lg-edge" data-edge="e-end" x1="592" y1="105" x2="626" y2="105" marker-end="url(#lg-ah)"></line>
+                <path class="lg-edge" data-edge="e-loop" d="M 330 158 C 330 218, 165 218, 165 136" marker-end="url(#lg-ah-dev)"></path>
+                <text class="lg-edge-label" x="428" y="92">十分なら</text>
+                <text class="lg-edge-label loop" x="196" y="240">不足 → 検索へ戻る（ループ）</text>
+                <!-- nodes -->
+                <g class="lg-node" data-node="start">
+                  <circle cx="48" cy="105" r="24"></circle>
+                  <text x="48" y="101" text-anchor="middle" font-size="11">START</text>
+                  <text class="lg-sub" x="48" y="116" text-anchor="middle" font-size="10">開始</text>
+                </g>
+                <g class="lg-node" data-node="retrieve">
+                  <rect x="110" y="80" width="112" height="50" rx="10"></rect>
+                  <text x="166" y="103" text-anchor="middle" font-size="14">検索</text>
+                  <text class="lg-sub" x="166" y="120" text-anchor="middle" font-size="10.5">ノード：文書を引く</text>
+                </g>
+                <g class="lg-node" data-node="grade">
+                  <polygon points="330,52 408,105 330,158 252,105"></polygon>
+                  <text x="330" y="103" text-anchor="middle" font-size="14">判定</text>
+                  <text class="lg-sub" x="330" y="120" text-anchor="middle" font-size="10.5">条件分岐</text>
+                </g>
+                <g class="lg-node" data-node="generate">
+                  <rect x="480" y="80" width="112" height="50" rx="10"></rect>
+                  <text x="536" y="103" text-anchor="middle" font-size="14">回答生成</text>
+                  <text class="lg-sub" x="536" y="120" text-anchor="middle" font-size="10.5">ノード：文章を作る</text>
+                </g>
+                <g class="lg-node" data-node="end">
+                  <circle cx="652" cy="105" r="24"></circle>
+                  <text x="652" y="101" text-anchor="middle" font-size="11">END</text>
+                  <text class="lg-sub" x="652" y="116" text-anchor="middle" font-size="10">終了</text>
+                </g>
+              </svg>
+            </div>
+            <div class="state-box">
+              <div class="st-head">STATE（状態）— グラフ全体で共有される荷物</div>
+              <pre data-state></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="s-kicker" data-step-kicker>STEP 1 / 5</div>
+          <h3 data-step-title></h3>
+          <p data-step-desc></p>
+        </div>
+      </div>
+
+      <!-- ================= 4. Agent SDK アニメーション ================= -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 4</span>
+        <h2>Agent SDK：渡すと、内部のループが回る</h2>
+        <p>
+          題材は「資料フォルダから関連ファイルを探して要約する」調べものエージェント。
+          左の3つ（アンバー）を開発者が渡すと、真ん中の緑の枠＝SDKの中でループが回り始めます。
+          <strong>モデル⇔ツールの往復を管理するのはSDK</strong>で、開発者はその制御を書きません。
+        </p>
+      </div>
+
+      <div data-player="sdk">
+        <div class="controls" data-controls>
+          <button type="button" class="btn" data-action="prev">← 前へ</button>
+          <button type="button" class="btn primary" data-action="play">▶ 再生</button>
+          <button type="button" class="btn" data-action="next">次へ →</button>
+          <button type="button" class="btn" data-action="reset">最初から</button>
+          <div class="speedwrap">
+            <label>速度
+              <select class="speedsel" data-speed aria-label="再生速度">
+                <option value="0.5">0.5×</option>
+                <option value="1" selected>1×</option>
+                <option value="1.5">1.5×</option>
+                <option value="2">2×</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="progress-line">
+          <span class="progress-label" data-progress-label>ステップ 1 / 7</span>
+          <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+          <div class="dots" data-dots></div>
+        </div>
+
+        <div class="stage" data-stage style="margin-top:14px;">
+          <div class="ball" data-ball></div>
+          <div class="sdk-stage">
+            <div>
+              <div class="sdk-col-label">開発者が書く・渡す</div>
+              <div class="dev-stack">
+                <div class="part" data-box="task"><span class="p-icon">🎯</span><span class="p-name">タスク</span><span class="p-sub">「資料を探して要約して」</span><br><span class="owner-tag dev">開発者</span></div>
+                <div class="part" data-box="tools"><span class="p-icon">🧰</span><span class="p-name">ツール定義</span><span class="p-sub">検索・読み取り等の関数</span><br><span class="owner-tag dev">開発者</span></div>
+                <div class="part" data-box="rules"><span class="p-icon">🚧</span><span class="p-name">許可・制約</span><span class="p-sub">使える道具・対象フォルダ</span><br><span class="owner-tag dev">開発者</span></div>
+              </div>
+            </div>
+
+            <div>
+              <div class="sdk-col-label">フレームワークが担う</div>
+              <div class="sdk-core" data-box="core">
+                <div class="core-head">
+                  <span class="core-name">Agent SDK</span>
+                  <span class="owner-tag fw">ループ内蔵</span>
+                  <span class="loop-count" data-loop-count>ループ 0周目</span>
+                </div>
+                <div class="loop-pair">
+                  <div class="part" data-box="model"><span class="p-icon">🧠</span><span class="p-name">モデル</span><span class="p-sub">次の一手を決める</span></div>
+                  <div class="loop-arrows" aria-hidden="true">
+                    <span class="la" data-arrow="call">呼ぶ →<br>tool_use</span>
+                    <span class="la" data-arrow="result">← 結果<br>tool_result</span>
+                  </div>
+                  <div class="part" data-box="toolrun"><span class="p-icon">🔧</span><span class="p-name">ツール実行</span><span class="p-sub">SDKが実行・結果を回収</span></div>
+                </div>
+                <p style="margin:12px 2px 0; font-size:13px; color:var(--ink-2);">
+                  会話履歴の管理、ツールの呼び出しと結果の受け渡し、ループの継続・終了判定は、すべてこの枠の中。
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <div class="sdk-col-label">アプリへ</div>
+              <div class="out-box">
+                <div class="part" data-box="output"><span class="p-icon">📄</span><span class="p-name">最終回答</span><span class="p-sub">要約文が返る</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="packet-bar">
+            <div class="p-label">いま起きていること</div>
+            <div class="p-body" data-packet></div>
+          </div>
+
+          <div class="cards two" style="margin-top:16px;">
+            <div class="term" style="margin-top:0;">
+              <div class="term-head">Claude Agent SDK（Python）の例</div>
+              <pre class="term-body"><span class="dim">from claude_agent_sdk import query, ClaudeAgentOptions</span>
+
+options = ClaudeAgentOptions(
+    <span class="tok" data-tok="sdktools">allowed_tools=["Read", "Glob"]</span>)
+
+<span class="tok" data-tok="sdktask">async for message in query(
+    prompt="資料フォルダから関連ファイルを
+            探して要約して",
+    options=options):</span>
+    print(message)</pre>
+            </div>
+            <div class="term" style="margin-top:0;">
+              <div class="term-head">OpenAI Agents SDK（Python）の例</div>
+              <pre class="term-body"><span class="dim">from agents import Agent, Runner</span>
+
+<span class="tok" data-tok="sdktools">agent = Agent(
+    name="researcher",
+    instructions="資料を調べて要約する",
+    tools=[search_files, read_file])</span>
+
+<span class="tok" data-tok="sdktask">result = await Runner.run(
+    agent, "資料を探して要約して")</span></pre>
+            </div>
+          </div>
+          <p class="fig-cap">どちらのSDKでも、コードに「ループを回す処理」は現れません。書いてあるのは、渡すもの（タスク・ツール・制約）と、結果の受け取りだけです。</p>
+        </div>
+
+        <div class="step-card">
+          <div class="s-kicker" data-step-kicker>STEP 1 / 7</div>
+          <h3 data-step-title></h3>
+          <p data-step-desc></p>
+        </div>
+      </div>
+
+      <!-- ================= 5. 比較表 ================= -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 5</span>
+        <h2>比較表：どちらを選ぶか</h2>
+        <p>優劣ではなく、抽象度（どこまで任せるか）の違いです。同じ仕事を両方で組むこともできます。</p>
+      </div>
+
+      <div class="cmp-wrap">
+        <table class="cmp">
+          <thead>
+            <tr>
+              <th scope="col">観点</th>
+              <th scope="col">LangChain / LangGraph<span class="th-sub">部品組み立て型</span></th>
+              <th scope="col">Agent SDK<span class="th-sub">ループ内蔵型</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">抽象度</th>
+              <td data-h="LangChain / LangGraph"><strong>低め</strong> — 部品と流れが見える分、細かく制御できる。代わりに設計と配線は自分で担う</td>
+              <td data-h="Agent SDK"><strong>高め</strong> — ループごと任せる分、早く動く。代わりに内部の細部はSDKの流儀に従う</td>
+            </tr>
+            <tr>
+              <th scope="row">開発者が主に書くもの</th>
+              <td data-h="LangChain / LangGraph">部品の組み合わせ、流れ（鎖／グラフ）の設計、状態の持ち方</td>
+              <td data-h="Agent SDK">タスク（指示）、ツール定義、許可や制約。ループ制御は書かない</td>
+            </tr>
+            <tr>
+              <th scope="row">分岐・ループの扱い</th>
+              <td data-h="LangChain / LangGraph">チェーンは直線が基本。分岐・ループはLangGraphで、ノードとエッジとして<strong>自分で設計する</strong></td>
+              <td data-h="Agent SDK">エージェントループが<strong>内蔵</strong>。回数や順序はモデルの判断に委ねられる</td>
+            </tr>
+            <tr>
+              <th scope="row">向いている用途</th>
+              <td data-h="LangChain / LangGraph">手順の決まった処理、RAGのようなパイプライン、途中の形式や順序を厳密に決めたい処理</td>
+              <td data-h="Agent SDK">調べもの、ファイル操作、試行錯誤が要る作業など、手順が事前に決まらない自律的なタスク</td>
+            </tr>
+            <tr>
+              <th scope="row">関係</th>
+              <td data-h="LangChain / LangGraph" colspan="2">
+                対立するものではありません。Agent SDK的な自律エージェントも、LangChain側ではLangGraphで組めます。
+                逆にAgent SDKでも、ツールの裏側に決まった手順の処理（チェーン的な処理）を置けます。
+                選ぶ基準は「<strong>流れを自分で設計したいか、モデルの判断に任せたいか</strong>」です。
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ================= 6. 用語解説 ================= -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 6</span>
+        <h2>用語解説</h2>
+        <p>このページで使った言葉の整理です。</p>
+      </div>
+
+      <dl class="glossary">
+        <div class="g-item">
+          <dt>チェーン<span class="mono">Chain</span></dt>
+          <dd>部品を鎖のようにつないだ処理の流れ。入力が先頭の部品から順に渡され、最後の部品の出力が結果になる。LangChainの基本単位で、各部品は「入力を受けて出力を返す」という共通の約束（Runnableインターフェース）でつながる。</dd>
+        </div>
+        <div class="g-item">
+          <dt>LCEL<span class="mono">LangChain Expression Language</span></dt>
+          <dd>チェーンをパイプ記法で書くための記法。<span class="mono">prompt | model | parser</span> のように、部品を <span class="mono">|</span> でつなぐだけで鎖になり、<span class="mono">invoke</span> で実行できる。ストリーミングや並列実行などの共通機能も、この記法で組んだ鎖に自動で付いてくる。</dd>
+        </div>
+        <div class="g-item">
+          <dt>ノードとエッジと状態<span class="mono">LangGraph</span></dt>
+          <dd>ノード＝1つの処理（関数）。エッジ＝ノード間の遷移で、状態の中身に応じて行き先が変わる「条件付きエッジ」もある。状態（State）＝グラフ全体で共有されるデータの入れ物で、各ノードが読み書きしながら処理が進む。分岐・ループ・途中での停止と再開はこの仕組みで表す。</dd>
+        </div>
+        <div class="g-item">
+          <dt>エージェントループ<span class="mono">Agent Loop</span></dt>
+          <dd>「モデルが考える → ツールを使う → 結果を見る → また考える」の繰り返し。モデルが「もう道具は要らない」と判断するまで続くため、回数は実行時に決まる。Agent SDKではこのループがSDK側に内蔵され、LangGraphでは開発者がグラフとして設計する。</dd>
+        </div>
+        <div class="g-item">
+          <dt>抽象度<span class="mono">Abstraction</span></dt>
+          <dd>「細部をどれだけ枠組みの内側に隠すか」の度合い。低い＝部品と流れが見えて細かく制御できるが、書く量と設計の責任が増える。高い＝渡すものが少なく早く動くが、内部の挙動は枠組みの流儀に従う。どちらが良いかは、作るものの性質で決まる。</dd>
+        </div>
+        <div class="g-item">
+          <dt>ツール呼び出し<span class="mono">Tool Calling</span></dt>
+          <dd>モデルが「このツールを、この引数で呼んでほしい」という指示（tool_use）を返す仕組み。モデル自身は外部に触れられないので、実際に実行するのはフレームワーク側。実行結果（tool_result）がモデルに戻され、次の生成に使われる。</dd>
+        </div>
+      </dl>
+
+      <div class="note-box">
+        <strong>どちらの道でも、モデルとツールは同じ。</strong>
+        違いは「流れの設計図を誰が持つか」だけです。決まった手順を確実に回したいなら設計図を自分で描く（LangChain／LangGraph）、
+        手順自体をモデルに考えさせたいなら設計図ごと任せる（Agent SDK）。
+        実際の開発では、全体はSDKに任せつつ、部分的に決まった処理をツールの中に閉じ込める、といった混ぜ方もよくあります。
+      </div>
+
+      <footer>
+        コード例は各フレームワークの公開APIに基づく最小限の抜粋です。正確な仕様は各公式ドキュメント（LangChain／LangGraph、Claude Agent SDK、OpenAI Agents SDK）を確認してください。
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+
+        /* ============ 共通プレイヤーエンジン（シリーズ共通の操作形式） ============ */
+        function createPlayer(root, steps, renderStage, baseMs) {
+          var idx = 0, playing = false, speed = 1, timer = null;
+          var BASE_MS = baseMs || 3600;
+          var label = root.querySelector("[data-progress-label]");
+          var fill = root.querySelector("[data-progress-fill]");
+          var dotsWrap = root.querySelector("[data-dots]");
+          var kicker = root.querySelector("[data-step-kicker]");
+          var titleEl = root.querySelector("[data-step-title]");
+          var descEl = root.querySelector("[data-step-desc]");
+          var stage = root.querySelector("[data-stage]");
+          var ball = root.querySelector("[data-ball]");
+          var lastTarget = null;
+
+          var dots = [];
+          for (var i = 0; i < steps.length; i++) {
+            (function (n) {
+              var b = document.createElement("button");
+              b.type = "button";
+              b.className = "dot";
+              b.textContent = String(n + 1);
+              b.setAttribute("aria-label", "ステップ" + (n + 1) + "へ移動");
+              b.addEventListener("click", function () { pause(); goTo(n); });
+              dotsWrap.appendChild(b);
+              dots.push(b);
+            })(i);
+          }
+
+          function placeBall(instant) {
+            if (!ball || !stage) return;
+            if (!lastTarget) { ball.style.opacity = "0"; return; }
+            var sr = stage.getBoundingClientRect();
+            var tr = lastTarget.getBoundingClientRect();
+            if (instant) ball.style.transition = "none";
+            ball.style.left = (tr.left - sr.left + tr.width / 2) + "px";
+            ball.style.top = (tr.top - sr.top + tr.height / 2) + "px";
+            ball.style.opacity = "1";
+            if (instant) { void ball.offsetWidth; ball.style.transition = ""; }
+          }
+
+          function render() {
+            var s = steps[idx];
+            label.textContent = "ステップ " + (idx + 1) + " / " + steps.length;
+            fill.style.width = ((idx + 1) / steps.length * 100) + "%";
+            dots.forEach(function (d, i) {
+              d.classList.toggle("now", i === idx);
+              d.classList.toggle("done", i < idx);
+            });
+            kicker.textContent = "STEP " + (idx + 1) + " / " + steps.length;
+            titleEl.innerHTML = s.title;
+            descEl.innerHTML = s.desc;
+            lastTarget = renderStage(root, s, idx) || null;
+            placeBall(false);
+            root.querySelectorAll("[data-action='prev']").forEach(function (b) { b.disabled = idx === 0; });
+            root.querySelectorAll("[data-action='next']").forEach(function (b) { b.disabled = idx === steps.length - 1; });
+            root.querySelectorAll("[data-action='play']").forEach(function (b) {
+              b.textContent = playing ? "⏸ 一時停止" : (idx === steps.length - 1 ? "↺ もう一度" : "▶ 再生");
+            });
+          }
+          function goTo(n) { idx = Math.max(0, Math.min(steps.length - 1, n)); render(); }
+          function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+          function startTimer() {
+            stopTimer();
+            timer = setInterval(function () {
+              if (idx >= steps.length - 1) { pause(); return; }
+              goTo(idx + 1);
+              if (idx >= steps.length - 1) { pause(); }
+            }, BASE_MS / speed);
+          }
+          function play() {
+            if (idx >= steps.length - 1) { goTo(0); }
+            playing = true; render(); startTimer();
+          }
+          function pause() { playing = false; stopTimer(); render(); }
+
+          root.querySelector("[data-controls]").addEventListener("click", function (e) {
+            var btn = e.target.closest("[data-action]");
+            if (!btn || btn.disabled) return;
+            var a = btn.getAttribute("data-action");
+            if (a === "prev") { pause(); goTo(idx - 1); }
+            else if (a === "next") { pause(); goTo(idx + 1); }
+            else if (a === "reset") { pause(); goTo(0); }
+            else if (a === "play") { playing ? pause() : play(); }
+          });
+          root.querySelector("[data-speed]").addEventListener("change", function (e) {
+            speed = parseFloat(e.target.value);
+            if (playing) startTimer();
+          });
+          window.addEventListener("resize", function () { placeBall(true); });
+
+          render();
+        }
+
+        /* ============ Section 2: LangChain チェーン ============ */
+        var CHAIN_STEPS = [
+          {
+            title: "入力がチェーンに入る",
+            desc: "アプリが <span class='mono'>chain.invoke(...)</span> を呼ぶと、質問データの玉が鎖の先頭に入ります。ここから先、玉は部品から部品へ渡されながら姿を変えていきます。玉の中身の変化に注目してください。",
+            box: "input", done: [], tok: "invoke",
+            packet: "{ \"question\": \"明日の東京の天気は？傘は要る？\" }"
+          },
+          {
+            title: "メモリが会話履歴を読み出す",
+            desc: "メモリ部品が、過去のやり取りを玉に添えます。質問だけでは足りない文脈を補うためです。履歴をどう保持するか（そのまま貯める／要約する等）は、開発者がメモリ部品の種類を選んで決めます。",
+            box: "memory", done: ["input"], tok: "history",
+            packet: "質問 ＋ 会話履歴（前回：「週末は晴れる？」→「晴れます」）"
+          },
+          {
+            title: "プロンプトテンプレートに当てはめる",
+            desc: "テンプレートの <span class='mono'>{question}</span> などの変数に玉の中身が埋め込まれ、モデルへ渡す指示文が完成します。「指示文を組み立てる仕組み」は部品が担い、「何を書くか」は開発者がテンプレートに書きます。",
+            box: "prompt", done: ["input", "memory"], tok: "prompt",
+            packet: "完成した指示文（文字列）：「会話履歴と質問をもとに答えてください。質問: 明日の東京の天気は？…」"
+          },
+          {
+            title: "モデルが生成する — ただし「ツールを使いたい」と返す",
+            desc: "モデルは指示文を受けて応答を生成します。ただし最新の天気はモデルの知識にないため、文章ではなく「天気ツールを呼んで」という指示（<span class='mono'>tool_use</span>）を返しました。鎖の流れはここでツール側へ分岐します。",
+            box: "model", done: ["input", "memory", "prompt"], tok: "model",
+            packet: "モデルの応答：tool_use（get_weather, city=\"東京\", day=\"明日\"）"
+          },
+          {
+            title: "ツールが実行される",
+            desc: "フレームワーク側の仕組みが天気ツールを実際に実行し、結果を取得します。モデル自身は外部に触れられません。この「ツールを挟む往復を鎖のどこに置くか」も、開発者が配線する設計の一部です。",
+            box: "tool", done: ["input", "memory", "prompt", "model"], tok: null,
+            packet: "ツール実行結果：{ \"天気\": \"雨\", \"降水確率\": \"80%\" }"
+          },
+          {
+            title: "ツール結果を持って、モデルがもう一度生成する",
+            desc: "ツールの結果が玉に加わり、モデルへもう一度渡されます。今度は実際のデータがあるので、最終回答の文章が生成されます。チェーン型では、この「戻して再生成」の一往復も、鎖の形として目に見えています。",
+            box: "model", done: ["input", "memory", "prompt", "tool"], tok: "model",
+            packet: "ツール結果を加えた指示文 → モデルの最終生成：「明日は雨です。傘を…」"
+          },
+          {
+            title: "出力パーサーが整形する",
+            desc: "モデルの生出力を、アプリが扱える形に変換します。<span class='mono'>StrOutputParser</span> なら文字列を取り出し、JSON用のパーサーなら決まった構造のデータにします。「出力の形式を保証する」のがパーサーの役目です。",
+            box: "parser", done: ["input", "memory", "prompt", "model", "tool"], tok: "parser",
+            packet: "整形済みの文字列（アプリがそのまま表示・保存できる形）"
+          },
+          {
+            title: "出力が返り、やり取りがメモリに保存される",
+            desc: "整形された回答がアプリに返ります。同時に今回の質問と回答がメモリに書き込まれ、次回のステップ2で読み出される文脈になります。これで鎖を一周しました。",
+            box: "output", done: ["input", "memory", "prompt", "model", "tool", "parser"], tok: "invoke",
+            packet: "answer = \"明日は雨です。傘を持っていきましょう\" ＋ メモリへ保存"
+          }
+        ];
+        function chainRender(root, s) {
+          root.querySelectorAll("[data-box]").forEach(function (b) {
+            var name = b.getAttribute("data-box");
+            b.classList.toggle("active", name === s.box);
+            b.classList.toggle("done", s.done.indexOf(name) !== -1);
+          });
+          root.querySelector("[data-packet]").textContent = s.packet;
+          root.querySelectorAll("[data-tok]").forEach(function (t) {
+            t.classList.toggle("hl", t.getAttribute("data-tok") === s.tok);
+          });
+          return root.querySelector("[data-box='" + s.box + "']");
+        }
+        createPlayer(document.querySelector("[data-player='chain']"), CHAIN_STEPS, chainRender, 3600);
+
+        /* ============ Section 3: LangGraph ============ */
+        var GRAPH_STEPS = [
+          {
+            title: "状態が作られる",
+            desc: "実行が始まると、まず状態（State）が用意されます。最初は質問だけ。この状態が、グラフ全体で共有される「荷物」として、ノードからノードへ渡っていきます。",
+            node: "start", doneNodes: [], edges: [],
+            state: "{\n  <span class='hl'>\"question\": \"配送状況を教えて\"</span>\n}"
+          },
+          {
+            title: "検索ノードが状態を更新する",
+            desc: "検索ノードは「状態を受け取り、更新分を返す関数」です。文書検索の結果を <span class='mono'>docs</span> に追加しました。ノードの中身（検索の実装）は開発者が書き、ノード同士のつなぎ方はグラフ定義が持ちます。",
+            node: "retrieve", doneNodes: ["start"], edges: ["e-start"],
+            state: "{\n  \"question\": \"配送状況を教えて\",\n  <span class='hl'>\"docs\": [\"文書A\", \"文書B\"]</span>\n}"
+          },
+          {
+            title: "判定ノードで条件分岐 — 足りないので戻る",
+            desc: "判定ノードが <span class='mono'>docs</span> の十分さを評価し、「不足」と判断。条件付きエッジが検索ノードへの道を選びました。直線の鎖では書けない「戻る」が、グラフではエッジ1本で表せます。",
+            node: "grade", doneNodes: ["start", "retrieve"], edges: ["e-retrieve", "e-loop"],
+            state: "{\n  \"question\": \"配送状況を教えて\",\n  \"docs\": [\"文書A\", \"文書B\"]\n  <span class='dim'>// 判定：根拠が不足 → 検索へ戻る</span>\n}"
+          },
+          {
+            title: "2周目：検索し直して、今度は十分",
+            desc: "検索ノードが別の文書も引いて <span class='mono'>docs</span> が充実しました。再び判定ノードに来ると、今度は「十分」。同じノードでも、状態の中身によって次に進むエッジが変わります。",
+            node: "grade", doneNodes: ["start", "retrieve"], edges: ["e-retrieve"],
+            state: "{\n  \"question\": \"配送状況を教えて\",\n  <span class='hl'>\"docs\": [\"文書A\", \"文書B\", \"文書C\"]</span>\n  <span class='dim'>// 判定：十分 → 回答生成へ</span>\n}"
+          },
+          {
+            title: "回答生成ノード → 終了",
+            desc: "「十分」のエッジを通って回答生成ノードへ。<span class='mono'>docs</span> を根拠に文章を作り、<span class='mono'>answer</span> に書き込みます。ENDに到達すると、最終状態そのものが実行結果として返ります。",
+            node: "end", doneNodes: ["start", "retrieve", "grade", "generate"], edges: ["e-grade", "e-end"],
+            state: "{\n  \"question\": \"配送状況を教えて\",\n  \"docs\": [\"文書A\", \"文書B\", \"文書C\"],\n  <span class='hl'>\"answer\": \"配送は完了しています…\"</span>\n}"
+          }
+        ];
+        function graphRender(root, s) {
+          root.querySelectorAll("[data-node]").forEach(function (n) {
+            var name = n.getAttribute("data-node");
+            n.classList.toggle("active", name === s.node);
+            n.classList.toggle("done", s.doneNodes.indexOf(name) !== -1);
+          });
+          root.querySelectorAll("[data-edge]").forEach(function (e) {
+            e.classList.toggle("active", s.edges.indexOf(e.getAttribute("data-edge")) !== -1);
+          });
+          root.querySelector("[data-state]").innerHTML = s.state;
+          return null;
+        }
+        createPlayer(document.querySelector("[data-player='graph']"), GRAPH_STEPS, graphRender, 3600);
+
+        /* ============ Section 4: Agent SDK ============ */
+        var SDK_STEPS = [
+          {
+            title: "開発者が渡すのは3つだけ",
+            desc: "タスク（指示文）、ツール定義、許可・制約。この3つをSDKに渡して呼び出すのが、開発者のコードのほぼ全部です。ループを回す処理——モデルへの再送やツールの実行管理——は、コードのどこにも書かれていません。",
+            boxes: ["task", "tools", "rules"], ball: "task", loop: "ループ 0周目", hot: false,
+            arrowCall: false, arrowResult: false, toks: ["sdktools", "sdktask"],
+            packet: "開発者のコードはここまで — あとは query() / Runner.run() を呼ぶだけ"
+          },
+          {
+            title: "SDKがループを開始する",
+            desc: "呼び出しを受けると、SDKがモデルへタスクとツール定義を送ります。ここから先の運転はSDKです。モデルは「使える道具の一覧」を見たうえで、最初の一手を考えます。",
+            boxes: ["core", "model"], ball: "model", loop: "ループ 1周目", hot: false,
+            arrowCall: false, arrowResult: false, toks: [],
+            packet: "SDK → モデル：タスク ＋ ツール定義（search_files / read_file）を送信"
+          },
+          {
+            title: "モデルがツールを選ぶ",
+            desc: "モデルは「まず関連ファイルを探そう」と判断し、ツール呼び出し（<span class='mono'>tool_use</span>）を返しました。決めるのはモデルですが、モデル自身はファイルに触れられません。実行に移すのはSDKの役目です。",
+            boxes: ["core", "model"], ball: "model", loop: "ループ 1周目", hot: false,
+            arrowCall: true, arrowResult: false, toks: [],
+            packet: "モデル → SDK：tool_use「search_files で資料を探す」"
+          },
+          {
+            title: "SDKがツールを実行する",
+            desc: "SDKは許可・制約を照合してからツールを実行します（対象フォルダの外は読めない、等）。結果はSDKが受け取り、会話に <span class='mono'>tool_result</span> として積みます。この受け渡しの配線は、開発者が書かなくてもSDKの中で行われます。",
+            boxes: ["core", "toolrun"], ball: "toolrun", loop: "ループ 1周目", hot: true,
+            arrowCall: false, arrowResult: false, toks: [],
+            packet: "SDK が search_files を実行 → 該当ファイル3件が見つかる"
+          },
+          {
+            title: "結果がモデルへ戻る（ループ1周）",
+            desc: "SDKが結果をモデルへ再送します。モデルはファイル名を見て「中身を読もう」と次の一手を決め、再びツール呼び出しを返しました。ループ2周目に入ります。この往復の管理こそが、SDK内蔵ループの正体です。",
+            boxes: ["core", "model"], ball: "model", loop: "ループ 1周目 → 2周目へ", hot: true,
+            arrowCall: false, arrowResult: true, toks: [],
+            packet: "SDK → モデル：検索結果を渡す → モデル「read_file で中身を読む」"
+          },
+          {
+            title: "ループは必要なだけ繰り返される",
+            desc: "読み取り、必要なら追加の検索……モデルが「もう道具は要らない」と判断するまで、SDKが往復を回し続けます。何周するかは実行してみないと分かりません。これが「手順を事前に決めない」ことの裏側です。",
+            boxes: ["core", "toolrun"], ball: "toolrun", loop: "ループ 2周目", hot: true,
+            arrowCall: true, arrowResult: false, toks: [],
+            packet: "read_file 実行 → 要約の材料がそろう"
+          },
+          {
+            title: "最終回答が返ってループ終了",
+            desc: "モデルがツールを使わず文章で答えたら、SDKはループを終えて回答をアプリに返します。開発者のコードは最初と最後だけ。途中の往復はすべてSDKが担いました——Section 2のチェーンと見比べてください。",
+            boxes: ["output"], ball: "output", loop: "ループ終了", hot: false,
+            arrowCall: false, arrowResult: false, toks: [],
+            packet: "最終回答：資料3件の要約文がアプリに返る"
+          }
+        ];
+        function sdkRender(root, s) {
+          root.querySelectorAll("[data-box]").forEach(function (b) {
+            b.classList.toggle("active", s.boxes.indexOf(b.getAttribute("data-box")) !== -1);
+          });
+          var lc = root.querySelector("[data-loop-count]");
+          lc.textContent = s.loop;
+          lc.classList.toggle("hot", s.hot);
+          root.querySelector("[data-arrow='call']").classList.toggle("on", s.arrowCall);
+          root.querySelector("[data-arrow='result']").classList.toggle("on", s.arrowResult);
+          root.querySelector("[data-packet]").textContent = s.packet;
+          root.querySelectorAll("[data-tok]").forEach(function (t) {
+            t.classList.toggle("hl", s.toks.indexOf(t.getAttribute("data-tok")) !== -1);
+          });
+          return root.querySelector("[data-box='" + s.ball + "']");
+        }
+        createPlayer(document.querySelector("[data-player='sdk']"), SDK_STEPS, sdkRender, 3600);
+      })();
+    </script>
+  </body>
+</html>

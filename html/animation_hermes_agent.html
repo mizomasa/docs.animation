@@ -1,0 +1,804 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<link rel="icon" href="data:," />
+<title>Hermes Agentまとめ — ロボットの1日でわかる自律エージェント</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f4f1ea;
+    --bg2:#ece7db;
+    --surface:#fffdf8;
+    --surface2:#f7f3ea;
+    --ink:#23272b;
+    --ink2:#565d63;
+    --line:#ddd5c3;
+    --accent:#d96c1e;      /* workshop orange */
+    --accent-ink:#b45309;
+    --teal:#0f766e;
+    --teal-soft:#d9efec;
+    --amber-soft:#fdeeda;
+    --red:#b3372e;
+    --red-soft:#fbe9e6;
+    --shadow:0 10px 30px rgba(60,45,20,.10);
+    --radius:14px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#171a1d;
+      --bg2:#1d2125;
+      --surface:#22262b;
+      --surface2:#262b31;
+      --ink:#ece9e2;
+      --ink2:#a9b0b6;
+      --line:#3a4046;
+      --accent:#f08a3c;
+      --accent-ink:#f5a55e;
+      --teal:#3ec2b4;
+      --teal-soft:#173d39;
+      --amber-soft:#40301c;
+      --red:#e0786e;
+      --red-soft:#422623;
+      --shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Zen Kaku Gothic New",system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;
+    line-height:1.75;font-size:16px;
+    -webkit-text-size-adjust:100%;
+  }
+  .wrap{max-width:1020px;margin:0 auto;padding:0 18px 72px}
+  button{font-family:inherit;cursor:pointer;min-height:44px}
+  a{color:var(--teal)}
+  :focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+  /* ---------- header ---------- */
+  header{padding:34px 0 8px}
+  .kicker{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:"IBM Plex Mono",monospace;font-size:12.5px;font-weight:600;letter-spacing:.08em;
+    color:var(--accent-ink);background:var(--amber-soft);
+    border:1px solid var(--line);border-radius:999px;padding:5px 13px;
+  }
+  .kicker .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+  h1{font-size:clamp(30px,6vw,46px);font-weight:900;line-height:1.25;margin:16px 0 10px;letter-spacing:.01em}
+  h1 .thin{color:var(--ink2);font-weight:700}
+  .lede{font-size:clamp(15.5px,2.6vw,18px);color:var(--ink2);max-width:44em;margin:0}
+  .lede strong{color:var(--ink)}
+  .meta-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+  .meta-chip{
+    font-size:13px;font-weight:700;background:var(--surface);border:1px solid var(--line);
+    border-radius:8px;padding:6px 11px;color:var(--ink2);
+  }
+  .meta-chip b{color:var(--ink)}
+
+  /* ---------- stage ---------- */
+  .stage-card{
+    margin-top:26px;background:var(--surface);border:1px solid var(--line);
+    border-radius:20px;box-shadow:var(--shadow);overflow:hidden;
+  }
+  .stage-head{
+    display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;
+    padding:14px 18px 10px;
+  }
+  .stage-head h2{font-size:19px;font-weight:900;margin:0}
+  .stage-head p{margin:0;font-size:13px;color:var(--ink2)}
+  .clock-badge{
+    font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:14px;
+    background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:6px 12px;
+  }
+  .clock-badge span{color:var(--accent-ink)}
+  .stage-scroll{overflow:hidden}
+  svg.stage{width:100%;height:auto;display:block;background:linear-gradient(180deg,var(--surface2),var(--surface))}
+
+  /* SVG station styles */
+  .st-label{font-family:"Zen Kaku Gothic New",sans-serif;font-weight:700;font-size:12.5px;fill:var(--ink)}
+  .st-sub{font-family:"IBM Plex Mono",monospace;font-size:9.5px;fill:var(--ink2)}
+  .st-box{fill:var(--surface);stroke:var(--line);stroke-width:1.6}
+  .station{transition:opacity .4s}
+  .station .halo{opacity:0;transition:opacity .4s}
+  .station.active .halo{opacity:1}
+  .station.active .st-box{stroke:var(--accent);stroke-width:2.4}
+
+  #robot{transition:transform 1.15s cubic-bezier(.45,.05,.25,1);will-change:transform}
+  .bob{animation:bob 1.6s ease-in-out infinite}
+  @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  .arm-r{transform-origin:0 0;animation:wave 1.8s ease-in-out infinite}
+  @keyframes wave{0%,100%{transform:rotate(0deg)}50%{transform:rotate(-14deg)}}
+  .eye{transition:all .3s}
+  body[data-step="8"] .eye{transform:scaleY(.15)}
+  .antenna-ball{animation:blink 2.4s ease-in-out infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+
+  .fx{opacity:0;transition:opacity .5s}
+  body[data-step="1"] .fx-cron,
+  body[data-step="2"] .fx-msg,
+  body[data-step="3"] .fx-tool,
+  body[data-step="4"] .fx-clone,
+  body[data-step="5"] .fx-write,
+  body[data-step="6"] .fx-mem,
+  body[data-step="7"] .fx-brain,
+  body[data-step="8"] .fx-night{opacity:1}
+
+  .msgfly{animation:fly 1.5s ease-in-out infinite}
+  .msgfly.d2{animation-delay:.5s}.msgfly.d3{animation-delay:1s}
+  @keyframes fly{0%{transform:translateY(6px);opacity:0}25%{opacity:1}75%{opacity:1}100%{transform:translateY(-8px);opacity:0}}
+  .gear{transform-origin:center;transform-box:fill-box;animation:spin 3.2s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .clonebot{animation:bob 1.3s ease-in-out infinite}
+  .clonebot.c2{animation-delay:.35s}.clonebot.c3{animation-delay:.7s}
+  .pen{animation:write .7s ease-in-out infinite alternate}
+  @keyframes write{from{transform:translateX(0) rotate(0deg)}to{transform:translateX(7px) rotate(6deg)}}
+  .zzz{animation:zfloat 2.2s ease-in-out infinite}
+  .zzz.z2{animation-delay:.6s}.zzz.z3{animation-delay:1.2s}
+  @keyframes zfloat{0%{transform:translateY(4px);opacity:0}30%{opacity:1}100%{transform:translateY(-14px);opacity:0}}
+  .spark{animation:blink 1.1s ease-in-out infinite}
+  .brainpulse{animation:bpulse 1.4s ease-in-out infinite}
+  @keyframes bpulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+  .brainpulse{transform-origin:center;transform-box:fill-box}
+  #brainCore{transition:fill .6s}
+
+  /* caption + controls */
+  .caption{
+    padding:16px 18px 6px;border-top:1px solid var(--line);
+    display:flex;gap:14px;align-items:flex-start;
+  }
+  .step-no{
+    flex:0 0 auto;font-family:"IBM Plex Mono",monospace;font-weight:600;
+    background:var(--accent);color:#fff;border-radius:10px;
+    font-size:15px;padding:8px 12px;line-height:1.2;text-align:center;
+  }
+  .step-no small{display:block;font-size:10px;opacity:.85}
+  .caption h3{margin:0 0 4px;font-size:18px;font-weight:900}
+  .caption p{margin:0;color:var(--ink2);font-size:14.5px}
+  .caption .tag{
+    display:inline-block;font-size:11.5px;font-weight:700;color:var(--teal);
+    background:var(--teal-soft);border-radius:6px;padding:1px 8px;margin-left:8px;vertical-align:2px;
+  }
+  .controls{
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+    padding:14px 18px 18px;
+  }
+  .cbtn{
+    border:1px solid var(--line);background:var(--surface2);color:var(--ink);
+    font-weight:700;font-size:14.5px;border-radius:10px;padding:8px 16px;
+    display:inline-flex;align-items:center;gap:7px;min-width:44px;justify-content:center;
+  }
+  .cbtn:hover{border-color:var(--accent)}
+  .cbtn.primary{background:var(--accent);border-color:var(--accent);color:#fff;min-width:118px}
+  .cbtn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+  .speed-group{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .speed-group button{
+    border:0;background:var(--surface2);color:var(--ink2);font-weight:700;font-size:13.5px;
+    padding:8px 13px;min-height:44px;
+  }
+  .speed-group button.on{background:var(--accent);color:#fff}
+  .progress{flex:1 1 160px;min-width:150px}
+  .progress .bar{height:8px;background:var(--bg2);border-radius:99px;overflow:hidden}
+  .progress .fill{height:100%;background:var(--accent);border-radius:99px;transition:width .5s ease;width:12.5%}
+  .progress .lbl{font-size:12px;color:var(--ink2);font-family:"IBM Plex Mono",monospace;margin-top:4px}
+  .dots{display:flex;gap:6px;padding:0 18px 16px;flex-wrap:wrap}
+  .dots button{
+    flex:1 1 0;min-width:34px;height:38px;border-radius:9px;border:1px solid var(--line);
+    background:var(--surface2);color:var(--ink2);font-family:"IBM Plex Mono",monospace;
+    font-size:13px;font-weight:600;padding:0 4px;
+  }
+  .dots button small{display:block;font-family:"Zen Kaku Gothic New",sans-serif;font-size:9.5px;font-weight:700;line-height:1.1}
+  .dots button.cur{background:var(--accent);border-color:var(--accent);color:#fff}
+  .dots button.done{background:var(--amber-soft);color:var(--accent-ink);border-color:var(--accent)}
+
+  /* ---------- article ---------- */
+  section.block{margin-top:52px}
+  section.block > h2{
+    font-size:clamp(22px,4vw,28px);font-weight:900;margin:0 0 6px;
+    display:flex;align-items:center;gap:12px;
+  }
+  section.block > h2::after{content:"";flex:1;height:2px;background:var(--line);border-radius:2px}
+  .sec-lede{color:var(--ink2);margin:0 0 18px;max-width:46em}
+  .card{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:20px 22px;box-shadow:var(--shadow);
+  }
+  .card p{margin:0 0 12px}
+  .card p:last-child{margin-bottom:0}
+  code,.mono{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--surface2);border:1px solid var(--line);border-radius:5px;padding:0 5px}
+
+  .feat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+  .feat{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 18px;
+  }
+  .feat h3{margin:0 0 5px;font-size:16px;font-weight:900;display:flex;align-items:center;gap:9px}
+  .feat h3 .ic{
+    flex:0 0 auto;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
+    background:var(--amber-soft);color:var(--accent-ink);
+  }
+  .feat.star h3 .ic{background:var(--accent);color:#fff}
+  .feat p{margin:0;font-size:14px;color:var(--ink2)}
+  .feat .en{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink2);font-weight:600}
+
+  .loop-flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;margin:6px 0 16px}
+  .loop-step{
+    flex:1 1 150px;background:var(--surface2);border:1px solid var(--line);border-radius:12px;
+    padding:13px 14px;position:relative;
+  }
+  .loop-step b{display:block;font-size:14.5px;margin-bottom:3px}
+  .loop-step span{font-size:13px;color:var(--ink2);display:block;line-height:1.55}
+  .loop-step .n{
+    font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:600;color:var(--accent-ink);
+  }
+  .loop-arrow{align-self:center;padding:0 5px;color:var(--accent);font-weight:900;font-size:18px}
+  @media (max-width:640px){
+    .loop-flow{flex-direction:column}
+    .loop-arrow{transform:rotate(90deg);padding:3px 0;align-self:center}
+  }
+  .loop-note{
+    border-left:4px solid var(--teal);background:var(--teal-soft);
+    border-radius:0 10px 10px 0;padding:12px 16px;font-size:14.5px;
+  }
+  .loop-note p{margin:0}
+
+  .risk-list{display:grid;gap:12px}
+  .risk{
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 18px;display:grid;grid-template-columns:1fr;gap:6px;
+  }
+  @media (min-width:720px){.risk{grid-template-columns:1fr 1fr;gap:18px}}
+  .risk h3{margin:0 0 4px;font-size:15.5px;font-weight:900;color:var(--red);display:flex;gap:8px;align-items:center}
+  .risk p{margin:0;font-size:14px;color:var(--ink2)}
+  .risk .fix h3{color:var(--teal)}
+  .guard-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .guard{
+    font-weight:700;font-size:13.5px;background:var(--teal-soft);color:var(--ink);
+    border-radius:999px;padding:7px 14px;
+  }
+
+  .vs{
+    display:flex;gap:14px;align-items:flex-start;background:var(--surface);
+    border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow);
+  }
+  .vs .badge{
+    flex:0 0 auto;font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:12px;
+    background:var(--ink);color:var(--bg);border-radius:8px;padding:6px 10px;margin-top:3px;
+  }
+  .vs p{margin:0;font-size:15px}
+  .vs p + p{margin-top:8px;color:var(--ink2);font-size:14px}
+
+  .links{display:grid;gap:12px}
+  @media (min-width:640px){.links{grid-template-columns:1fr 1fr}}
+  .link-card{
+    display:flex;gap:14px;align-items:center;text-decoration:none;color:var(--ink);
+    background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px 18px;min-height:44px;
+  }
+  .link-card:hover{border-color:var(--accent)}
+  .link-card .ic{
+    flex:0 0 auto;width:42px;height:42px;border-radius:11px;background:var(--ink);color:var(--bg);
+    display:grid;place-items:center;
+  }
+  .link-card b{display:block;font-size:16px}
+  .link-card span{font-size:12.5px;color:var(--ink2);font-family:"IBM Plex Mono",monospace;word-break:break-all}
+
+  footer{margin-top:56px;border-top:1px solid var(--line);padding-top:18px;color:var(--ink2);font-size:13px}
+  footer p{margin:0 0 6px}
+
+  @media (prefers-reduced-motion: reduce){
+    .bob,.arm-r,.gear,.msgfly,.clonebot,.pen,.zzz,.antenna-ball,.brainpulse{animation:none !important}
+    #robot{transition:none}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body data-step="1">
+<div class="wrap">
+
+  <header>
+    <span class="kicker"><span class="dot"></span>OPEN-SOURCE AGENT FRAMEWORK</span>
+    <h1>Hermes Agent<span class="thin">まとめ</span></h1>
+    <p class="lede">Nous Research が公開する、<strong>自分のマシンやVPSに住む個人用AIエージェント</strong>。チャットアプリから話しかけると、道具を使って仕事をこなし、うまくいった手順を「スキル」として覚えて、使うほど賢くなっていく——その1日を、ロボットの作業場で追ってみます。</p>
+    <div class="meta-row">
+      <span class="meta-chip">開発 <b>Nous Research</b></span>
+      <span class="meta-chip">ライセンス <b>MIT（オープンソース）</b></span>
+      <span class="meta-chip">動く場所 <b>自分のPC / VPS</b></span>
+      <span class="meta-chip">売り <b>学習ループ</b></span>
+    </div>
+  </header>
+
+  <!-- ================= ANIMATION ================= -->
+  <div class="stage-card" id="stageCard">
+    <div class="stage-head">
+      <div>
+        <h2>ロボットの1日 — 作業場アニメーション</h2>
+        <p>ステップを進めると、ロボットが各ステーションへ移動して働きます</p>
+      </div>
+      <div class="clock-badge">🕐 <span id="clockLabel">07:00 朝</span></div>
+    </div>
+
+    <div class="stage-scroll">
+    <svg class="stage" viewBox="0 0 820 470" role="img" aria-label="ロボットが作業場の各ステーションを巡るアニメーション">
+      <!-- floor -->
+      <rect x="0" y="392" width="820" height="78" fill="var(--bg2)"/>
+      <line x1="0" y1="392" x2="820" y2="392" stroke="var(--line)" stroke-width="2"/>
+      <ellipse cx="410" cy="330" rx="120" ry="16" fill="var(--bg2)" opacity=".7"/>
+      <text x="410" y="335" text-anchor="middle" class="st-sub">HOME</text>
+
+      <!-- ===== Station 1: Cron (top-left) ===== -->
+      <g class="station" id="st-cron">
+        <rect class="halo" x="18" y="18" width="196" height="148" rx="16" fill="var(--amber-soft)"/>
+        <rect class="st-box" x="26" y="26" width="180" height="132" rx="12"/>
+        <circle cx="76" cy="72" r="26" fill="var(--surface2)" stroke="var(--ink2)" stroke-width="2"/>
+        <line x1="76" y1="72" x2="76" y2="55" stroke="var(--ink)" stroke-width="3" stroke-linecap="round"/>
+        <line x1="76" y1="72" x2="88" y2="78" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/>
+        <g class="fx fx-cron">
+          <path d="M116 52 l5 10 11 2 -8 8 2 11 -10 -5 -10 5 2 -11 -8 -8 11 -2 z" fill="var(--accent)" class="spark"/>
+        </g>
+        <!-- mini calendar -->
+        <rect x="118" y="52" width="66" height="58" rx="6" fill="var(--surface2)" stroke="var(--ink2)" stroke-width="1.6"/>
+        <rect x="118" y="52" width="66" height="15" rx="6" fill="var(--accent)"/>
+        <circle cx="132" cy="82" r="3.4" fill="var(--teal)"/><circle cx="151" cy="82" r="3.4" fill="var(--ink2)"/><circle cx="170" cy="82" r="3.4" fill="var(--ink2)"/>
+        <circle cx="132" cy="97" r="3.4" fill="var(--ink2)"/><circle cx="151" cy="97" r="3.4" fill="var(--accent)"/><circle cx="170" cy="97" r="3.4" fill="var(--ink2)"/>
+        <text x="116" y="136" text-anchor="middle" class="st-label">時計とカレンダー</text>
+        <text x="116" y="151" text-anchor="middle" class="st-sub">CRON</text>
+      </g>
+
+      <!-- ===== Station 3: Desk (top-center) ===== -->
+      <g class="station" id="st-desk">
+        <rect class="halo" x="302" y="18" width="216" height="148" rx="16" fill="var(--amber-soft)"/>
+        <rect class="st-box" x="310" y="26" width="200" height="132" rx="12"/>
+        <!-- monitor -->
+        <rect x="356" y="48" width="108" height="70" rx="7" fill="#2b3138"/>
+        <rect x="364" y="56" width="92" height="54" rx="4" fill="#3d4a42"/>
+        <text x="372" y="74" font-family="IBM Plex Mono,monospace" font-size="10" fill="#8be0a4">$ run task</text>
+        <text x="372" y="89" font-family="IBM Plex Mono,monospace" font-size="10" fill="#e8e4d8">searching…</text>
+        <text x="372" y="104" font-family="IBM Plex Mono,monospace" font-size="10" fill="#8be0a4">✓ done</text>
+        <rect x="398" y="118" width="24" height="9" fill="var(--ink2)"/>
+        <rect x="330" y="127" width="160" height="7" rx="3" fill="var(--ink2)"/>
+        <!-- gear + file + globe icons -->
+        <g class="fx fx-tool">
+          <g class="gear"><path d="M336 52 l3.5 6 6.8-1.4 -1.2 6.9 5.3 4.6 -5.9 3.7 .6 6.9 -6.8-.8 -4.2 5.5 -3.7-5.9 -6.9.2 1.8-6.7 -4.9-4.9 6.2-3.2 .1-7 6.5 1.9z" fill="var(--accent)" transform="scale(.62) translate(318 30)"/></g>
+          <circle cx="486" cy="60" r="11" fill="none" stroke="var(--teal)" stroke-width="2.2"/>
+          <path d="M475 60 h22 M486 49 c5 6 5 16 0 22 c-5 -6 -5 -16 0 -22" fill="none" stroke="var(--teal)" stroke-width="1.6"/>
+        </g>
+        <text x="410" y="148" text-anchor="middle" class="st-label">作業デスク（ツール実行）</text>
+      </g>
+
+      <!-- ===== Station 5: Sub-agents (top-right) ===== -->
+      <g class="station" id="st-clone">
+        <rect class="halo" x="606" y="18" width="196" height="148" rx="16" fill="var(--amber-soft)"/>
+        <rect class="st-box" x="614" y="26" width="180" height="132" rx="12"/>
+        <g class="fx fx-clone">
+          <g class="clonebot c1">
+            <rect x="640" y="66" width="34" height="28" rx="8" fill="var(--teal-soft)" stroke="var(--teal)" stroke-width="1.8"/>
+            <circle cx="650" cy="79" r="3.4" fill="var(--ink)"/><circle cx="664" cy="79" r="3.4" fill="var(--ink)"/>
+            <rect x="646" y="94" width="22" height="16" rx="5" fill="var(--teal)" opacity=".55"/>
+            <line x1="657" y1="66" x2="657" y2="56" stroke="var(--teal)" stroke-width="2"/><circle cx="657" cy="53" r="3" fill="var(--teal)"/>
+          </g>
+          <g class="clonebot c2">
+            <rect x="688" y="58" width="38" height="32" rx="9" fill="var(--amber-soft)" stroke="var(--accent)" stroke-width="1.8"/>
+            <circle cx="699" cy="72" r="3.8" fill="var(--ink)"/><circle cx="715" cy="72" r="3.8" fill="var(--ink)"/>
+            <rect x="694" y="90" width="26" height="18" rx="5" fill="var(--accent)" opacity=".55"/>
+            <line x1="707" y1="58" x2="707" y2="47" stroke="var(--accent)" stroke-width="2"/><circle cx="707" cy="44" r="3.2" fill="var(--accent)"/>
+          </g>
+          <g class="clonebot c3">
+            <rect x="738" y="66" width="34" height="28" rx="8" fill="var(--teal-soft)" stroke="var(--teal)" stroke-width="1.8"/>
+            <circle cx="748" cy="79" r="3.4" fill="var(--ink)"/><circle cx="762" cy="79" r="3.4" fill="var(--ink)"/>
+            <rect x="744" y="94" width="22" height="16" rx="5" fill="var(--teal)" opacity=".55"/>
+            <line x1="755" y1="66" x2="755" y2="56" stroke="var(--teal)" stroke-width="2"/><circle cx="755" cy="53" r="3" fill="var(--teal)"/>
+          </g>
+        </g>
+        <g opacity=".35">
+          <rect x="688" y="58" width="38" height="32" rx="9" fill="var(--surface2)" stroke="var(--ink2)" stroke-width="1.4" stroke-dasharray="4 3"/>
+        </g>
+        <text x="704" y="136" text-anchor="middle" class="st-label">分身ロボット</text>
+        <text x="704" y="151" text-anchor="middle" class="st-sub">SUB-AGENTS</text>
+      </g>
+
+      <!-- ===== Station 2: Reception (left) ===== -->
+      <g class="station" id="st-recept">
+        <rect class="halo" x="18" y="196" width="196" height="150" rx="16" fill="var(--amber-soft)"/>
+        <rect class="st-box" x="26" y="204" width="180" height="134" rx="12"/>
+        <!-- counter -->
+        <rect x="44" y="288" width="148" height="14" rx="5" fill="var(--ink2)"/>
+        <rect x="56" y="302" width="10" height="22" fill="var(--ink2)"/><rect x="166" y="302" width="10" height="22" fill="var(--ink2)"/>
+        <!-- bell -->
+        <path d="M104 288 a14 12 0 0 1 28 0 z" fill="var(--accent)"/>
+        <circle cx="118" cy="274" r="3.4" fill="var(--accent)"/>
+        <!-- chat app bubbles -->
+        <g>
+          <rect x="46" y="222" width="40" height="30" rx="9" fill="#3ec2b4"/><path d="M58 252 l0 10 12 -10z" fill="#3ec2b4"/><circle cx="58" cy="237" r="3" fill="#fff"/><circle cx="66" cy="237" r="3" fill="#fff"/><circle cx="74" cy="237" r="3" fill="#fff"/>
+          <rect x="96" y="216" width="40" height="30" rx="9" fill="#e0a32e"/><path d="M108 246 l0 10 12 -10z" fill="#e0a32e"/><path d="M106 231 h20 M106 238 h13" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+          <rect x="146" y="222" width="40" height="30" rx="9" fill="#7a9cc4"/><path d="M158 252 l0 10 12 -10z" fill="#7a9cc4"/><circle cx="166" cy="237" r="7" fill="none" stroke="#fff" stroke-width="2.6"/>
+        </g>
+        <g class="fx fx-msg">
+          <text class="msgfly" x="60" y="212" font-size="15">✉</text>
+          <text class="msgfly d2" x="112" y="206" font-size="15">✉</text>
+          <text class="msgfly d3" x="160" y="212" font-size="15">✉</text>
+        </g>
+        <text x="116" y="332" text-anchor="middle" class="st-label">受付カウンター</text>
+      </g>
+
+      <!-- ===== Station 4/5: Bookshelf + memory (right) ===== -->
+      <g class="station" id="st-shelf">
+        <rect class="halo" x="606" y="196" width="196" height="150" rx="16" fill="var(--amber-soft)"/>
+        <rect class="st-box" x="614" y="204" width="180" height="134" rx="12"/>
+        <!-- shelf -->
+        <rect x="632" y="226" width="104" height="8" fill="var(--ink2)"/>
+        <rect x="638" y="196" width="13" height="30" rx="2" fill="#b3372e"/>
+        <rect x="653" y="192" width="13" height="34" rx="2" fill="#0f766e"/>
+        <rect x="668" y="199" width="13" height="27" rx="2" fill="#e0a32e"/>
+        <rect x="683" y="194" width="13" height="32" rx="2" fill="#7a9cc4"/>
+        <rect x="700" y="201" width="15" height="25" rx="2" fill="var(--accent)" transform="rotate(9 707 213)"/>
+        <rect x="632" y="272" width="104" height="8" fill="var(--ink2)"/>
+        <!-- notebook -->
+        <rect x="640" y="240" width="42" height="32" rx="3" fill="var(--surface2)" stroke="var(--ink2)" stroke-width="1.5"/>
+        <path d="M648 250 h26 M648 258 h26 M648 266 h17" stroke="var(--ink2)" stroke-width="1.8" stroke-linecap="round"/>
+        <g class="fx fx-write"><path class="pen" d="M676 236 l14 -8 -3 13 -8 3 z" fill="var(--accent)"/></g>
+        <!-- memory box -->
+        <g id="memBox">
+          <rect x="690" y="244" width="52" height="30" rx="5" fill="var(--teal)" opacity=".85"/>
+          <rect x="690" y="244" width="52" height="9" rx="4" fill="var(--teal)"/>
+          <circle cx="716" cy="262" r="4" fill="#fff"/>
+        </g>
+        <g class="fx fx-mem"><path d="M716 224 l3.4 7 7.6 1.1 -5.5 5.4 1.3 7.6 -6.8 -3.6 -6.8 3.6 1.3 -7.6 -5.5 -5.4 7.6 -1.1z" fill="var(--accent)" class="spark"/></g>
+        <text x="704" y="300" text-anchor="middle" class="st-label">本棚と保管箱</text>
+        <text x="704" y="315" text-anchor="middle" class="st-sub">SKILLS &amp; MEMORY</text>
+        <text x="704" y="330" text-anchor="middle" class="st-sub" id="shelfSub2">ノート＝スキル ／ 箱＝メモリ</text>
+      </g>
+
+      <!-- ===== Station 7: Brain swap (bottom-center-left) ===== -->
+      <g class="station" id="st-brain">
+        <rect class="halo" x="238" y="352" width="220" height="104" rx="16" fill="var(--amber-soft)"/>
+        <rect class="st-box" x="246" y="360" width="204" height="88" rx="12"/>
+        <!-- pedestal with spare brains -->
+        <rect x="266" y="414" width="120" height="10" rx="4" fill="var(--ink2)"/>
+        <g class="brainpulse">
+          <path d="M292 388 a13 13 0 0 1 13 -13 a12 12 0 0 1 12 9 a11 11 0 0 1 -3 20 a13 13 0 0 1 -19 -3 a12 12 0 0 1 -3 -13z" fill="#e58aa5"/>
+        </g>
+        <path d="M344 388 a13 13 0 0 1 13 -13 a12 12 0 0 1 12 9 a11 11 0 0 1 -3 20 a13 13 0 0 1 -19 -3 a12 12 0 0 1 -3 -13z" fill="#7ab8a2"/>
+        <g class="fx fx-brain">
+          <path d="M330 372 q10 -12 22 -4" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" marker-end="url(#arr)"/>
+          <path d="M368 402 q-12 12 -24 5" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" marker-end="url(#arr)"/>
+        </g>
+        <defs><marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7z" fill="var(--accent)"/></marker></defs>
+        <text x="404" y="392" class="st-label">頭脳の</text>
+        <text x="404" y="409" class="st-label">差し替え台</text>
+        <text x="404" y="425" class="st-sub">MODEL SWAP</text>
+      </g>
+
+      <!-- ===== Station 8: Night / bed (bottom-right) ===== -->
+      <g class="station" id="st-night">
+        <rect class="halo" x="540" y="352" width="262" height="104" rx="16" fill="var(--amber-soft)"/>
+        <rect class="st-box" x="548" y="360" width="246" height="88" rx="12"/>
+        <path d="M742 376 a17 17 0 1 0 12 29 a13.5 13.5 0 1 1 -12 -29z" fill="#e0a32e"/>
+        <rect x="566" y="410" width="130" height="14" rx="6" fill="var(--ink2)"/>
+        <rect x="566" y="396" width="44" height="16" rx="7" fill="var(--surface2)" stroke="var(--ink2)" stroke-width="1.5"/>
+        <g class="fx fx-night">
+          <text class="zzz" x="640" y="392" font-family="IBM Plex Mono,monospace" font-weight="600" font-size="17" fill="var(--teal)">Z</text>
+          <text class="zzz z2" x="656" y="382" font-family="IBM Plex Mono,monospace" font-weight="600" font-size="13" fill="var(--teal)">Z</text>
+          <text class="zzz z3" x="668" y="374" font-family="IBM Plex Mono,monospace" font-weight="600" font-size="10" fill="var(--teal)">Z</text>
+        </g>
+        <text x="628" y="440" text-anchor="middle" class="st-label">おやすみスペース</text>
+      </g>
+
+      <!-- speech bubble -->
+      <g id="bubble" opacity="0" style="transition:opacity .4s">
+        <rect id="bubbleRect" x="0" y="0" width="210" height="40" rx="12" fill="var(--surface)" stroke="var(--accent)" stroke-width="1.8"/>
+        <text id="bubbleText" x="14" y="26" font-size="13.5" font-weight="700" fill="var(--ink)">おはよう！</text>
+      </g>
+
+      <!-- ===== ROBOT ===== -->
+      <g id="robot" transform="translate(372,238)">
+        <g class="bob">
+          <!-- shadow -->
+          <ellipse cx="38" cy="118" rx="34" ry="6" fill="rgba(0,0,0,.14)"/>
+          <!-- legs / wheel -->
+          <rect x="26" y="98" width="24" height="12" rx="5" fill="var(--ink2)"/>
+          <circle cx="38" cy="114" r="8" fill="#2b3138"/><circle cx="38" cy="114" r="3.4" fill="#c8cdd2"/>
+          <!-- left arm -->
+          <g><path d="M8 62 q-14 8 -12 24" fill="none" stroke="var(--ink2)" stroke-width="7" stroke-linecap="round"/><circle cx="-3" cy="88" r="6" fill="var(--accent)"/></g>
+          <!-- right arm -->
+          <g class="arm-r" style="transform-origin:68px 60px"><path d="M68 62 q14 6 15 22" fill="none" stroke="var(--ink2)" stroke-width="7" stroke-linecap="round"/><circle cx="84" cy="86" r="6" fill="var(--accent)"/></g>
+          <!-- body -->
+          <rect x="10" y="52" width="56" height="50" rx="14" fill="var(--surface)" stroke="var(--ink2)" stroke-width="2"/>
+          <rect x="22" y="64" width="32" height="20" rx="5" fill="var(--teal-soft)" stroke="var(--teal)" stroke-width="1.4"/>
+          <circle id="brainCore" cx="38" cy="74" r="6.5" fill="#e0a32e"/>
+          <!-- head -->
+          <line x1="38" y1="14" x2="38" y2="2" stroke="var(--ink2)" stroke-width="3" stroke-linecap="round"/>
+          <circle class="antenna-ball" cx="38" cy="0" r="4.6" fill="var(--accent)"/>
+          <rect x="2" y="14" width="72" height="42" rx="15" fill="var(--surface)" stroke="var(--ink2)" stroke-width="2"/>
+          <rect x="-4" y="28" width="7" height="14" rx="3" fill="var(--ink2)"/><rect x="73" y="28" width="7" height="14" rx="3" fill="var(--ink2)"/>
+          <circle class="eye" cx="26" cy="33" r="5" fill="#2b3138"/>
+          <circle class="eye" cx="50" cy="33" r="5" fill="#2b3138"/>
+          <circle cx="27.8" cy="31.2" r="1.7" fill="#fff"/><circle cx="51.8" cy="31.2" r="1.7" fill="#fff"/>
+          <path d="M30 45 q8 6 16 0" fill="none" stroke="#2b3138" stroke-width="2.4" stroke-linecap="round"/>
+          <circle cx="13" cy="43" r="4" fill="#f2b8a0" opacity=".8"/><circle cx="63" cy="43" r="4" fill="#f2b8a0" opacity=".8"/>
+        </g>
+      </g>
+    </svg>
+    </div>
+
+    <div class="caption" aria-live="polite">
+      <div class="step-no"><span id="capNo">1</span><small>/ 8</small></div>
+      <div>
+        <h3><span id="capTitle">朝の起動</span><span class="tag" id="capTag">Cron</span></h3>
+        <p id="capText"></p>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="cbtn" id="btnRestart" aria-label="最初から">⏮ 最初から</button>
+      <button class="cbtn" id="btnPrev" aria-label="前のステップ">◀ 前へ</button>
+      <button class="cbtn primary" id="btnPlay" aria-label="再生・一時停止">▶ 再生</button>
+      <button class="cbtn" id="btnNext" aria-label="次のステップ">次へ ▶</button>
+      <span class="speed-group" role="group" aria-label="再生速度">
+        <button data-speed="0.5">0.5×</button>
+        <button data-speed="1" class="on">1×</button>
+        <button data-speed="2">2×</button>
+      </span>
+      <div class="progress">
+        <div class="bar"><div class="fill" id="progFill"></div></div>
+        <div class="lbl" id="progLbl">STEP 1 / 8</div>
+      </div>
+    </div>
+    <div class="dots" id="dots" role="tablist" aria-label="ステップ一覧"></div>
+  </div>
+
+  <!-- ================= ARTICLE ================= -->
+  <section class="block">
+    <h2>Hermes Agentとは</h2>
+    <div class="card">
+      <p>Hermes Agent は、Nous Research が MIT ライセンスで公開しているオープンソースの自律エージェントフレームワークです。クラウドのチャットサービスとして使うのではなく、<strong>自分のPCやVPSにインストールして動かす「個人用エージェント」</strong>という位置づけで、入口はコマンドライン（CLI）、デスクトップアプリ、そして Telegram / Discord / Slack / WhatsApp / Signal など20以上のメッセージング連携（Gateway）があり、どれから話しかけても同じエージェントのコアが応答します。</p>
+      <p>最大の特徴は<strong>学習ループ（built-in learning loop）</strong>です。タスクがうまくいくと、その手順をスキルとして自動でファイルに残し、会話の内容はメモリに蓄積されるため、使えば使うほど「自分のやり方」を覚えたエージェントに育っていきます。性格や振る舞いは <code>SOUL.md</code> というファイルで定義でき、頭脳にあたるLLMも Nous Portal / OpenRouter / OpenAI / Anthropic / ローカルの llama.cpp などから自由に差し替えられます。</p>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>主な機能</h2>
+    <p class="sec-lede">アニメーションの各ステーションが、そのまま機能に対応しています。</p>
+    <div class="feat-grid">
+      <div class="feat star">
+        <h3><span class="ic">↻</span>学習ループ</h3>
+        <p>成功した手順をスキル化し、メモリと組み合わせて次回に活かす、Hermes の売り。使うほど賢くなる設計です。</p>
+      </div>
+      <div class="feat">
+        <h3><span class="ic">▦</span>メモリ <span class="en">MEMORY</span></h3>
+        <p>全会話履歴を SQLite ＋ FTS5（全文検索）に保存し、過去の会話を横断検索して文脈として思い出せます。</p>
+      </div>
+      <div class="feat">
+        <h3><span class="ic">✎</span>スキル <span class="en">SKILLS</span></h3>
+        <p>手順書は <code>SKILL.md</code> 形式（agentskills.io 標準）。複雑なタスクの完了後に <code>skill_manage</code> で自動作成されます。</p>
+      </div>
+      <div class="feat">
+        <h3><span class="ic">✉</span>マルチプラットフォーム <span class="en">GATEWAY</span></h3>
+        <p>CLI・デスクトップ・20以上のメッセージングアプリが入口。どの入口でも同じエージェントが応答します。</p>
+      </div>
+      <div class="feat">
+        <h3><span class="ic">◉</span>モデル自由 <span class="en">MODEL-AGNOSTIC</span></h3>
+        <p>Nous Portal / OpenRouter / OpenAI / Anthropic / ローカル（llama.cpp）など、LLMを差し替えても本体はそのまま。</p>
+      </div>
+      <div class="feat">
+        <h3><span class="ic">◷</span>Cron <span class="en">SCHEDULED TASKS</span></h3>
+        <p>定期実行も「自然言語で書いたエージェントタスク」として登録でき、決まった時刻に自律的に動き出します。</p>
+      </div>
+      <div class="feat">
+        <h3><span class="ic">⧉</span>サブエージェント <span class="en">SUB-AGENTS</span></h3>
+        <p>大きな仕事は子エージェントに分担させ、並行して処理させることができます。</p>
+      </div>
+      <div class="feat">
+        <h3><span class="ic">⚒</span>MCP対応 <span class="en">TOOLS</span></h3>
+        <p>ファイル操作・シェル・ブラウザなどのツールに加え、MCP（Model Context Protocol）で外部ツールを接続できます。</p>
+      </div>
+      <div class="feat">
+        <h3><span class="ic">▣</span>サンドボックス <span class="en">SANDBOX</span></h3>
+        <p>ターミナルの実行環境はローカル / Docker / SSH / Modal などから選べ、隔離した環境で動かすことも可能です。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>学習ループの仕組み</h2>
+    <p class="sec-lede">「スキル」と「メモリ」は役割が違います。スキルは<em>やり方</em>、メモリは<em>出来事と文脈</em>です。</p>
+    <div class="card">
+      <div class="loop-flow">
+        <div class="loop-step"><span class="n">STEP 1</span><b>タスクを実行</b><span>ツールを使って調べものや作業を行い、試行錯誤しながら完了を目指す</span></div>
+        <div class="loop-arrow">→</div>
+        <div class="loop-step"><span class="n">STEP 2</span><b>うまくいったら記録</b><span>複雑なタスクが成功すると、手順を <code>SKILL.md</code> として自動作成（<code>skill_manage</code>）</span></div>
+        <div class="loop-arrow">→</div>
+        <div class="loop-step"><span class="n">STEP 3</span><b>メモリにも蓄積</b><span>会話の内容は履歴として保存され、全文検索でいつでも引き出せる</span></div>
+        <div class="loop-arrow">→</div>
+        <div class="loop-step"><span class="n">STEP 4</span><b>次回は賢く開始</b><span>似たタスクではスキルを読み込み、メモリの文脈と合わせて最初から効率よく動く</span></div>
+      </div>
+      <div class="loop-note">
+        <p>つまり、<strong>スキル＝再利用できる「手順書」</strong>、<strong>メモリ＝検索できる「日記と文脈」</strong>。この2つが回ることで、エージェントはセッションをまたいで成長します。アニメーションのステップ5（ノートに書く）とステップ6（保管箱にしまう）がこの関係です。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>危険性と対策</h2>
+    <p class="sec-lede">Hermes 自体がマルウェアというわけではありません。ただし「自分のマシンで自律的に動き、外部からも話しかけられる」設計そのものに、構造的なリスクがあります。</p>
+    <div class="risk-list">
+      <div class="risk">
+        <div><h3>⚠ ローカル実行時の広い権限</h3><p>シェルやファイル操作を自分のマシンで実行するため、誤動作や暴走の被害がそのまま自分の環境に及びます。</p></div>
+        <div class="fix"><h3>✓ 対策</h3><p>Docker などのサンドボックス・バックエンドや専用のVMで動かし、本体環境と隔離する。</p></div>
+      </div>
+      <div class="risk">
+        <div><h3>⚠ メッセージング入口の許可設定</h3><p>Telegram や Discord が入口になるため、許可リストの設定ミスやアカウントの乗っ取りが、そのままエージェントの操作権につながります。</p></div>
+        <div class="fix"><h3>✓ 対策</h3><p>入口は許可リストで利用者を絞り、アカウント側の認証も強固に保つ。</p></div>
+      </div>
+      <div class="risk">
+        <div><h3>⚠ プロンプトインジェクション</h3><p>メールやWebページなど外部の文章を読む機会が多いため、埋め込まれた指示に誘導されるリスクがあります。「機密へのアクセス × 信頼できない入力 × 外部送信」が揃うと危険です。</p></div>
+        <div class="fix"><h3>✓ 対策</h3><p>重要な認証情報は渡さない。送信や削除など影響の大きい操作には承認を挟む。</p></div>
+      </div>
+      <div class="risk">
+        <div><h3>⚠ スキル・メモリへの永続化</h3><p>学習ループが悪意ある内容や間違った手順を取り込むと、消すまでセッションをまたいで効き続けます。</p></div>
+        <div class="fix"><h3>✓ 対策</h3><p>保存されたスキルやメモリを定期的に見直し、出所の分からない内容は取り込まない。</p></div>
+      </div>
+    </div>
+    <div class="guard-row">
+      <span class="guard">サンドボックスで隔離</span>
+      <span class="guard">入口は許可リスト</span>
+      <span class="guard">重要操作は承認制</span>
+      <span class="guard">専用環境で運用</span>
+      <span class="guard">認証情報は最小限</span>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>似たOSSとの違い</h2>
+    <div class="vs">
+      <span class="badge">vs OpenClaw</span>
+      <div>
+        <p>よく比較される類似OSSの OpenClaw との大きな違いは、<strong>「学習ループ」を中核に据えている点</strong>です。成功した手順をスキルとして自動で残し、メモリと組み合わせて育てていく設計が Hermes Agent の個性です。</p>
+        <p>どちらも「自分の環境に住む個人用エージェント」という方向性は共通しているため、乗り換えや併用を検討する文脈で並べて語られることが多い組み合わせです。</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>公式リンク</h2>
+    <div class="links">
+      <a class="link-card" href="https://github.com/NousResearch/hermes-agent" target="_blank" rel="noopener">
+        <span class="ic"><svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span>
+        <span><b>GitHub リポジトリ</b><span>github.com/NousResearch/hermes-agent</span></span>
+      </a>
+      <a class="link-card" href="https://hermes-agent.nousresearch.com" target="_blank" rel="noopener">
+        <span class="ic" style="font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:19px">?</span>
+        <span><b>公式ドキュメント</b><span>hermes-agent.nousresearch.com</span></span>
+      </a>
+    </div>
+  </section>
+
+  <footer>
+    <p>本ページは Hermes Agent（Nous Research）の公開情報に基づく一般的な技術解説です。アニメーションは仕組みを分かりやすく表した概念図であり、実際のUIや動作そのものではありません。</p>
+    <p>Hermes Agent は MIT ライセンスのオープンソースソフトウェアです。</p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  var steps = [
+    { no:1, clock:"07:00 朝", title:"朝の起動", tag:"Cron",
+      text:"決まった時刻になると、Cron に登録された定期タスクがロボットを起こします。「毎朝、決まった調べものをして報告する」のような指示も、自然言語のエージェントタスクとしてそのまま登録できます。",
+      say:"おはよう！定期タスクの時間だ", x:60, y:196, station:"st-cron", brain:"#e0a32e" },
+    { no:2, clock:"09:10 午前", title:"メッセージが届く", tag:"Gateway",
+      text:"受付カウンターに、Telegram・Discord・Slack など複数のチャットアプリからメッセージが届きます。入口が違っても、応対するのは同じ1体のロボット（同じエージェントコア）です。CLIやデスクトップアプリからも話しかけられます。",
+      say:"いろんなアプリから同時に届いた！", x:60, y:330, station:"st-recept", brain:"#e0a32e" },
+    { no:3, clock:"10:30 午前", title:"作業デスクでツールを使う", tag:"Tools / MCP",
+      text:"ロボットは作業デスクへ移動し、ファイル操作・シェル・ブラウザなどの道具（ツール）を使って調べものや作業を進めます。MCPで外部のツールも接続できます。",
+      say:"道具をそろえて、調べもの開始", x:352, y:196, station:"st-desk", brain:"#e0a32e" },
+    { no:4, clock:"13:00 午後", title:"分身に分担させる", tag:"Sub-agents",
+      text:"大きな仕事は1体では抱えきれません。分身ロボット（サブエージェント）を呼び出して仕事を分け、並行して進めさせます。本体は全体の取りまとめに集中できます。",
+      say:"分身たち、手を貸して！", x:600, y:196, station:"st-clone", brain:"#e0a32e" },
+    { no:5, clock:"15:40 午後", title:"スキルに書き残す", tag:"Skills",
+      text:"作業がうまくいったら、本棚へ移動してノートに手順を書き残します。これがスキル（SKILL.md）です。次に似た仕事が来たら、このノートを開くだけで最初から上手にこなせます。",
+      say:"うまくいった手順、ノートに残そう", x:540, y:238, station:"st-shelf", brain:"#e0a32e" },
+    { no:6, clock:"16:20 午後", title:"メモリにしまう", tag:"Memory",
+      text:"会話の大切な内容は、となりの保管箱（メモリ）にしまいます。全会話履歴は SQLite＋FTS5 に保存され全文検索できるので、ずっと前の会話の文脈でも必要なときに思い出せます。",
+      say:"大事な話は保管箱へ", x:540, y:238, station:"st-shelf", brain:"#e0a32e" },
+    { no:7, clock:"18:00 夕方", title:"頭脳を差し替える", tag:"Model swap",
+      text:"頭脳（LLM）を別のモデルに差し替えても、ロボットは同じロボットのまま動き続けます。スキルもメモリも性格（SOUL.md）もそのまま。用途や予算に合わせてモデルを選べるのが、モデル非依存の設計です。",
+      say:"頭脳を替えても、ぼくはぼく", x:270, y:330, station:"st-brain", brain:"#7ab8a2" },
+    { no:8, clock:"22:30 夜", title:"整理しておやすみ", tag:"Learning loop",
+      text:"夜はメモリとスキルを整理して休みます。そして翌朝——昨日覚えたスキルとメモリがあるので、ロボットは昨日より賢く1日を始められます。これが学習ループです。",
+      say:"おやすみ。明日はもっと賢く", x:520, y:330, station:"st-night", brain:"#7ab8a2" }
+  ];
+
+  var cur = 0, playing = false, timer = null, speed = 1;
+  var robot = document.getElementById('robot');
+  var bubble = document.getElementById('bubble');
+  var bubbleRect = document.getElementById('bubbleRect');
+  var bubbleText = document.getElementById('bubbleText');
+  var brainCore = document.getElementById('brainCore');
+  var dotsWrap = document.getElementById('dots');
+  var shortNames = ["Cron起動","受信","ツール","分身","スキル","メモリ","頭脳交換","おやすみ"];
+
+  steps.forEach(function(s, i){
+    var b = document.createElement('button');
+    b.innerHTML = (i+1) + "<small>" + shortNames[i] + "</small>";
+    b.setAttribute('aria-label', "ステップ" + (i+1) + " " + s.title);
+    b.addEventListener('click', function(){ stop(); go(i); });
+    dotsWrap.appendChild(b);
+  });
+  var dotBtns = dotsWrap.querySelectorAll('button');
+
+  function render(){
+    var s = steps[cur];
+    document.body.setAttribute('data-step', String(s.no));
+    robot.style.transform = "translate(" + s.x + "px," + s.y + "px)";
+    robot.setAttribute('transform', "translate(" + s.x + "," + s.y + ")");
+    // speech bubble above robot
+    var bw = Math.max(120, s.say.length * 17 + 36);
+    var bx = Math.min(Math.max(s.x + 38 - bw/2, 8), 820 - bw - 8);
+    var by = s.y - 52;
+    if (by < 6) by = s.y + 128;
+    bubble.setAttribute('transform', "translate(" + bx + "," + by + ")");
+    bubbleRect.setAttribute('width', bw);
+    bubbleText.textContent = s.say;
+    bubbleText.setAttribute('x', bx + 14 - bx); bubbleText.setAttribute('x', 14);
+    bubble.style.opacity = 1;
+    brainCore.setAttribute('fill', s.brain);
+    // stations
+    steps.forEach(function(st){ var el = document.getElementById(st.station); if(el) el.classList.remove('active'); });
+    var act = document.getElementById(s.station); if (act) act.classList.add('active');
+    // shelf sub-label emphasis for step 5/6
+    document.getElementById('shelfSub2').textContent =
+      s.no === 5 ? "▶ ノート＝スキルに記録中" : (s.no === 6 ? "▶ 箱＝メモリに保存中" : "ノート＝スキル ／ 箱＝メモリ");
+    // caption
+    document.getElementById('capNo').textContent = s.no;
+    document.getElementById('capTitle').textContent = s.title;
+    document.getElementById('capTag').textContent = s.tag;
+    document.getElementById('capText').textContent = s.text;
+    document.getElementById('clockLabel').textContent = s.clock;
+    document.getElementById('progFill').style.width = ((cur+1)/steps.length*100) + "%";
+    document.getElementById('progLbl').textContent = "STEP " + (cur+1) + " / " + steps.length;
+    dotBtns.forEach(function(d, i){
+      d.classList.toggle('cur', i === cur);
+      d.classList.toggle('done', i < cur);
+    });
+  }
+
+  function go(i){ cur = Math.max(0, Math.min(steps.length-1, i)); render(); }
+  function next(){ if (cur < steps.length-1) go(cur+1); else stop(); }
+  function schedule(){
+    clearTimeout(timer);
+    if (!playing) return;
+    timer = setTimeout(function(){
+      if (cur >= steps.length-1){ stop(); return; }
+      go(cur+1); schedule();
+    }, 4200 / speed);
+  }
+  var btnPlay = document.getElementById('btnPlay');
+  function play(){
+    if (cur >= steps.length-1) go(0);
+    playing = true; btnPlay.textContent = "⏸ 一時停止"; btnPlay.classList.add('on'); schedule();
+  }
+  function stop(){
+    playing = false; clearTimeout(timer);
+    btnPlay.textContent = "▶ 再生"; btnPlay.classList.remove('on');
+  }
+  btnPlay.addEventListener('click', function(){ playing ? stop() : play(); });
+  document.getElementById('btnNext').addEventListener('click', function(){ stop(); next(); });
+  document.getElementById('btnPrev').addEventListener('click', function(){ stop(); go(cur-1); });
+  document.getElementById('btnRestart').addEventListener('click', function(){ stop(); go(0); });
+  document.querySelectorAll('.speed-group button').forEach(function(b){
+    b.addEventListener('click', function(){
+      document.querySelectorAll('.speed-group button').forEach(function(x){ x.classList.remove('on'); });
+      b.classList.add('on'); speed = parseFloat(b.getAttribute('data-speed'));
+      if (playing) schedule();
+    });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
