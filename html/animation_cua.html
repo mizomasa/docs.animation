@@ -1,0 +1,863 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Computer-Using Agent（CUA）の仕組みアニメーション</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
+      * { box-sizing: border-box; }
+      :root {
+        --bg: #f5f4fa;
+        --surface: #ffffff;
+        --surface-2: #efedf7;
+        --ink: #1d1930;
+        --ink-2: #4a4468;
+        --ink-3: #726a92;
+        --line: #d8d3ea;
+        --accent: #7c3aed;
+        --accent-ink: #ffffff;
+        --accent-soft: #ede9fe;
+        --packet: #b45309;
+        --packet-soft: #fdf0dd;
+        --danger: #b3261e;
+        --danger-soft: #fbe9e7;
+        --term-bg: #14101f;
+        --term-ink: #ddd3f5;
+        --term-dim: #8d81ad;
+        --radius: 10px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #100e1a;
+          --surface: #1a1729;
+          --surface-2: #221e36;
+          --ink: #ece8f8;
+          --ink-2: #bcb3d6;
+          --ink-3: #8f86ad;
+          --line: #373154;
+          --accent: #a78bfa;
+          --accent-ink: #1d1040;
+          --accent-soft: #2c2154;
+          --packet: #f0a832;
+          --packet-soft: #3a2c12;
+          --danger: #f0867e;
+          --danger-soft: #3d1d1a;
+          --term-bg: #0a0812;
+          --term-ink: #ddd3f5;
+          --term-dim: #776d99;
+          color-scheme: dark;
+        }
+      }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "IBM Plex Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        line-height: 1.75;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { max-width: 960px; margin: 0 auto; padding: 28px 18px 72px; }
+      h1 { font-size: clamp(26px, 5.4vw, 38px); line-height: 1.3; margin: 0 0 10px; letter-spacing: .01em; }
+      .lede { color: var(--ink-2); font-size: 16px; margin: 0 0 6px; max-width: 42em; }
+      .lede .mono { color: var(--accent); font-weight: 600; }
+      h2 { font-size: 21px; margin: 0 0 6px; line-height: 1.4; }
+      h3 { font-size: 16px; margin: 0 0 6px; }
+      .sec-head { margin: 40px 0 14px; }
+      .sec-head p { margin: 0; color: var(--ink-2); font-size: 14.5px; max-width: 44em; }
+      .sec-num { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 1px 10px; margin-bottom: 8px; letter-spacing: .08em; }
+
+      /* ---------- controls ---------- */
+      .controls {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 10px 12px; margin: 18px 0;
+      }
+      .controls .btn {
+        appearance: none; border: 1px solid var(--line); background: var(--surface-2);
+        color: var(--ink); border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 14.5px; font-weight: 600;
+        cursor: pointer; min-width: 44px;
+      }
+      .controls .btn:hover { border-color: var(--accent); }
+      .controls .btn:focus-visible, .speedsel:focus-visible, .dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .controls .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 92px; }
+      .controls .btn:disabled { opacity: .38; cursor: default; }
+      .controls .btn:disabled:hover { border-color: var(--line); }
+      .controls .btn.primary:disabled:hover { border-color: var(--accent); }
+      .speedwrap { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13.5px; color: var(--ink-2); }
+      .speedsel { font: inherit; font-size: 14px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+      .progress-line { display: flex; align-items: center; gap: 12px; margin: 4px 2px 0; flex-wrap: wrap; }
+      .progress-label { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+      .progress-track { flex: 1 1 140px; height: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+      .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .45s ease; }
+      .dots { display: flex; gap: 6px; flex-wrap: wrap; }
+      .dot { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+      .dot.done { border-color: var(--accent); color: var(--accent); }
+      .dot.now { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+      /* ---------- screen mock + action log ---------- */
+      .stage-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      @media (min-width: 820px) { .stage-grid { grid-template-columns: 1fr 1fr; } }
+      .browser, .term {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+      }
+      .browser-bar {
+        display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+        background: var(--surface-2); border-bottom: 1px solid var(--line);
+      }
+      .traffic { display: flex; gap: 6px; flex: none; }
+      .traffic i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+      .traffic i:nth-child(1) { background: #e0655f; } .traffic i:nth-child(2) { background: #e8b23f; } .traffic i:nth-child(3) { background: #58b368; }
+      .win-title { font-size: 13.5px; font-weight: 700; color: var(--ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .spinner {
+        width: 16px; height: 16px; border-radius: 50%; flex: none; margin-left: auto;
+        border: 2.5px solid var(--line); border-top-color: var(--accent);
+        animation: spin .8s linear infinite; display: none;
+      }
+      .spinner.on { display: block; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .screen-wrap { position: relative; min-height: 342px; background: var(--surface); }
+      .app-screen { padding: 16px 16px 18px; }
+      .app-title { font-size: 15px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+      .app-title .app-badge { font-size: 11px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 0 8px; }
+      .fld { display: block; margin-bottom: 10px; }
+      .fld > span { display: block; font-size: 12px; font-weight: 700; color: var(--ink-2); margin-bottom: 3px; }
+      .fld .req { color: var(--danger); }
+      .input {
+        border: 1.5px solid var(--line); border-radius: 7px; padding: 6px 10px; font-size: 13.5px;
+        color: var(--ink-3); background: var(--surface); min-height: 34px;
+      }
+      .input.filled { color: var(--ink); }
+      .fld.focus .input { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .fld.hl .input { border-color: var(--packet); box-shadow: 0 0 0 3px var(--packet-soft); }
+      .coord-tag {
+        display: none; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600;
+        color: var(--packet); margin-top: 3px;
+      }
+      .fld.hl .coord-tag { display: block; }
+      .submit-row { margin-top: 14px; text-align: center; }
+      .submit-btn {
+        display: inline-block; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 14px;
+        border-radius: 8px; padding: 7px 34px;
+      }
+      .submit-btn.hl { box-shadow: 0 0 0 4px var(--packet-soft); outline: 2px solid var(--packet); }
+      .shot-frame {
+        position: absolute; inset: 8px; border: 2.5px dashed var(--accent); border-radius: 8px; pointer-events: none;
+      }
+      .shot-tag {
+        position: absolute; top: -11px; left: 12px; background: var(--accent); color: var(--accent-ink);
+        font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; padding: 1px 9px; border-radius: 999px;
+      }
+      .popup {
+        position: absolute; left: 50%; top: 46%; transform: translate(-50%, -50%); width: 82%;
+        background: var(--surface); border: 1.5px solid var(--danger); border-radius: var(--radius);
+        box-shadow: 0 10px 32px rgba(0,0,0,.28); padding: 14px 16px; font-size: 13.5px;
+      }
+      .popup .p-head { font-weight: 700; color: var(--danger); margin-bottom: 4px; font-size: 14px; }
+      .popup .p-btns { margin-top: 10px; text-align: right; }
+      .popup .p-btn { display: inline-block; border: 1px solid var(--line); background: var(--surface-2); border-radius: 7px; padding: 3px 16px; font-weight: 600; font-size: 13px; }
+      .popup.confirm { border-color: var(--accent); }
+      .popup.confirm .p-head { color: var(--accent); }
+      .success-banner {
+        border: 1.5px solid var(--accent); background: var(--accent-soft); color: var(--ink);
+        border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 600; margin-bottom: 12px;
+      }
+      .cursor {
+        position: absolute; width: 20px; height: 20px; z-index: 5; pointer-events: none;
+        transition: left .55s ease, top .55s ease, opacity .3s;
+        filter: drop-shadow(0 1px 2px rgba(0,0,0,.45));
+      }
+      .cursor svg { display: block; }
+      .term-head { padding: 8px 14px; font-size: 12.5px; color: var(--term-dim); background: var(--term-bg); border-bottom: 1px solid #2c2450; font-family: "IBM Plex Mono", monospace; }
+      .term-body {
+        background: var(--term-bg); color: var(--term-ink); margin: 0; padding: 14px 16px 18px;
+        font-family: "IBM Plex Mono", monospace; font-size: 12.4px; line-height: 1.6; min-height: 342px;
+        white-space: pre-wrap; word-break: break-all;
+      }
+      .term-body .dim { color: var(--term-dim); }
+      .term-body .hl { color: #f0a832; }
+      .term-body .ok { color: #7ee2b8; }
+      .term-body .warn { color: #f0867e; }
+      .fig-cap { font-size: 12.5px; color: var(--ink-3); margin: 8px 2px 0; }
+
+      /* ---------- flow diagram ---------- */
+      .flow-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 16px 16px; }
+      .actors { display: flex; align-items: stretch; gap: 0; }
+      .actor {
+        flex: 1 1 0; min-width: 0; text-align: center; padding: 12px 6px 10px; border: 1.5px solid var(--line);
+        border-radius: var(--radius); background: var(--surface-2); transition: border-color .3s, background .3s, box-shadow .3s;
+      }
+      .actor .a-icon { font-size: 24px; line-height: 1.2; display: block; }
+      .actor .a-name { font-weight: 700; font-size: 13.5px; display: block; margin-top: 4px; line-height: 1.45; }
+      .actor .a-sub { font-size: 11.5px; color: var(--ink-3); display: block; line-height: 1.5; }
+      .actor.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .actor .a-tag { display: none; margin-top: 6px; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; color: var(--accent); }
+      .actor.tag-on .a-tag { display: inline-block; }
+      .link-arrow { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 15px; }
+      @media (max-width: 640px) {
+        .actors { flex-direction: column; gap: 0; }
+        .link-arrow { transform: rotate(90deg); height: 22px; flex-basis: 22px; margin: 0 auto; }
+      }
+      .packet-bar {
+        margin-top: 16px; border: 1.5px solid var(--packet); background: var(--packet-soft); border-radius: var(--radius);
+        padding: 12px 16px; min-height: 76px;
+      }
+      .packet-bar .p-label { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; color: var(--packet); margin-bottom: 2px; }
+      .packet-bar .p-route { font-weight: 700; font-size: 15px; }
+      .packet-bar .p-body { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; margin-top: 2px; word-break: break-all; }
+      .step-card { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px; }
+      .step-card .s-kicker { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent); font-weight: 600; letter-spacing: .06em; }
+      .step-card h3 { font-size: 19px; margin: 4px 0 8px; }
+      .step-card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+      .step-card p .mono { color: var(--ink); font-weight: 600; font-size: .94em; }
+      .tag { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 1px 10px; margin-left: 8px; vertical-align: 2px; }
+      .tag.rec { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+      .tag.itr { background: var(--packet-soft); color: var(--packet); border: 1px solid var(--packet); }
+
+      /* ---------- supplements ---------- */
+      .cards { display: grid; grid-template-columns: 1fr; gap: 14px; }
+      @media (min-width: 720px) { .cards.two { grid-template-columns: 1fr 1fr; } .cards.three { grid-template-columns: repeat(3, 1fr); } .cards.four { grid-template-columns: 1fr 1fr; } }
+      @media (min-width: 960px) { .cards.four { grid-template-columns: repeat(4, 1fr); } }
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+      .card p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+      .card p + p { margin-top: 8px; }
+      .card .mono { color: var(--ink); font-weight: 600; }
+      .card .date { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 600; color: var(--accent); display: block; margin-bottom: 4px; }
+      .vs-route { font-family: "IBM Plex Mono", monospace; font-size: 13px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; line-height: 1.9; word-break: break-all; }
+      .cmp-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+      table.cmp { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14px; }
+      table.cmp th, table.cmp td { padding: 11px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; line-height: 1.6; }
+      table.cmp thead th { background: var(--surface-2); font-size: 14.5px; }
+      table.cmp tbody th { font-weight: 700; white-space: nowrap; background: var(--surface); }
+      table.cmp td { color: var(--ink-2); }
+      table.cmp td strong { color: var(--ink); }
+      table.cmp tr:last-child th, table.cmp tr:last-child td { border-bottom: none; }
+      dl.glossary { display: grid; grid-template-columns: 1fr; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 0; }
+      @media (min-width: 720px) { dl.glossary { grid-template-columns: 1fr 1fr; } }
+      .glossary .g-item { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+      .glossary dt { font-weight: 700; font-size: 15px; }
+      .glossary dt .mono { font-size: 13px; color: var(--accent); font-weight: 600; margin-left: 6px; }
+      .glossary dd { margin: 4px 0 0; font-size: 14px; color: var(--ink-2); }
+      .note-box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 6px; padding: 14px 18px; font-size: 14.5px; color: var(--ink-2); margin-top: 14px; }
+      .note-box strong { color: var(--ink); }
+      .note-box.warn { border-left-color: var(--danger); }
+      footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .spinner { animation: none; }
+        .progress-fill { transition: none; }
+        .actor { transition: none; }
+        .cursor { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Computer-Using Agent（CUA）の仕組み</h1>
+      <p class="lede">
+        <span class="mono">CUA（Computer-Using Agent）</span>は、AIが画面のスクリーンショットを見て、マウスとキーボードを人と同じように操作するエージェントです。
+        専用のAPIがない画面でも、ボタンや入力欄という「人と同じ入口」から入って作業できる——そこが本質です。申請フォームを入力して送信する例で、操作のループを8ステップで再生できます。
+      </p>
+
+      <!-- 1. 操作ボタン -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+      <div class="progress-line">
+        <span class="progress-label" data-progress-label>ステップ 1 / 8</span>
+        <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+        <div class="dots" data-dots aria-label="ステップ一覧"></div>
+      </div>
+
+      <!-- セクション1. 操作のループをアニメーションで見る -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 1</span>
+        <h2>操作のループをアニメーションで見る</h2>
+        <p>左がエージェントの操作対象のアプリ画面、右がそのとき発行されるアクションのログです。カーソルの動きとログがステップに連動します。題材は、業務アプリの申請フォームに必要事項を入力して送信する、という汎用的な例です。</p>
+      </div>
+      <div class="stage-grid">
+        <div>
+          <div class="browser" aria-label="業務アプリ画面のモック">
+            <div class="browser-bar">
+              <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="win-title">業務アプリ — 申請フォーム（操作対象の画面）</div>
+              <span class="spinner" data-spinner aria-hidden="true"></span>
+            </div>
+            <div class="screen-wrap">
+              <div data-screen></div>
+              <div class="cursor" data-cursor aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24"><path d="M4 2 L20 12 L12.5 13.5 L15.5 21 L12.5 22.5 L9.5 14.8 L4 19 Z" fill="#fff" stroke="#1d1930" stroke-width="1.6"/></svg>
+              </div>
+            </div>
+          </div>
+          <p class="fig-cap">アプリ画面のモック。エージェントはこの画面の「画像」だけを見て操作します。</p>
+        </div>
+        <div>
+          <div class="term" aria-label="アクションログのモック">
+            <div class="term-head">アクションログ — エージェントの知覚と操作</div>
+            <pre class="term-body" data-log></pre>
+          </div>
+          <p class="fig-cap">エージェントが発行する操作（click / type / key など）のイメージです（値は説明用の例）。</p>
+        </div>
+      </div>
+
+      <!-- 2. 操作ボタン（連動） -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+      <div class="flow-wrap">
+        <div class="actors" role="img" aria-label="CUAの登場人物：あなた、CUAエージェント、画面（アプリ）">
+          <div class="actor" data-actor="user">
+            <span class="a-icon" aria-hidden="true">🧑</span>
+            <span class="a-name">あなた</span>
+            <span class="a-sub">自然言語でタスクを頼む人<br>重要な操作では確認に応じる</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="agent">
+            <span class="a-icon" aria-hidden="true">🤖</span>
+            <span class="a-name">CUAエージェント</span>
+            <span class="a-sub">モデル（視覚＋推論）と<br>アクション実行層</span>
+            <span class="a-tag" data-tag>知覚―推論―行動ループ実行中</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="screen">
+            <span class="a-icon" aria-hidden="true">🖥️</span>
+            <span class="a-name">画面（アプリ）</span>
+            <span class="a-sub">デスクトップ／ブラウザ上の<br>ふつうの業務アプリ</span>
+            <span class="a-tag" data-tag>APIなし・GUIのみ</span>
+          </div>
+        </div>
+        <div class="packet-bar" aria-live="polite">
+          <div class="p-label">いま起きていること</div>
+          <div class="p-route" data-packet-route>あなた → CUAエージェント</div>
+          <div class="p-body mono" data-packet-body>タスクを自然言語で受け取る</div>
+        </div>
+        <div class="step-card">
+          <div class="s-kicker" data-step-kicker>STEP 1 / 8</div>
+          <h3 data-step-title>自然言語でタスクを受け取る</h3>
+          <p data-step-desc></p>
+        </div>
+      </div>
+
+      <!-- セクション2. 画面でこう見える -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 2</span>
+        <h2>画面でこう見える — 「目」と「手」のループ</h2>
+        <p>エージェントと画面のあいだで起きているのは、単純な往復の繰り返しです。スクリーンショットが「目」、マウスとキーボードが「手」、そのあいだでモデルが考えます。</p>
+      </div>
+      <div class="card">
+        <div class="vs-route">📸 スクリーンショットを撮る（目＝知覚）<br>　→ 🧠 画面を読み、次の一手を考える（推論）<br>　　→ 🖱️ click / type / key を送る（手＝行動）<br>　　　→ 🖥️ 画面が変わる → またスクリーンショットへ（ループ）</div>
+        <p>ポイントは、エージェントが受け取るのが原則として<strong>画面の画像（ピクセル）</strong>だということです。Webページの裏側の構造（DOM）を直接読む方式とは違い、人間が見ているものとほぼ同じ情報から判断します。だからAPIのないデスクトップアプリや、画像として表示されるだけの画面でも操作できます。</p>
+      </div>
+      <div class="cards two" style="margin-top:14px">
+        <div class="card">
+          <h3>ピクセルを見る方式 <span class="mono" style="font-size:13px;color:var(--accent)">スクリーンショット</span></h3>
+          <p>画面を画像としてモデルに渡し、ボタンの位置を座標で特定します。どんなアプリでも同じやり方で扱えるのが強みです。一方で、小さい文字の読み取りや、似たボタンの見分けはモデルの視覚能力に依存し、座標がずれると誤クリックになります。</p>
+        </div>
+        <div class="card">
+          <h3>アクセシビリティツリー併用 <span class="mono" style="font-size:13px;color:var(--accent)">構造も読む</span></h3>
+          <p>OSやブラウザが持つ「画面要素の構造情報」（アクセシビリティツリー）を画像と併せて渡す方式です。要素の名前や役割がテキストで分かるため、位置の特定が安定しやすくなります。ただし構造情報を持たないアプリでは使えず、画像だけの方式と使い分け・併用されます。</p>
+        </div>
+      </div>
+
+      <!-- セクション3. 実際の中身のフロー -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 3</span>
+        <h2>実際の中身のフロー — 4つの構成要素</h2>
+        <p>CUAの実装は、大きく4つの部品に分かれます。「考えるモデル」だけでは動かず、操作する環境と、安全を担保する層がセットで必要です。</p>
+      </div>
+      <div class="cards four">
+        <div class="card">
+          <h3>① モデル</h3>
+          <p>スクリーンショットを理解する<strong>視覚能力</strong>と、タスクを手順に分解する<strong>推論能力</strong>を兼ねたモデルです。画面要素の位置を座標で言い当てる「グラウンディング」の精度が、成否を大きく左右します。</p>
+        </div>
+        <div class="card">
+          <h3>② 実行環境</h3>
+          <p>エージェントが操作するコンピュータそのものです。<strong>クラウド上の仮想マシン（VM）</strong>、ブラウザ専用環境、あるいは<strong>自分のPC</strong>上で動かす形があります。使い捨てできるVMなら、失敗しても環境ごと捨てられます。</p>
+        </div>
+        <div class="card">
+          <h3>③ アクション実行層</h3>
+          <p>モデルが出した指示（<span class="mono">click(x, y)</span>、<span class="mono">type</span>、<span class="mono">key</span>、スクロールなど）を、OSやブラウザへの実際の入力イベントに変換する層です。スクリーンショットの取得もここが担います。</p>
+        </div>
+        <div class="card">
+          <h3>④ 安全層</h3>
+          <p>危険な操作を止めるための仕組みです。重要な操作の前で<strong>人の確認</strong>を挟む、画面内の不審な指示を検知する分類器、外部と切り離した<strong>サンドボックス</strong>などが含まれます（詳しくはセクション5）。</p>
+        </div>
+      </div>
+      <div class="sec-head">
+        <span class="sec-num">SECTION 3</span>
+        <h2>主な担い手の年表</h2>
+        <p>「モデルが画面を操作する」という発想が、研究デモから製品・基盤へ広がってきた流れです。</p>
+      </div>
+      <div class="cards two">
+        <div class="card">
+          <span class="date">2024年10月</span>
+          <h3>Anthropic「computer use」</h3>
+          <p>Claudeがスクリーンショットを見てデスクトップを操作する機能を、公開ベータとして発表しました。開発者がAPI経由で「AIに画面操作させる」形が広く知られるきっかけになったとされます。</p>
+        </div>
+        <div class="card">
+          <span class="date">2025年1月</span>
+          <h3>OpenAI「CUA」モデルと Operator</h3>
+          <p>OpenAIは画面操作専用のモデルを「CUA（computer-using agent）」と名付け、それを使った Operator を発表しました。のちに、この機能はChatGPTのエージェント機能へ統合されたと報告されています。</p>
+        </div>
+        <div class="card">
+          <span class="date">2025年〜</span>
+          <h3>Google Gemini の computer use</h3>
+          <p>GoogleもGemini系モデルに画面操作の能力を持たせ、ブラウザ操作を中心に提供を広げています。主要なモデル提供者がそろってこの領域に入った形です。</p>
+        </div>
+        <div class="card">
+          <span class="date">オープンソース基盤</span>
+          <h3>trycua/cua と CUA Agent Kit</h3>
+          <p><span class="mono">trycua/cua</span> は、エージェント用の仮想デスクトップ環境（LumeによるVMなど）を提供するオープンソース基盤です。CVS Healthが公開した <span class="mono">CUA Agent Kit</span> は発想が逆で、「探索はAIにやらせるが、繰り返し実行はコード化して行う」というハイブリッド方式を採ります（セクション4参照）。</p>
+        </div>
+      </div>
+
+      <!-- セクション4. RPAとの違い -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 4</span>
+        <h2>RPAとの違い</h2>
+        <p>画面操作の自動化といえば従来は <span class="mono">RPA（Robotic Process Automation）</span> でした。どちらも「画面を操作する」点は同じですが、次の一手の決め方が根本的に違います。</p>
+      </div>
+      <div class="cmp-wrap">
+        <table class="cmp">
+          <thead>
+            <tr><th scope="col">観点</th><th scope="col">RPA</th><th scope="col">CUA</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">次の一手の決め方</th>
+              <td><strong>事前に固定。</strong>人間が手順をシナリオとして書き、機械はそれを再生する</td>
+              <td><strong>その場で判断。</strong>モデルが画面を見て、次に何をするかを毎回推論する</td>
+            </tr>
+            <tr>
+              <th scope="row">画面変更への耐性</th>
+              <td>弱い。ボタンの位置や文言が変わると、シナリオがそのまま止まることが多い</td>
+              <td>強い。レイアウトが多少変わっても、画面を見て新しい位置を探せる</td>
+            </tr>
+            <tr>
+              <th scope="row">再現性・決定性</th>
+              <td><strong>決定的。</strong>同じ入力なら毎回まったく同じ動きをする</td>
+              <td>非決定的。実行ごとに経路が少しずつ変わりうる</td>
+            </tr>
+            <tr>
+              <th scope="row">速度とコスト</th>
+              <td>速く安い。再生だけなので計算資源はわずか</td>
+              <td>遅く高い傾向。ステップごとにモデルの呼び出し（画像入力を含む）が発生する</td>
+            </tr>
+            <tr>
+              <th scope="row">失敗の仕方</th>
+              <td><strong>止まる。</strong>想定外では例外になって停止するので、被害は限定的</td>
+              <td><strong>静かに間違える。</strong>想定外でも「それらしい操作」を続けてしまい、誤ったまま完了扱いになることがある</td>
+            </tr>
+            <tr>
+              <th scope="row">作る速さ</th>
+              <td>遅い。対象画面ごとにシナリオの設計・調整が要る</td>
+              <td>速い。タスクを文章で頼むだけで、未知の画面でも試行を始められる</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note-box">
+        <strong>ベンチマークの読み方：</strong> PC操作の代表的なベンチマーク <span class="mono">OSWorld</span> では、初期のエージェントの成功率は14.9%にとどまり、OpenAIのCUAでは38.1%、人間のベースラインは約72%と報告されています。改良版の OSWorld-Verified では上位モデルが人間超えを達成したとの報告もある一方、長時間の実務ワークフローを測る OSWorld 2.0 では最良のエージェントでも5割弱にとどまるとされます。<strong>「1回解ける」ことと「毎回解ける」ことは別物</strong>で、短い課題の成功率を、そのまま実務の信頼性と読み替えないことが大切です。
+      </div>
+      <div class="cards two" style="margin-top:14px">
+        <div class="card">
+          <h3>使い分けの原則 — 優先順位</h3>
+          <div class="vs-route">① API があれば API を使う<br>② コネクタ／MCP など構造化された接続<br>③ 手順が固定なら RPA<br>④ CUA は「他に手段がない画面」の切り札</div>
+          <p>画面操作は、構造化された接続が使えないときの最終手段と考えるのが基本です。画面は変わりやすく、検証もしにくいため、上位の手段が使えるならそちらを優先します。</p>
+        </div>
+        <div class="card">
+          <h3>ハイブリッド — 探索はAI、繰り返しはコード</h3>
+          <p>両者のいいとこ取りが、<strong>AIに手順を探索させて成功した操作をコード化し、繰り返しはそのコードで実行する</strong>方式です（CVS Healthの CUA Agent Kit がこの発想とされます）。探索の柔軟さと、再生の速さ・再現性を両立でき、画面が変わったときだけAIに直させます。</p>
+        </div>
+      </div>
+
+      <!-- セクション5. リスクと対策 -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 5</span>
+        <h2>リスクと対策</h2>
+        <p>「画面を見て何でも操作できる」ことは、そのまま「画面に映るものすべてが攻撃や事故の入口になる」ことでもあります。代表的なリスクと、実装側で用意される対策です。</p>
+      </div>
+      <div class="cards two">
+        <div class="card">
+          <h3>① 画面内プロンプトインジェクション</h3>
+          <p>Webページや画像、文書の中に「この指示に従え」という文言を埋め込み、画面を読んだエージェントを釣る攻撃です。CUAでは<strong>画面そのものが攻撃面</strong>になり、タスクと無関係な指示がスクリーンショット経由で入り込みます。</p>
+        </div>
+        <div class="card">
+          <h3>② 誤操作とサイレントな失敗</h3>
+          <p>似たボタンの押し間違いや、値の入力ミスに気づかないまま進む失敗です。「保存はできたが金額が違う」のように、<strong>成功したつもりで間違っている</strong>状態が最も厄介で、完了判定を画面の見た目だけに頼ると見逃します。</p>
+        </div>
+        <div class="card">
+          <h3>③ 認証情報・画面の丸見え</h3>
+          <p>スクリーンショットには、その瞬間に表示されている<strong>すべての情報</strong>が写ります。パスワード入力欄や個人情報を含む画面が、モデルの入力やログにそのまま残るおそれがあり、情報の取り扱い範囲が広がります。</p>
+        </div>
+        <div class="card">
+          <h3>④ 取り消せない操作</h3>
+          <p>送信、支払い、削除といった操作は、一度実行すると<strong>元に戻せません</strong>。人間の作業なら手が止まる場面でも、エージェントは確認なしに実行できてしまうため、影響の大きい操作ほど歯止めが必要です。</p>
+        </div>
+        <div class="card">
+          <h3>⑤ 再現性とコスト</h3>
+          <p>毎ステップでLLMを呼び出すため、長いタスクほど<strong>時間と費用がかさみ</strong>ます。また実行ごとに経路が変わりうるので、「昨日できた操作が今日は違う動きをする」ことがあり、監査や再現テストが難しくなります。</p>
+        </div>
+        <div class="card">
+          <h3>対策の基本セット</h3>
+          <p>専用の<strong>VM／サンドボックス</strong>で動かし、権限は最小限に。アクセス先ドメインは<strong>許可リスト</strong>で絞る。送信・支払いなど重要な操作の前では<strong>人の確認（テイクオーバー）</strong>を挟む。操作ログとスクリーンショットを<strong>監査証跡</strong>として残す。そして、いきなり本番ではなく<strong>低リスクなタスクから始める</strong>のが定石です。</p>
+        </div>
+      </div>
+      <div class="note-box warn">
+        <strong>要点：</strong> CUAの安全はモデルの賢さだけでは決まりません。「どの環境で・どの権限で・どこまで人を確認に挟むか」という運用設計が、そのまま安全性になります。
+      </div>
+
+      <!-- 用語解説 -->
+      <div class="sec-head">
+        <span class="sec-num">GLOSSARY</span>
+        <h2>用語解説</h2>
+      </div>
+      <dl class="glossary">
+        <div class="g-item">
+          <dt>グラウンディング<span class="mono">grounding</span></dt>
+          <dd>「送信ボタンを押して」という言語的な指示を、画面上の具体的な座標（x, y）に対応づけること。CUAのモデルに求められる中核能力で、ここがずれると誤クリックになります。</dd>
+        </div>
+        <div class="g-item">
+          <dt>知覚―推論―行動ループ<span class="mono">perception–reasoning–action loop</span></dt>
+          <dd>スクリーンショットで画面を知覚し、次の一手を推論し、クリックや入力として行動し、変わった画面をまた知覚する、というCUAの基本の繰り返し構造です。</dd>
+        </div>
+        <div class="g-item">
+          <dt>OSWorld<span class="mono">ベンチマーク</span></dt>
+          <dd>実在のOSやアプリ上での課題（ファイル操作、アプリの設定変更など）で、PC操作エージェントの成功率を測る代表的なベンチマーク。人間の成功率（約72%と報告）と比較されます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>テイクオーバー<span class="mono">takeover</span></dt>
+          <dd>エージェントの操作を人間が引き継ぐ・承認すること。重要な操作の前で一時停止して人に判断を仰ぐ使い方が一般的で、安全層の要です。</dd>
+        </div>
+        <div class="g-item">
+          <dt>アクセシビリティツリー<span class="mono">accessibility tree</span></dt>
+          <dd>OSやブラウザが支援技術向けに提供する、画面要素の構造情報（役割・名前・位置）。スクリーンショットの画像と併用すると、要素の特定が安定しやすくなります。</dd>
+        </div>
+        <div class="g-item">
+          <dt>サンドボックス<span class="mono">sandbox</span></dt>
+          <dd>外部から切り離した隔離環境のこと。CUAでは専用VMなどでエージェントを動かし、誤操作や攻撃の影響が本番環境や個人のPCに及ばないようにします。</dd>
+        </div>
+      </dl>
+
+      <footer>
+        このページの画面・ログ・数値は説明用の例です。ベンチマークの成功率や各社の提供時期などの記述は、OpenAIの Operator System Card、Anthropicの computer use 公式ドキュメント、各ベンチマークの公開資料といった一次情報に基づき、「〜と報告されている」範囲で記載しています。実際の精度や仕様は、利用するモデルと実行環境によって異なります。
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var STEPS = [
+          {
+            title: "自然言語でタスクを受け取る",
+            tag: "",
+            desc: "あなたは「申請フォームに必要事項を入力して送信して」と、ふだん人へ頼むのと同じ言葉で依頼します。このアプリには自動化用のAPIがありませんが、CUAには<strong>画面さえあればよい</strong>のが出発点です。手順を細かく指定する必要はなく、ゴールだけを渡します。",
+            route: "あなた → CUAエージェント",
+            packet: "task: 「申請フォームに必要事項を入力して送信して」",
+            actors: ["user", "agent"],
+            agentTag: false, screenTag: false
+          },
+          {
+            title: "スクリーンショットを撮る（知覚）",
+            tag: "<span class='tag rec'>知覚</span>",
+            desc: "エージェントはまず、画面を<strong>画像として</strong>取得します。受け取るのはWebページの構造（DOM）ではなくピクセルの並びで、人間が見ているものとほぼ同じ情報です。ここから「何が・どこに表示されているか」を読み解きます。",
+            route: "画面 → CUAエージェント（画像）",
+            packet: "screenshot() → 画像 1280×800",
+            actors: ["agent", "screen"],
+            agentTag: true, screenTag: true
+          },
+          {
+            title: "画面要素の位置を特定する（グラウンディング）",
+            tag: "<span class='tag rec'>グラウンディング</span>",
+            desc: "モデルは「件名の入力欄はどこか」を考え、その位置を<strong>座標（x, y）</strong>で言い当てます。この対応づけをグラウンディングと呼び、CUAの精度を左右する中核の能力です。座標が数ピクセルずれるだけで、クリックは隣の要素に当たります。",
+            route: "CUAエージェント（モデルが推論）",
+            packet: "locate(\"件名の入力欄\") → (412, 238)",
+            actors: ["agent"],
+            agentTag: true, screenTag: true
+          },
+          {
+            title: "次の一手を推論する",
+            tag: "",
+            desc: "ゴールと現在の画面を見比べて、モデルは手順を組み立てます。「まず件名をクリックして入力し、次に出発日と金額、最後に送信」という<strong>計画そのものもモデルが作る</strong>点が、あらかじめ手順を固定するRPAとの大きな違いです。",
+            route: "CUAエージェント（モデルが推論）",
+            packet: "plan: 件名を入力 → 日付・金額 → 送信",
+            actors: ["agent"],
+            agentTag: true, screenTag: true
+          },
+          {
+            title: "クリックと入力を実行する（行動）",
+            tag: "<span class='tag itr'>行動</span>",
+            desc: "決めた一手は、アクション実行層がOSへの実際の入力イベントに変換します。座標への <span class='mono'>click</span> と、キーボード入力の <span class='mono'>type</span> です。アプリ側から見れば、人間がマウスとキーボードで操作しているのと区別がつきません。",
+            route: "CUAエージェント → 画面（入力イベント）",
+            packet: "click(412, 238) / type(\"出張申請（東京 − 大阪）\")",
+            actors: ["agent", "screen"],
+            agentTag: true, screenTag: true
+          },
+          {
+            title: "画面が変わり、再度スクリーンショット（ループ）",
+            tag: "",
+            desc: "操作したら、結果を確認するために<strong>もう一度スクリーンショット</strong>を撮ります。入力が反映されたかを見て、次の項目へ進み、送信ボタンを押すところまでこの往復を繰り返します。1つのタスクは、この小さなループの積み重ねです。",
+            route: "画面 ⇄ CUAエージェント（ループ継続）",
+            packet: "screenshot() → 入力を確認 → click（送信ボタン）",
+            actors: ["agent", "screen"],
+            agentTag: true, screenTag: true
+          },
+          {
+            title: "想定外のポップアップに気づいて自己修正",
+            tag: "<span class='tag itr'>自己修正</span>",
+            desc: "送信を押したら、「必須項目『承認者』が未入力です」という想定外のダイアログが現れました。エージェントは画面を読み直し、<strong>計画を修正して</strong>承認者を先に入力し直します。シナリオ固定の自動化なら止まってしまう場面ですが、裏返すと「想定外でも、それらしく操作を続けてしまう」危うさと表裏一体です（セクション5）。",
+            route: "画面 → CUAエージェント → 画面",
+            packet: "observe: ダイアログ検知 → 計画を修正",
+            actors: ["agent", "screen"],
+            agentTag: true, screenTag: true
+          },
+          {
+            title: "人の確認を経て、完了を判定する",
+            tag: "",
+            desc: "送信は<strong>取り消せない操作</strong>なので、最後の実行の前にエージェントは停止して、あなたに確認を求めます（テイクオーバー）。承認後に送信し、画面に「受け付けました」と出たことを自分の目で確認して、初めてタスク完了と判定します。",
+            route: "CUAエージェント → あなた（確認）→ 画面",
+            packet: "request_confirmation → 承認 → 送信 → 完了を確認",
+            actors: ["user", "agent", "screen"],
+            agentTag: true, screenTag: true
+          }
+        ];
+
+        /* ---------- screen mock states ---------- */
+        function fld(label, req, val, wrapCls, coord) {
+          var inner = val
+            ? "<div class='input filled'>" + val + "</div>"
+            : "<div class='input'>未入力</div>";
+          var c = coord ? "<div class='coord-tag'>→ locate: (" + coord + ") と特定</div>" : "";
+          return "<label class='fld " + (wrapCls || "") + "'><span>" + label +
+            (req ? " <span class='req'>*必須</span>" : "") + "</span>" + inner + c + "</label>";
+        }
+        function form(o) {
+          var html = "<div class='app-screen'>";
+          if (o.banner) html += "<div class='success-banner'>" + o.banner + "</div>";
+          html += "<div class='app-title'>出張申請フォーム <span class='app-badge'>業務アプリ</span></div>";
+          html += fld("件名", true, o.subject[0], o.subject[1], o.subject[2]);
+          html += fld("出発日", true, o.date[0], o.date[1], "");
+          html += fld("金額（円）", true, o.amount[0], o.amount[1], "");
+          html += fld("承認者", true, o.approver[0], o.approver[1], "");
+          html += "<div class='submit-row'><span class='submit-btn" + (o.submit ? " " + o.submit : "") + "'>送信する</span></div>";
+          html += "</div>";
+          if (o.shot) html += "<div class='shot-frame'><span class='shot-tag'>screenshot</span></div>";
+          if (o.popup) html += o.popup;
+          return html;
+        }
+        var POPUP_ERR = "<div class='popup'><div class='p-head'>⚠ 入力エラー</div>必須項目『承認者』が未入力です。入力してから送信してください。<div class='p-btns'><span class='p-btn'>OK</span></div></div>";
+        var E = ["", "", ""]; /* empty field: [value, wrapClass, coord] */
+
+        var VIEW = [
+          { spin: false, cursor: null,
+            screen: form({ subject: E, date: E, amount: E, approver: E, submit: "" }) },
+          { spin: true, cursor: null,
+            screen: form({ subject: E, date: E, amount: E, approver: E, submit: "", shot: true }) },
+          { spin: true, cursor: { x: "46%", y: "24%" },
+            screen: form({ subject: ["", "hl", "412, 238"], date: E, amount: E, approver: E, submit: "" }) },
+          { spin: true, cursor: { x: "46%", y: "24%" },
+            screen: form({ subject: E, date: E, amount: E, approver: E, submit: "" }) },
+          { spin: false, cursor: { x: "46%", y: "24%" },
+            screen: form({ subject: ["出張申請（東京 − 大阪）", "focus", ""], date: E, amount: E, approver: E, submit: "" }) },
+          { spin: false, cursor: { x: "50%", y: "88%" },
+            screen: form({ subject: ["出張申請（東京 − 大阪）", "", ""], date: ["2026-12-10", "", ""], amount: ["48,000", "", ""], approver: E, submit: "hl" }) },
+          { spin: true, cursor: { x: "46%", y: "63%" },
+            screen: form({ subject: ["出張申請（東京 − 大阪）", "", ""], date: ["2026-12-10", "", ""], amount: ["48,000", "", ""], approver: ["", "hl", ""], submit: "", popup: POPUP_ERR }) },
+          { spin: false, cursor: null,
+            screen: form({ banner: "✓ 申請を受け付けました（受付番号 #A-1024）", subject: ["出張申請（東京 − 大阪）", "", ""], date: ["2026-12-10", "", ""], amount: ["48,000", "", ""], approver: ["上長A", "", ""], submit: "" }) }
+        ];
+
+        /* ---------- action log (cumulative) ---------- */
+        var LOG_LINES = [
+          ["<span class='dim'># タスクを受け取った</span>",
+           "&gt; task: \"申請フォームに必要事項を入力して送信して\"",
+           "<span class='dim'>対象: 業務アプリ（APIなし・GUIのみ）</span>"],
+          ["<span class='dim'># ループ1回目 — 知覚</span>",
+           "[perceive] screenshot() → 画像 1280×800 を取得"],
+          ["[ground] locate(\"件名の入力欄\") → <span class='hl'>(412, 238)</span>",
+           "[ground] locate(\"送信ボタン\") → <span class='hl'>(640, 742)</span>"],
+          ["[plan] 手順を立てる:",
+           "  1. 件名をクリックして入力",
+           "  2. 出発日・金額を入力",
+           "  3. 送信ボタンを押す"],
+          ["[action] click(412, 238)",
+           "[action] type(\"出張申請（東京 − 大阪）\")"],
+          ["[perceive] screenshot() → 入力欄に文字が入った",
+           "[action] type(出発日: \"2026-12-10\")",
+           "[action] type(金額: \"48000\")",
+           "[action] click(640, 742) <span class='dim'># 送信ボタン</span>"],
+          ["[perceive] screenshot() → <span class='warn'>想定外のダイアログを検知</span>",
+           "[observe] \"必須項目『承認者』が未入力です\"",
+           "[plan] 計画を修正: 承認者を先に入力する",
+           "[action] click(OK) → type(承認者: \"上長A\")"],
+          ["[guard] 送信は取り消せない操作 → 人に確認を依頼",
+           "[human] <span class='ok'>承認された</span>",
+           "[action] click(640, 742) <span class='dim'># 送信ボタン</span>",
+           "[verify] screenshot() → \"受け付けました\" を確認",
+           "<span class='ok'>✓ タスク完了</span>"]
+        ];
+        function logHTML(upto) {
+          var out = [];
+          for (var i = 0; i <= upto; i++) out = out.concat(LOG_LINES[i]);
+          return out.join("\n");
+        }
+
+        var idx = 0;
+        var playing = false;
+        var speed = 1;
+        var timer = null;
+        var BASE_MS = 3400;
+
+        var els = {
+          label: document.querySelector("[data-progress-label]"),
+          fill: document.querySelector("[data-progress-fill]"),
+          dotsWrap: document.querySelector("[data-dots]"),
+          spinner: document.querySelector("[data-spinner]"),
+          screen: document.querySelector("[data-screen]"),
+          cursor: document.querySelector("[data-cursor]"),
+          log: document.querySelector("[data-log]"),
+          route: document.querySelector("[data-packet-route]"),
+          packet: document.querySelector("[data-packet-body]"),
+          kicker: document.querySelector("[data-step-kicker]"),
+          stepTitle: document.querySelector("[data-step-title]"),
+          stepDesc: document.querySelector("[data-step-desc]")
+        };
+
+        /* build dots */
+        var dots = [];
+        for (var i = 0; i < STEPS.length; i++) {
+          (function (n) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "dot";
+            b.textContent = String(n + 1);
+            b.setAttribute("aria-label", "ステップ" + (n + 1) + "へ移動");
+            b.addEventListener("click", function () { pause(); goTo(n); });
+            els.dotsWrap.appendChild(b);
+            dots.push(b);
+          })(i);
+        }
+
+        var actorEls = {};
+        document.querySelectorAll("[data-actor]").forEach(function (el) {
+          actorEls[el.getAttribute("data-actor")] = el;
+        });
+
+        function render() {
+          var s = STEPS[idx];
+          var v = VIEW[idx];
+          els.label.textContent = "ステップ " + (idx + 1) + " / " + STEPS.length;
+          els.fill.style.width = ((idx + 1) / STEPS.length * 100) + "%";
+          dots.forEach(function (d, i) {
+            d.classList.toggle("now", i === idx);
+            d.classList.toggle("done", i < idx);
+          });
+          /* screen mock + log */
+          els.spinner.classList.toggle("on", v.spin);
+          els.screen.innerHTML = v.screen;
+          if (v.cursor) {
+            els.cursor.style.opacity = "1";
+            els.cursor.style.left = v.cursor.x;
+            els.cursor.style.top = v.cursor.y;
+          } else {
+            els.cursor.style.opacity = "0";
+          }
+          els.log.innerHTML = logHTML(idx);
+          /* flow */
+          els.route.textContent = s.route;
+          els.packet.textContent = s.packet;
+          els.kicker.textContent = "STEP " + (idx + 1) + " / " + STEPS.length;
+          els.stepTitle.innerHTML = s.title + (s.tag || "");
+          els.stepDesc.innerHTML = s.desc;
+          Object.keys(actorEls).forEach(function (k) {
+            actorEls[k].classList.toggle("active", s.actors.indexOf(k) !== -1);
+          });
+          actorEls.agent.classList.toggle("tag-on", !!s.agentTag);
+          actorEls.screen.classList.toggle("tag-on", !!s.screenTag);
+          /* controls state */
+          document.querySelectorAll("[data-action='prev']").forEach(function (b) { b.disabled = idx === 0; });
+          document.querySelectorAll("[data-action='next']").forEach(function (b) { b.disabled = idx === STEPS.length - 1; });
+          document.querySelectorAll("[data-action='play']").forEach(function (b) {
+            b.textContent = playing ? "⏸ 一時停止" : (idx === STEPS.length - 1 ? "↺ もう一度" : "▶ 再生");
+          });
+        }
+
+        function goTo(n) {
+          idx = Math.max(0, Math.min(STEPS.length - 1, n));
+          render();
+        }
+        function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+        function startTimer() {
+          stopTimer();
+          timer = setInterval(function () {
+            if (idx >= STEPS.length - 1) { pause(); return; }
+            goTo(idx + 1);
+            if (idx >= STEPS.length - 1) { pause(); }
+          }, BASE_MS / speed);
+        }
+        function play() {
+          if (idx >= STEPS.length - 1) { goTo(0); }
+          playing = true;
+          render();
+          startTimer();
+        }
+        function pause() {
+          playing = false;
+          stopTimer();
+          render();
+        }
+
+        document.querySelectorAll("[data-controls]").forEach(function (bar) {
+          bar.addEventListener("click", function (e) {
+            var btn = e.target.closest("[data-action]");
+            if (!btn || btn.disabled) return;
+            var a = btn.getAttribute("data-action");
+            if (a === "prev") { pause(); goTo(idx - 1); }
+            else if (a === "next") { pause(); goTo(idx + 1); }
+            else if (a === "reset") { pause(); goTo(0); }
+            else if (a === "play") { playing ? pause() : play(); }
+          });
+        });
+        document.querySelectorAll("[data-speed]").forEach(function (sel) {
+          sel.addEventListener("change", function () {
+            speed = parseFloat(sel.value);
+            document.querySelectorAll("[data-speed]").forEach(function (o) { o.value = sel.value; });
+            if (playing) startTimer();
+          });
+        });
+
+        render();
+      })();
+    </script>
+  </body>
+</html>

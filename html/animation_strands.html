@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Strands Agentsの仕組みアニメーション</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
+      * { box-sizing: border-box; }
+      :root {
+        --bg: #faf6ef;
+        --surface: #ffffff;
+        --surface-2: #f4ecdd;
+        --ink: #251a0e;
+        --ink-2: #57493a;
+        --ink-3: #8a7965;
+        --line: #e3d5bd;
+        --accent: #d97706;
+        --accent-ink: #ffffff;
+        --accent-soft: #fdeeda;
+        --packet: #1d4ed8;
+        --packet-soft: #e4ebfd;
+        --danger: #b3261e;
+        --danger-soft: #fbe9e7;
+        --term-bg: #1c150c;
+        --term-ink: #f3e2c2;
+        --term-dim: #a68d64;
+        --radius: 10px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #171208;
+          --surface: #221a10;
+          --surface-2: #2c2214;
+          --ink: #f3ead9;
+          --ink-2: #cfc0a8;
+          --ink-3: #a08d6f;
+          --line: #453620;
+          --accent: #f5a623;
+          --accent-ink: #2a1a02;
+          --accent-soft: #3d2c0c;
+          --packet: #7aa5ff;
+          --packet-soft: #1d2a4d;
+          --danger: #f0867e;
+          --danger-soft: #3d1d1a;
+          --term-bg: #0d0a05;
+          --term-ink: #f3e2c2;
+          --term-dim: #8a744e;
+          color-scheme: dark;
+        }
+      }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "IBM Plex Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        line-height: 1.75;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { max-width: 960px; margin: 0 auto; padding: 28px 18px 72px; }
+      h1 { font-size: clamp(26px, 5.4vw, 38px); line-height: 1.3; margin: 0 0 10px; letter-spacing: .01em; }
+      .lede { color: var(--ink-2); font-size: 16px; margin: 0 0 6px; max-width: 42em; }
+      .lede .mono { color: var(--accent); font-weight: 600; }
+      h2 { font-size: 21px; margin: 0 0 6px; line-height: 1.4; }
+      h3 { font-size: 16px; margin: 0 0 6px; }
+      .sec-head { margin: 40px 0 14px; }
+      .sec-head p { margin: 0; color: var(--ink-2); font-size: 14.5px; max-width: 44em; }
+      .sec-num { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 1px 10px; margin-bottom: 8px; letter-spacing: .08em; }
+
+      /* ---------- controls ---------- */
+      .controls {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 10px 12px; margin: 18px 0;
+      }
+      .controls .btn {
+        appearance: none; border: 1px solid var(--line); background: var(--surface-2);
+        color: var(--ink); border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 14.5px; font-weight: 600;
+        cursor: pointer; min-width: 44px;
+      }
+      .controls .btn:hover { border-color: var(--accent); }
+      .controls .btn:focus-visible, .speedsel:focus-visible, .dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .controls .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 92px; }
+      .controls .btn:disabled { opacity: .38; cursor: default; }
+      .controls .btn:disabled:hover { border-color: var(--line); }
+      .controls .btn.primary:disabled:hover { border-color: var(--accent); }
+      .speedwrap { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13.5px; color: var(--ink-2); }
+      .speedsel { font: inherit; font-size: 14px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+      .progress-line { display: flex; align-items: center; gap: 12px; margin: 4px 2px 0; flex-wrap: wrap; }
+      .progress-label { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+      .progress-track { flex: 1 1 140px; height: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+      .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .45s ease; }
+      .dots { display: flex; gap: 6px; flex-wrap: wrap; }
+      .dot { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+      .dot.done { border-color: var(--accent); color: var(--accent); }
+      .dot.now { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+      /* ---------- chat mock + event log ---------- */
+      .stage-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      @media (min-width: 820px) { .stage-grid { grid-template-columns: 1fr 1fr; } }
+      .browser, .term {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+      }
+      .browser-bar {
+        display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+        background: var(--surface-2); border-bottom: 1px solid var(--line);
+      }
+      .traffic { display: flex; gap: 6px; flex: none; }
+      .traffic i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+      .traffic i:nth-child(1) { background: #e0655f; } .traffic i:nth-child(2) { background: #e8b23f; } .traffic i:nth-child(3) { background: #58b368; }
+      .win-title { font-size: 13.5px; font-weight: 700; color: var(--ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .spinner {
+        width: 16px; height: 16px; border-radius: 50%; flex: none; margin-left: auto;
+        border: 2.5px solid var(--line); border-top-color: var(--accent);
+        animation: spin .8s linear infinite; display: none;
+      }
+      .spinner.on { display: block; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .chat-body {
+        padding: 14px 14px 16px; min-height: 342px; background: var(--surface);
+        display: flex; flex-direction: column; gap: 10px;
+      }
+      .msg { max-width: 90%; padding: 9px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.6; border: 1px solid var(--line); }
+      .msg .who { display: block; font-size: 11px; font-weight: 700; color: var(--ink-3); margin-bottom: 2px; }
+      .msg.user { align-self: flex-end; background: var(--accent-soft); border-bottom-right-radius: 4px; }
+      .msg.agent { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
+      .tool-chip {
+        align-self: flex-start; font-family: "IBM Plex Mono", monospace; font-size: 12px; line-height: 1.55;
+        border: 1.5px solid var(--packet); background: var(--packet-soft); color: var(--ink);
+        border-radius: 8px; padding: 6px 10px; word-break: break-all;
+      }
+      .tool-chip.res { border-color: var(--line); background: var(--surface); color: var(--ink-2); }
+      .think { align-self: flex-start; font-size: 12.5px; color: var(--ink-3); }
+      .done-bar {
+        align-self: stretch; text-align: center; font-size: 12.5px; font-weight: 700; color: var(--accent);
+        border: 1.5px dashed var(--accent); border-radius: 8px; padding: 6px;
+      }
+      .term-head { padding: 8px 14px; font-size: 12.5px; color: var(--term-dim); background: var(--term-bg); border-bottom: 1px solid #3a2c14; font-family: "IBM Plex Mono", monospace; }
+      .term-body {
+        background: var(--term-bg); color: var(--term-ink); margin: 0; padding: 14px 16px 18px;
+        font-family: "IBM Plex Mono", monospace; font-size: 12.4px; line-height: 1.6; min-height: 342px;
+        white-space: pre-wrap; word-break: break-all;
+      }
+      .term-body .dim { color: var(--term-dim); }
+      .term-body .hl { color: #f5a623; }
+      .term-body .ok { color: #7ee2b8; }
+      .term-body .warn { color: #f0867e; }
+      .fig-cap { font-size: 12.5px; color: var(--ink-3); margin: 8px 2px 0; }
+
+      /* ---------- code panel ---------- */
+      .code-body {
+        background: var(--term-bg); color: var(--term-ink); margin: 0; padding: 16px 18px 20px;
+        font-family: "IBM Plex Mono", monospace; font-size: 13px; line-height: 1.75;
+        white-space: pre; overflow-x: auto;
+      }
+      .code-body .dim { color: var(--term-dim); }
+      .code-body .kw { color: #f5a623; }
+      .code-body .str { color: #a7d7a0; }
+      .code-body .fn { color: #7aa5ff; }
+      .code-body .hl-line { background: rgba(245,166,35,.13); display: inline-block; width: 100%; }
+
+      /* ---------- flow diagram ---------- */
+      .flow-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 16px 16px; }
+      .actors { display: flex; align-items: stretch; gap: 0; }
+      .actor {
+        flex: 1 1 0; min-width: 0; text-align: center; padding: 12px 6px 10px; border: 1.5px solid var(--line);
+        border-radius: var(--radius); background: var(--surface-2); transition: border-color .3s, background .3s, box-shadow .3s;
+      }
+      .actor .a-icon { font-size: 24px; line-height: 1.2; display: block; }
+      .actor .a-name { font-weight: 700; font-size: 13.5px; display: block; margin-top: 4px; line-height: 1.45; }
+      .actor .a-sub { font-size: 11.5px; color: var(--ink-3); display: block; line-height: 1.5; }
+      .actor.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .actor .a-tag { display: none; margin-top: 6px; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; color: var(--accent); }
+      .actor.tag-on .a-tag { display: inline-block; }
+      .link-arrow { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 15px; }
+      @media (max-width: 700px) {
+        .actors { flex-direction: column; gap: 0; }
+        .link-arrow { transform: rotate(90deg); height: 22px; flex-basis: 22px; margin: 0 auto; }
+      }
+      .packet-bar {
+        margin-top: 16px; border: 1.5px solid var(--packet); background: var(--packet-soft); border-radius: var(--radius);
+        padding: 12px 16px; min-height: 76px;
+      }
+      .packet-bar .p-label { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; color: var(--packet); margin-bottom: 2px; }
+      .packet-bar .p-route { font-weight: 700; font-size: 15px; }
+      .packet-bar .p-body { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; margin-top: 2px; word-break: break-all; }
+      .step-card { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px; }
+      .step-card .s-kicker { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent); font-weight: 600; letter-spacing: .06em; }
+      .step-card h3 { font-size: 19px; margin: 4px 0 8px; }
+      .step-card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+      .step-card p .mono { color: var(--ink); font-weight: 600; font-size: .94em; }
+      .tag { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 1px 10px; margin-left: 8px; vertical-align: 2px; }
+      .tag.rec { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+      .tag.itr { background: var(--packet-soft); color: var(--packet); border: 1px solid var(--packet); }
+
+      /* ---------- supplements ---------- */
+      .cards { display: grid; grid-template-columns: 1fr; gap: 14px; }
+      @media (min-width: 720px) { .cards.two { grid-template-columns: 1fr 1fr; } .cards.three { grid-template-columns: repeat(3, 1fr); } .cards.four { grid-template-columns: 1fr 1fr; } }
+      @media (min-width: 960px) { .cards.four { grid-template-columns: repeat(4, 1fr); } }
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+      .card p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+      .card p + p { margin-top: 8px; }
+      .card .mono { color: var(--ink); font-weight: 600; }
+      .card .date { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 600; color: var(--accent); display: block; margin-bottom: 4px; }
+      .vs-route { font-family: "IBM Plex Mono", monospace; font-size: 13px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; line-height: 1.9; word-break: break-all; }
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+      .chip { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 600; border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 3px 12px; }
+      .chip.def { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+      .cmp-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+      table.cmp { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14px; }
+      table.cmp th, table.cmp td { padding: 11px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; line-height: 1.6; }
+      table.cmp thead th { background: var(--surface-2); font-size: 14.5px; }
+      table.cmp tbody th { font-weight: 700; white-space: nowrap; background: var(--surface); }
+      table.cmp td { color: var(--ink-2); }
+      table.cmp td strong { color: var(--ink); }
+      table.cmp tr:last-child th, table.cmp tr:last-child td { border-bottom: none; }
+      dl.glossary { display: grid; grid-template-columns: 1fr; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 0; }
+      @media (min-width: 720px) { dl.glossary { grid-template-columns: 1fr 1fr; } }
+      .glossary .g-item { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+      .glossary dt { font-weight: 700; font-size: 15px; }
+      .glossary dt .mono { font-size: 13px; color: var(--accent); font-weight: 600; margin-left: 6px; }
+      .glossary dd { margin: 4px 0 0; font-size: 14px; color: var(--ink-2); }
+      .note-box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 6px; padding: 14px 18px; font-size: 14.5px; color: var(--ink-2); margin-top: 14px; }
+      .note-box strong { color: var(--ink); }
+      .note-box.warn { border-left-color: var(--danger); }
+      footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .spinner { animation: none; }
+        .progress-fill { transition: none; }
+        .actor { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Strands Agentsの仕組み</h1>
+      <p class="lede">
+        <span class="mono">Strands Agents</span>は、AWSが公開したオープンソースのAIエージェントSDKです。設計思想は<strong>モデル駆動（model-driven）</strong>——
+        エージェントとは「<strong>モデル＋ツール＋システムプロンプト</strong>」という最小構成であり、手順（フロー）は人が設計せず、モデルの推論に委ねる、という考え方です。
+        名前はDNAの二重らせんに由来し、モデルとツールという2本の「strand（鎖）」をつなぐもの、と公式ブログで説明されています。
+        まずエージェントループを8ステップで再生し、そのあと中身・他フレームワークとの違い・リスクを順に見ていきます。
+      </p>
+
+      <!-- 1. 操作ボタン -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+      <div class="progress-line">
+        <span class="progress-label" data-progress-label>ステップ 1 / 8</span>
+        <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+        <div class="dots" data-dots aria-label="ステップ一覧"></div>
+      </div>
+
+      <!-- セクション1. エージェントループをアニメーションで見る -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 1</span>
+        <h2>エージェントループをアニメーションで見る</h2>
+        <p>左が利用者とのチャット画面、右がループの中で起きているイベントのログです。題材は「天気を調べて、雨なら在庫も確認する」という汎用的なタスクで、ツールは2つ（<span class="mono">get_weather</span> と <span class="mono">check_stock</span>）だけ。開発者はフローを書いておらず、進み方はモデルがその場で決めます。</p>
+      </div>
+      <div class="stage-grid">
+        <div>
+          <div class="browser" aria-label="チャット画面のモック">
+            <div class="browser-bar">
+              <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="win-title">チャット — 利用者とエージェント</div>
+              <span class="spinner" data-spinner aria-hidden="true"></span>
+            </div>
+            <div class="chat-body" data-chat></div>
+          </div>
+          <p class="fig-cap">利用者から見えるのは、頼みごとと途中経過（ツール呼び出し）と最終回答だけです。</p>
+        </div>
+        <div>
+          <div class="term" aria-label="イベントログのモック">
+            <div class="term-head">イベントログ — ループの中で起きていること</div>
+            <pre class="term-body" data-log></pre>
+          </div>
+          <p class="fig-cap">モデルへの送信、ツール呼び出し（toolUse）、結果の返却が交互に起きます（値は説明用の例）。</p>
+        </div>
+      </div>
+
+      <!-- 2. 操作ボタン（連動） -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+      <div class="flow-wrap">
+        <div class="actors" role="img" aria-label="Strandsエージェントの登場人物：あなた、Agent（ループ）、モデル、ツール">
+          <div class="actor" data-actor="user">
+            <span class="a-icon" aria-hidden="true">🧑</span>
+            <span class="a-name">あなた</span>
+            <span class="a-sub">自然言語でタスクを渡し<br>最終回答を受け取る</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="harness">
+            <span class="a-icon" aria-hidden="true">🔁</span>
+            <span class="a-name">Agent（ループ）</span>
+            <span class="a-sub">履歴管理・ツール実行・<br>継続判定を担うハーネス</span>
+            <span class="a-tag" data-tag>ループ実行中</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">⇄</div>
+          <div class="actor" data-actor="model">
+            <span class="a-icon" aria-hidden="true">🧠</span>
+            <span class="a-name">モデル</span>
+            <span class="a-sub">推論して次の一手を決める<br>（既定はAmazon Bedrock）</span>
+            <span class="a-tag" data-tag>推論中</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="tools">
+            <span class="a-icon" aria-hidden="true">🔧</span>
+            <span class="a-name">ツール</span>
+            <span class="a-sub">@tool を付けた関数や<br>MCPサーバーの道具</span>
+            <span class="a-tag" data-tag>関数を実行中</span>
+          </div>
+        </div>
+        <div class="packet-bar" aria-live="polite">
+          <div class="p-label">いま起きていること</div>
+          <div class="p-route" data-packet-route>あなた → Agent</div>
+          <div class="p-body mono" data-packet-body>agent("明日の東京の天気を調べて…")</div>
+        </div>
+        <div class="step-card">
+          <div class="s-kicker" data-step-kicker>STEP 1 / 8</div>
+          <h3 data-step-title>エージェントは「3点セット」で作る</h3>
+          <p data-step-desc></p>
+        </div>
+      </div>
+
+      <!-- セクション2. 画面でこう見える -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 2</span>
+        <h2>画面でこう見える — 開発者の書くコード</h2>
+        <p>開発者の視点では、Strandsのコードは驚くほど短くなります。エージェントを作って、文字列で呼び出す。ループを回す処理はコードのどこにも現れません。</p>
+      </div>
+      <div class="term" aria-label="最小コード例">
+        <div class="term-head">agent.py — 最小のエージェント（Python）</div>
+        <pre class="code-body"><span class="kw">from</span> strands <span class="kw">import</span> Agent
+
+<span class="dim"># モデル（既定は Amazon Bedrock）＋ツール＋プロンプトを用意するだけ</span>
+agent = Agent(
+    tools=[get_weather, check_stock],
+    system_prompt=<span class="str">"あなたは店舗スタッフの助手です"</span>,
+)
+
+<span class="dim"># あとは文字列で呼び出す。ループはSDKの中で回る</span>
+result = agent(<span class="str">"明日の東京の天気を調べて。雨なら傘の在庫も確認して"</span>)
+<span class="fn">print</span>(result)</pre>
+      </div>
+      <p class="fig-cap">公式ドキュメントのクイックスタートも、同様に <span class="mono">Agent()</span> を作って文字列で呼び出す数行から始まります。</p>
+      <div class="cards two" style="margin-top:14px">
+        <div class="card">
+          <h3>ツールは「ふつうの関数」 <span class="mono" style="font-size:13px;color:var(--accent)">@tool</span></h3>
+          <p>Python関数に <span class="mono">@tool</span> デコレータを付けるだけで、そのままツールになります。関数の<strong>docstringがツールの説明文</strong>に、<strong>型ヒントが引数のスキーマ</strong>になり、モデルはそれを読んで「いつ・何を渡して呼ぶか」を判断します。説明文の書き方そのものが、エージェントの挙動を左右します。</p>
+          <div class="vs-route">@tool<br>def get_weather(city: str) -&gt; str:<br>　"""指定した都市の天気を返します"""<br>　...</div>
+        </div>
+        <div class="card">
+          <h3>定義済みツールとMCP <span class="mono" style="font-size:13px;color:var(--accent)">tools</span></h3>
+          <p>別パッケージ <span class="mono">strands-agents-tools</span> には、ファイル操作・HTTPリクエスト・AWSのAPI操作など<strong>20以上の定義済みツール</strong>が用意されています（公式ブログ）。さらに <span class="mono">MCPClient</span> でMCPサーバーに接続すれば、公開されているMCPサーバーのツールをそのまま道具として取り込めます。自作ツールとMCPツールを混ぜて使うこともできます。</p>
+        </div>
+      </div>
+
+      <!-- セクション3. 実際の中身のフロー -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 3</span>
+        <h2>実際の中身のフロー — 4つの構成要素</h2>
+        <p>エージェントの中身は、開発者が渡す3点と、それを回すループの、合わせて4要素です。役割分担がはっきりしているのが特徴です。</p>
+      </div>
+      <div class="cards four">
+        <div class="card">
+          <h3>① モデル</h3>
+          <p>推論とツール使用ができるLLMです。タスクの分解、次に呼ぶツールの選択、結果の解釈、終了の判断まで、<strong>「考える」部分はすべてモデル</strong>が担います。既定はAmazon Bedrock経由のモデルです。</p>
+        </div>
+        <div class="card">
+          <h3>② ツール</h3>
+          <p>エージェントの「手足」です。<span class="mono">@tool</span> を付けた自作関数、定義済みツール、MCPサーバーのツール、さらには<strong>別のエージェント自体</strong>もツールとして渡せます。実行そのものは通常のプログラムとして行われます。</p>
+        </div>
+        <div class="card">
+          <h3>③ システムプロンプト</h3>
+          <p>エージェントの役割と振る舞いを決める指示文です。モデル駆動では手順をコードで固定しない分、<strong>この指示文とツールの説明文が「設計」の中心</strong>になります。</p>
+        </div>
+        <div class="card">
+          <h3>④ ループ（ハーネス）</h3>
+          <p>会話履歴を保持し、「モデルを呼ぶ→ツール実行→結果を返す」を繰り返す土台です。履歴の管理、エラーの扱い、ライフサイクルの<strong>フック</strong>（モデル呼び出しやツール実行の前後に処理を挟む仕組み）はここが担います。</p>
+        </div>
+      </div>
+
+      <div class="cards two" style="margin-top:14px">
+        <div class="card">
+          <h3>モデルは差し替えられる <span class="mono" style="font-size:13px;color:var(--accent)">model providers</span></h3>
+          <p>既定はAmazon Bedrockですが、SDKはモデルに依存しない設計で、プロバイダーを差し替えられます。公式ドキュメント・PyPIの説明では、次のような組み込みプロバイダーが挙げられています。</p>
+          <div class="chips">
+            <span class="chip def">Amazon Bedrock（既定）</span>
+            <span class="chip">Anthropic</span>
+            <span class="chip">OpenAI</span>
+            <span class="chip">Gemini</span>
+            <span class="chip">Ollama（ローカル）</span>
+            <span class="chip">Llama API</span>
+            <span class="chip">Mistral</span>
+            <span class="chip">Cohere</span>
+            <span class="chip">SageMaker</span>
+            <span class="chip">LiteLLM 経由</span>
+            <span class="chip">カスタム</span>
+          </div>
+          <p style="margin-top:10px">つまり「AWSのSDKだが、頭脳はAWSのモデルでなくてもよい」作りです。ローカル開発ではOllama、本番ではBedrock、といった切り替えができます。</p>
+        </div>
+        <div class="card">
+          <h3>MCPサーバーとつながる <span class="mono" style="font-size:13px;color:var(--accent)">MCPClient</span></h3>
+          <p>Strandsは<strong>MCP（Model Context Protocol）のクライアント</strong>として動き、MCPサーバーに接続してそのツール一覧を取り込みます。</p>
+          <div class="vs-route">MCPClient( …サーバーへの接続… )<br>with client:<br>　agent = Agent(tools=client.list_tools_sync())</div>
+          <p>道具の供給元を「自分のコード」から「外部のサーバー」へ広げられるため、公開MCPサーバーの資産をそのまま使えます。自作の <span class="mono">@tool</span> と併用も可能です。</p>
+        </div>
+      </div>
+
+      <div class="sec-head">
+        <h2>マルチエージェント — 4つのパターン</h2>
+        <p>1つのエージェントで足りなくなったら、複数を組み合わせます。公式ドキュメントでは、違いは「<strong>実行の進み方を誰が決めるか</strong>」にあると整理されています。単一エージェントから少しずつ育てるのが推奨の順序です。</p>
+      </div>
+      <div class="cards four">
+        <div class="card">
+          <h3>Agents as Tools</h3>
+          <p><span class="date">進み方：司令塔のモデルが決める</span></p>
+          <p>専門エージェントを、司令塔エージェントの<strong>ツールとして登録</strong>する最小のパターン。司令塔が質問に応じて専門家を呼び、答えを回収して自分の文脈でまとめます。まずはここから、が公式の案内です。</p>
+          <div class="vs-route">司令塔Agent<br>　├─ tool: 天気Agent<br>　└─ tool: 在庫Agent</div>
+        </div>
+        <div class="card">
+          <h3>Swarm</h3>
+          <p><span class="date">進み方：エージェント同士が決める</span></p>
+          <p>専門エージェントのチームが、<strong>共有メモリとハンドオフ（引き継ぎ）</strong>で自律的に連携するパターン。固定の経路はなく、その場の判断で次を担当するエージェントが入れ替わります。自由な分、動きの予測は難しくなります。</p>
+          <div class="vs-route">調査 ⇄ 分析 ⇄ レビュー<br>（共有メモリ＋引き継ぎ）</div>
+        </div>
+        <div class="card">
+          <h3>Graph</h3>
+          <p><span class="date">進み方：開発者が辺を定義</span></p>
+          <p>エージェントを<strong>ノード</strong>、遷移を<strong>辺</strong>とするグラフを開発者が定義します。無条件の辺は常に従い、条件付きの辺は条件を満たしたときだけ進むため、「レビューで差し戻し」のような循環や品質ゲートを表現できます。</p>
+          <div class="vs-route">調査 → 分析 → レビュー<br>　　　　　└ 差し戻し ┘</div>
+        </div>
+        <div class="card">
+          <h3>Workflow</h3>
+          <p><span class="date">進み方：開発者がコードで固定</span></p>
+          <p>タスクとその<strong>依存関係（DAG）</strong>を定義し、決まった順序で実行するパターン。依存しないタスクは自動で並列実行されます。決定的で再現性が高い反面、その場の判断による分岐はしません。</p>
+          <div class="vs-route">抽出 → 分析A ┐<br>　　 → 分析B ┘→ 報告</div>
+        </div>
+      </div>
+      <div class="note-box">
+        <strong>歩みと実績。</strong>
+        Strands Agentsは、AWS Open Source Blogで<strong>2025年5月16日</strong>にオープンソースSDK（Apache-2.0）として発表され、<strong>2025年7月にバージョン1.0</strong>が公開されました（マルチエージェントの基本部品とA2Aプロトコル対応を含む）。Python SDKが先行し、TypeScript SDKも提供されています。
+        公式ブログによれば、公開前からAWS社内で使われており、<strong>Amazon Q Developer、AWS Glue、VPC Reachability Analyzer</strong>の各チームが本番のエージェントに利用していると説明されています。
+      </div>
+
+      <!-- セクション4. 他のフレームワークとの違い -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 4</span>
+        <h2>他のフレームワークとの違い — 「設計する」か「委ねる」か</h2>
+        <p>LangChainに代表される「部品組み立て型」は、モデル・プロンプト・ツールといった部品を開発者がつなぎ、流れそのものを設計します。Strandsのモデル駆動は、その流れの設計をモデルに委ねる点が対照的です（このシリーズの「LangChainとAgent SDK」のページでいう「ループ内蔵型」と同系統で、その中でもモデルへの委任の度合いが高い設計です）。</p>
+      </div>
+      <div class="cmp-wrap">
+        <table class="cmp">
+          <thead>
+            <tr><th scope="col">観点</th><th scope="col">部品組み立て型（LangChain的）</th><th scope="col">モデル駆動（Strands Agents）</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">流れの決め方</th>
+              <td>開発者が鎖（チェーン）やグラフとして<strong>事前に設計</strong>する</td>
+              <td><strong>モデルが実行時に判断</strong>する。開発者は流れを書かない</td>
+            </tr>
+            <tr>
+              <th scope="row">書くコード</th>
+              <td>部品の配線・状態管理が中心で、どうしても多めになる</td>
+              <td>モデル・ツール・プロンプトの指定が中心。<strong>数行から始められる</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">モデルが賢くなると</th>
+              <td>設計した流れはそのまま。恩恵は各部品の中の性能向上にとどまる</td>
+              <td>手順の組み立てもモデル任せなので、<strong>モデルの進化がそのままエージェントの性能向上につながりやすい</strong></td>
+            </tr>
+            <tr>
+              <th scope="row">再現性</th>
+              <td>流れが固定されている分、<strong>予測しやすく再現性が高い</strong></td>
+              <td>実行ごとに経路が変わりうる。<strong>同じ依頼でも結果が揺れる</strong>ことがある</td>
+            </tr>
+            <tr>
+              <th scope="row">想定外への対応</th>
+              <td>分岐を先に書いておく必要がある。想定外は止まりやすい</td>
+              <td>モデルがその場で対処できる。ただし<strong>対処の仕方自体もモデルの判断</strong>に依存する</td>
+            </tr>
+            <tr>
+              <th scope="row">向く場面</th>
+              <td>手順が決まっていて、監査や再現性が要る業務フロー</td>
+              <td>手順を事前に固定しにくい、探索的・対話的なタスク</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="cards two" style="margin-top:14px">
+        <div class="card">
+          <h3>モデル駆動の利点</h3>
+          <p>コードが少なく、作り始めるまでが速いのが第一です。加えて、手順の組み立てをモデルに任せるため、<strong>モデルが世代交代で賢くなると、コードを直さなくてもエージェントの段取りまで良くなる</strong>可能性があります。AWSがこの方式を採った理由として、公式ブログでは「複雑なワークフローを定義させるフレームワークと比べ、モデルの計画・推論・ツール使用の能力をそのまま活かせる」ことが挙げられています。</p>
+        </div>
+        <div class="card">
+          <h3>モデル駆動の弱点</h3>
+          <p>挙動がモデル依存になるため、<strong>再現性と予測可能性は下がります</strong>。モデルを差し替えれば段取りも変わりえますし、「必ずこの順序で」「ここで必ず止める」といった統制は、ループ側の仕組み（フックやGraph/Workflowのような決定的パターン）で別途かける必要があります。コストも、ループの周数に比例して読みにくくなります（セクション5）。</p>
+        </div>
+      </div>
+
+      <!-- セクション5. リスクと注意点 -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 5</span>
+        <h2>リスクと注意点 — 任せる範囲をどう絞るか</h2>
+        <p>モデル駆動は「委ねる」設計なので、歯止めは自分で用意するのが前提です。代表的なリスクと、SDKや周辺で用意されている対策を並べます。</p>
+      </div>
+      <div class="cards two">
+        <div class="card">
+          <h3>ループの暴走とコスト</h3>
+          <p>終了判定はモデルの出力頼みです。モデルが「まだ終わっていない」と判断し続ければ、ループは回り続け、その分だけモデル呼び出しとツール実行のコストが積み上がります。</p>
+          <p><strong>対策：</strong>最大ステップ数・タイムアウト・トークン予算といった上限を外側で決め、結果オブジェクトのメトリクスやログで消費を監視します。</p>
+        </div>
+        <div class="card">
+          <h3>ツールの権限管理</h3>
+          <p>シェル実行やファイル操作のツールは、実質的に「プログラムの実行権限」をモデルに渡すのと同じです。定義済みツールには強力なものも含まれるため、便利さと危険さは表裏一体です。</p>
+          <p><strong>対策：</strong>最小権限が原則です。読み取り専用のツールから始め、認証情報はツール側に持たせすぎず、実行環境はサンドボックスや専用環境に隔離します。</p>
+        </div>
+        <div class="card">
+          <h3>プロンプトインジェクション</h3>
+          <p>ツールが返した外部コンテンツ（Webページや文書）に紛れた指示を、モデルが「次の命令」と誤認して従ってしまうリスクがあります。ツール結果はモデルの文脈にそのまま入るため、モデル駆動では特に意識が必要です。</p>
+          <p><strong>対策：</strong>入力・出力の検査にはAmazon Bedrock Guardrailsとの連携が使えます（公式サイトでも導入事例として言及）。ツール実行の前後にフックで検査や記録を挟むことも有効です。</p>
+        </div>
+        <div class="card">
+          <h3>不可逆な操作と人の確認</h3>
+          <p>送信・削除・課金のような取り消せない操作を、モデルの判断だけで実行させるのは危険です。モデル駆動のループには、標準では「人の承認待ち」という概念が薄くなりがちです。</p>
+          <p><strong>対策：</strong>フックや割り込み（interrupt）の仕組みで、危険なツールの実行前にループを止めて人の承認を挟みます。公式サイトの事例でも、hooksとinterruptsで承認前にエージェントを停止させる運用が紹介されています。</p>
+        </div>
+      </div>
+      <div class="note-box warn">
+        <strong>再現性はモデル依存、という前提で評価する。</strong>
+        同じ入力でも、モデルの世代や設定が変われば段取りと結果は変わりえます。本番投入の前後では、決まったケース集で挙動を測る評価（Strandsには評価用の仕組みとしてStrands Evalsが用意されています）を回し、モデル差し替え時の「回帰」を確認するのが安全です。観測の面では、トレースやメトリクスを出す仕組み（OpenTelemetry連携など）も公式に案内されています。
+      </div>
+
+      <!-- 用語解説 -->
+      <div class="sec-head">
+        <span class="sec-num">GLOSSARY</span>
+        <h2>用語解説</h2>
+      </div>
+      <dl class="glossary">
+        <div class="g-item">
+          <dt>モデル駆動<span class="mono">model-driven</span></dt>
+          <dd>エージェントの進み方（計画・手順・ツールの選択・終了判定）を、開発者がフローとして書くのではなく、モデルの推論に委ねる設計思想。Strands Agentsの中核の考え方です。</dd>
+        </div>
+        <div class="g-item">
+          <dt>エージェントループ<span class="mono">agent loop</span></dt>
+          <dd>「モデルを呼ぶ→ツール実行の要否を見る→実行して結果を返す→またモデルを呼ぶ」という繰り返し。モデルがツール呼び出しを含まない最終回答を返すと終了します。</dd>
+        </div>
+        <div class="g-item">
+          <dt>@tool<span class="mono">tool decorator</span></dt>
+          <dd>Python関数に付けるデコレータ。これだけで関数がツール化され、docstringがツールの説明文、型ヒントが引数のスキーマになります。TypeScript版ではZodスキーマでツール定義を書きます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>ハーネス<span class="mono">harness</span></dt>
+          <dd>モデルとツールのあいだでループを回す土台の部分。会話履歴の保持、ツール実行、継続・終了の管理、フックの提供などを担います。</dd>
+        </div>
+        <div class="g-item">
+          <dt>フック<span class="mono">hooks</span></dt>
+          <dd>モデル呼び出しやツール実行といったライフサイクルの節目に、自前の処理（ログ、検査、承認待ちなど）を差し込む仕組み。モデル駆動のループに統制を加える主な手段です。</dd>
+        </div>
+        <div class="g-item">
+          <dt>MCP<span class="mono">Model Context Protocol</span></dt>
+          <dd>ツールやデータを外部サーバーから供給するための共通規約。StrandsはMCPクライアントとしてサーバーに接続し、そのツールをエージェントの道具として使えます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>Agents as Tools</dt>
+          <dd>エージェントを別のエージェントのツールとして登録する、最も単純なマルチエージェントのパターン。司令塔が専門家エージェントを呼び分ける階層型の委任です。</dd>
+        </div>
+        <div class="g-item">
+          <dt>Swarm / Graph / Workflow</dt>
+          <dd>マルチエージェントの進み方の違いを表す3パターン。Swarmはエージェント同士の自律的な引き継ぎ、Graphは開発者が定義したノードと辺（条件分岐あり）、Workflowは依存関係（DAG）による決定的な実行です。</dd>
+        </div>
+        <div class="g-item">
+          <dt>ガードレール<span class="mono">guardrails</span></dt>
+          <dd>入出力の内容を検査し、不適切な内容や想定外の指示を遮断・警告する仕組み。StrandsではAmazon Bedrock Guardrailsと連携させる使い方が公式に案内されています。</dd>
+        </div>
+        <div class="g-item">
+          <dt>A2A<span class="mono">Agent2Agent</span></dt>
+          <dd>異なる基盤で動くエージェント同士が通信するためのプロトコル。Strands Agents 1.0で対応が追加され、フレームワークをまたいだエージェント連携の道が開かれました。</dd>
+        </div>
+      </dl>
+
+      <footer>
+        このページのコード・画面・ログは説明用の例です。Strands Agentsに関する記述は、AWS Open Source Blog「Introducing Strands Agents」（2025年5月16日）、Strands Agents公式ドキュメント（strandsagents.com）、GitHubの strands-agents 組織の公開リポジトリ、公式ブログ「Strands Agents 1.0」（2025年7月）といった一次情報に基づいています。提供される機能やプロバイダーの一覧はバージョンによって変わるため、最新の仕様は公式ドキュメントで確認してください。
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var STEPS = [
+          {
+            title: "エージェントは「3点セット」で作る",
+            tag: "",
+            desc: "開発者が用意するのは<strong>モデル</strong>と<strong>ツール</strong>と<strong>システムプロンプト</strong>だけです。<span class='mono'>Agent(tools=[...])</span> を作り、利用者の言葉をそのまま文字列で渡すところから始まります。「まず天気、次に在庫」という手順書（フロー）は、どこにも書かれていません。",
+            route: "あなた → Agent",
+            packet: "agent(\"明日の東京の天気を調べて…\")",
+            actors: ["user", "harness"],
+            tags: []
+          },
+          {
+            title: "モデルへ「履歴＋ツールの説明書」を渡す",
+            tag: "<span class='tag rec'>ループ</span>",
+            desc: "ループ（ハーネス）は、会話履歴とツールの定義をモデルへ送ります。ツールの定義——名前・説明・引数の型——は、<span class='mono'>@tool</span> を付けた関数の <span class='mono'>docstring</span> と型ヒントから作られます。つまり<strong>関数の書き方そのものが、モデルへの説明書</strong>になります。",
+            route: "Agent → モデル",
+            packet: "messages + tools[get_weather, check_stock]",
+            actors: ["harness", "model"],
+            tags: ["harness"]
+          },
+          {
+            title: "モデルが推論し、ツール呼び出しを決める",
+            tag: "<span class='tag itr'>モデル駆動</span>",
+            desc: "モデルは「答えるにはまず天気が必要だ」と判断し、<span class='mono'>toolUse</span>（呼びたいツールと引数）を返します。次の一手を決めるのはコードではなく<strong>モデルの推論</strong>です。ここがモデル駆動の核心で、従来のフレームワークが担っていた「段取り」をモデルに委ねています。",
+            route: "モデル → Agent（toolUse）",
+            packet: "toolUse: get_weather { city: \"東京\" }",
+            actors: ["model", "harness"],
+            tags: ["harness", "model"]
+          },
+          {
+            title: "ハーネスがツールを実行する",
+            tag: "",
+            desc: "ループは <span class='mono'>toolUse</span> に対応するPython関数を実際に呼び出し、結果を受け取ります。関数の実行は通常のプログラムと同じで、APIを叩く・在庫DBを見るといった処理の中身は、開発者のコードそのものです。モデルは「呼ぶこと」だけを決め、<strong>実行はコードが担います</strong>。",
+            route: "Agent → ツール",
+            packet: "get_weather(\"東京\") → \"雨（降水確率80%）\"",
+            actors: ["harness", "tools"],
+            tags: ["harness", "tools"]
+          },
+          {
+            title: "結果をモデルへ返し、ループが続く",
+            tag: "<span class='tag rec'>ループ</span>",
+            desc: "ツールの結果を会話履歴に足して、もう一度モデルへ送ります。モデルは「雨の予報だ。在庫確認がまだ残っている」と判断し、次の <span class='mono'>toolUse</span> を返します。ツールを何回・どの順で使うかは、あらかじめ決まっておらず、<strong>状況を見ながらモデルが決めていきます</strong>。",
+            route: "Agent ⇄ モデル（ループ2周目）",
+            packet: "toolResult を追加 → toolUse: check_stock",
+            actors: ["harness", "model"],
+            tags: ["harness", "model"]
+          },
+          {
+            title: "2つ目のツールを実行する",
+            tag: "",
+            desc: "<span class='mono'>check_stock</span> が実行され、「在庫12本」という結果が返ります。これで、依頼に必要な情報（天気と在庫）が両方そろいました。ループは結果を再びモデルへ渡します。",
+            route: "Agent → ツール",
+            packet: "check_stock(\"傘\") → \"在庫 12本\"",
+            actors: ["harness", "tools"],
+            tags: ["harness", "tools"]
+          },
+          {
+            title: "最終回答で、ループが終わる",
+            tag: "",
+            desc: "モデルが今度は <span class='mono'>toolUse</span> を含まない、テキストだけの応答を返しました。ループはこれを「用件は済んだ」という合図とみなして終了します。<strong>終了条件までモデルの出力に委ねられている</strong>のが、モデル駆動の特徴であり、注意点でもあります（セクション5）。",
+            route: "モデル → Agent → あなた",
+            packet: "final text（toolUse なし）→ ループ終了",
+            actors: ["model", "harness", "user"],
+            tags: ["harness"]
+          },
+          {
+            title: "結果オブジェクトを受け取る",
+            tag: "",
+            desc: "呼び出し側は、最終回答に加えて、ループの周数やツール実行回数、トークン使用量といった実行情報も結果として受け取ります。本番運用では、この記録とフックによるログが「エージェントが何をしたか」を後から追う手がかりになります。",
+            route: "Agent → あなた",
+            packet: "AgentResult: 回答 + 実行メトリクス",
+            actors: ["harness", "user"],
+            tags: []
+          }
+        ];
+
+        /* ---------- chat mock states ---------- */
+        var BOOT = "<div class='think'>⚙ エージェント起動（モデル＋ツール＋システムプロンプト）</div>";
+        var U = "<div class='msg user'><span class='who'>あなた</span>明日の東京の天気を調べて。雨なら、傘の在庫があるかも確認して。</div>";
+        var THINK1 = "<div class='think'>🧠 モデルが考え中…（ツールの説明書を受け取った）</div>";
+        var TC1 = "<div class='tool-chip'>🔧 toolUse: get_weather(city=\"東京\", date=\"tomorrow\")</div>";
+        var TR1 = "<div class='tool-chip res'>↩ 結果: 「雨（降水確率 80%）」</div>";
+        var THINK2 = "<div class='think'>🧠 雨の予報 → 在庫の確認が残っている</div>";
+        var TC2 = "<div class='tool-chip'>🔧 toolUse: check_stock(item=\"傘\")</div>";
+        var TR2 = "<div class='tool-chip res'>↩ 結果: 「在庫 12本」</div>";
+        var A = "<div class='msg agent'><span class='who'>エージェント</span>明日（東京）は雨の予報です（降水確率80%）。傘の在庫は12本あります。</div>";
+        var DONE = "<div class='done-bar'>✓ 完了 — ループ3周 / ツール実行2回</div>";
+
+        var VIEW = [
+          { spin: false, chat: BOOT + U },
+          { spin: true,  chat: U + THINK1 },
+          { spin: true,  chat: U + TC1 },
+          { spin: false, chat: U + TC1 + TR1 },
+          { spin: true,  chat: U + TC1 + TR1 + THINK2 },
+          { spin: false, chat: U + TC1 + TR1 + TC2 + TR2 },
+          { spin: false, chat: U + TC1 + TR1 + TC2 + TR2 + A },
+          { spin: false, chat: U + TC1 + TR1 + TC2 + TR2 + A + DONE }
+        ];
+
+        /* ---------- event log (cumulative) ---------- */
+        var LOG_LINES = [
+          ["<span class='dim'># エージェント定義（3点セット）</span>",
+           "agent = Agent(tools=[get_weather, check_stock],",
+           "              system_prompt=\"店舗スタッフの助手\")",
+           "&gt; agent(\"明日の東京の天気を調べて。雨なら傘の在庫も確認して\")"],
+          ["<span class='dim'># ループ1周目 — モデルへ送信</span>",
+           "→ messages: [ user: \"明日の東京の天気を…\" ]",
+           "→ tools: get_weather(city: str) / check_stock(item: str)",
+           "<span class='dim'>　（説明文は各関数の docstring から生成）</span>"],
+          ["← モデルの応答: <span class='hl'>toolUse</span> を返す",
+           "  toolUse: get_weather { city: \"東京\", date: \"tomorrow\" }",
+           "<span class='dim'>　（テキスト回答ではない ＝ ループ継続）</span>"],
+          ["[実行] get_weather(\"東京\") <span class='dim'># Python関数を呼び出す</span>",
+           "  → toolResult: \"雨（降水確率 80%）\""],
+          ["→ toolResult を会話に足して、再度モデルへ",
+           "← モデルの応答: <span class='hl'>toolUse</span> check_stock { item: \"傘\" }"],
+          ["[実行] check_stock(\"傘\") <span class='dim'># Python関数を呼び出す</span>",
+           "  → toolResult: \"在庫 12本\""],
+          ["→ toolResult をモデルへ返す",
+           "← モデルの応答: テキストのみ（toolUse なし）",
+           "<span class='dim'>　→ ループ終了の合図</span>",
+           "<span class='ok'>✓ 最終回答を生成</span>"],
+          ["<span class='dim'># 呼び出し側へ結果を返す</span>",
+           "AgentResult: \"明日（東京）は雨の予報です…\"",
+           "  ループ 3周 / ツール実行 2回 / トークン使用量などを記録"]
+        ];
+        function logHTML(upto) {
+          var out = [];
+          for (var i = 0; i <= upto; i++) out = out.concat(LOG_LINES[i]);
+          return out.join("\n");
+        }
+
+        var idx = 0;
+        var playing = false;
+        var speed = 1;
+        var timer = null;
+        var BASE_MS = 3400;
+
+        var els = {
+          label: document.querySelector("[data-progress-label]"),
+          fill: document.querySelector("[data-progress-fill]"),
+          dotsWrap: document.querySelector("[data-dots]"),
+          spinner: document.querySelector("[data-spinner]"),
+          chat: document.querySelector("[data-chat]"),
+          log: document.querySelector("[data-log]"),
+          route: document.querySelector("[data-packet-route]"),
+          packet: document.querySelector("[data-packet-body]"),
+          kicker: document.querySelector("[data-step-kicker]"),
+          stepTitle: document.querySelector("[data-step-title]"),
+          stepDesc: document.querySelector("[data-step-desc]")
+        };
+
+        /* build dots */
+        var dots = [];
+        for (var i = 0; i < STEPS.length; i++) {
+          (function (n) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "dot";
+            b.textContent = String(n + 1);
+            b.setAttribute("aria-label", "ステップ" + (n + 1) + "へ移動");
+            b.addEventListener("click", function () { pause(); goTo(n); });
+            els.dotsWrap.appendChild(b);
+            dots.push(b);
+          })(i);
+        }
+
+        var actorEls = {};
+        document.querySelectorAll("[data-actor]").forEach(function (el) {
+          actorEls[el.getAttribute("data-actor")] = el;
+        });
+
+        function render() {
+          var s = STEPS[idx];
+          var v = VIEW[idx];
+          els.label.textContent = "ステップ " + (idx + 1) + " / " + STEPS.length;
+          els.fill.style.width = ((idx + 1) / STEPS.length * 100) + "%";
+          dots.forEach(function (d, i) {
+            d.classList.toggle("now", i === idx);
+            d.classList.toggle("done", i < idx);
+          });
+          /* chat mock + log */
+          els.spinner.classList.toggle("on", v.spin);
+          els.chat.innerHTML = v.chat;
+          els.log.innerHTML = logHTML(idx);
+          /* flow */
+          els.route.textContent = s.route;
+          els.packet.textContent = s.packet;
+          els.kicker.textContent = "STEP " + (idx + 1) + " / " + STEPS.length;
+          els.stepTitle.innerHTML = s.title + (s.tag || "");
+          els.stepDesc.innerHTML = s.desc;
+          Object.keys(actorEls).forEach(function (k) {
+            actorEls[k].classList.toggle("active", s.actors.indexOf(k) !== -1);
+            actorEls[k].classList.toggle("tag-on", s.tags.indexOf(k) !== -1);
+          });
+          /* controls state */
+          document.querySelectorAll("[data-action='prev']").forEach(function (b) { b.disabled = idx === 0; });
+          document.querySelectorAll("[data-action='next']").forEach(function (b) { b.disabled = idx === STEPS.length - 1; });
+          document.querySelectorAll("[data-action='play']").forEach(function (b) {
+            b.textContent = playing ? "⏸ 一時停止" : (idx === STEPS.length - 1 ? "↺ もう一度" : "▶ 再生");
+          });
+        }
+
+        function goTo(n) {
+          idx = Math.max(0, Math.min(STEPS.length - 1, n));
+          render();
+        }
+        function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+        function startTimer() {
+          stopTimer();
+          timer = setInterval(function () {
+            if (idx >= STEPS.length - 1) { pause(); return; }
+            goTo(idx + 1);
+            if (idx >= STEPS.length - 1) { pause(); }
+          }, BASE_MS / speed);
+        }
+        function play() {
+          if (idx >= STEPS.length - 1) { goTo(0); }
+          playing = true;
+          render();
+          startTimer();
+        }
+        function pause() {
+          playing = false;
+          stopTimer();
+          render();
+        }
+
+        document.querySelectorAll("[data-controls]").forEach(function (bar) {
+          bar.addEventListener("click", function (e) {
+            var btn = e.target.closest("[data-action]");
+            if (!btn || btn.disabled) return;
+            var a = btn.getAttribute("data-action");
+            if (a === "prev") { pause(); goTo(idx - 1); }
+            else if (a === "next") { pause(); goTo(idx + 1); }
+            else if (a === "reset") { pause(); goTo(0); }
+            else if (a === "play") { playing ? pause() : play(); }
+          });
+        });
+        document.querySelectorAll("[data-speed]").forEach(function (sel) {
+          sel.addEventListener("change", function () {
+            speed = parseFloat(sel.value);
+            document.querySelectorAll("[data-speed]").forEach(function (o) { o.value = sel.value; });
+            if (playing) startTimer();
+          });
+        });
+
+        render();
+      })();
+    </script>
+  </body>
+</html>
