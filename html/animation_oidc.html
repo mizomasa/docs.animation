@@ -167,6 +167,15 @@ td{color:var(--muted)} td:first-child{color:var(--text);font-weight:700;white-sp
 .filmBtn.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .filmBtn.done{border-color:var(--accent)}
 .mockMetaUrl{font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all;background:var(--card2);border-radius:8px;padding:9px 10px;margin-top:10px;line-height:1.6}
+/* doc prose */
+.doc{margin-top:18px}
+.doc .label{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:8px}
+.doc p{font-size:15.5px;line-height:1.9;margin:0 0 14px;color:var(--text)}
+.doc p:last-child{margin-bottom:0}
+.doc h3{font-size:16.5px;margin:24px 0 8px;border-left:4px solid var(--accent);padding-left:10px}
+.doc h3:first-of-type{margin-top:20px}
+.doc.summary p{font-size:16px;line-height:1.85;margin:0 0 8px}
+.doc.summary p:last-child{margin-bottom:0}
 </style>
 </head>
 <body>
@@ -176,6 +185,27 @@ td{color:var(--muted)} td:first-child{color:var(--text);font-weight:700;white-sp
     <p>OpenID Connect（OIDC）は、OAuth 2.0の上に「本人確認」を載せた仕組みです。パスワードをサービスごとに渡さず、IdP（Googleなど）が発行する <strong>IDトークン</strong> で「誰か」を証明します。下のアニメーションで、認可コードフロー＋PKCEを1ステップずつ追ってみましょう。</p>
     <div class="badges"><span class="badge">土台 <b>OAuth 2.0</b></span><span class="badge">主役 <b>IDトークン（JWT）</b></span><span class="badge">推奨フロー <b>認可コード + PKCE</b></span><span class="badge">勉強会用 <b>スペース / ← →</b> 対応</span></div>
   </header>
+
+  <section class="card doc summary">
+    <div class="label">概要</div>
+    <p>OIDC（OpenID Connect）は、OAuth 2.0の上に「本人確認」を標準の形で載せた仕組みで、「Googleでログイン」のような機能の正体です。</p>
+    <p>サービスごとにパスワードを預ける形では、漏洩の危険も管理の負担もサービス数だけ増えていくため、本人確認を専門のIdPに任せる形が求められました。</p>
+    <p>サービスはIdPが署名したIDトークンを受け取るだけで「誰がログインしたか」を確かめられ、パスワードを一切扱わずにログイン機能を持てます。</p>
+  </section>
+
+  <section class="card doc">
+    <div class="label">背景</div>
+    <h2>OIDCが生まれた背景 — 本人確認を自前で抱える限界</h2>
+    <h3>サービスの数だけパスワードが増えた</h3>
+    <p>Webサービスが増えるにつれ、利用者はサービスごとにIDとパスワードを作ってきました。作る側も、パスワードの保管や漏洩時の対応、再設定の仕組みまで自前で抱えることになります。本人確認はどのサービスにも必要なのに、実装と責任がサービスごとに重複している状態でした。</p>
+    <p>企業の中でも似た問題がありました。社内システムが増えるたびにログイン先が増え、利用者は何度も認証し直し、管理側はアカウントの棚卸しをシステムごとに繰り返します。「本人確認を1か所に集約したい」という需要は、コンシューマー向けサービスと社内システムの両方にありました。</p>
+    <h3>OAuthだけでは「誰か」が伝わらなかった</h3>
+    <p>OAuth 2.0によって「パスワードを渡さずにAPIアクセスを許可する」形は整いました。しかしOAuthが渡すアクセストークンは「データへのアクセス許可」であり、「今ログインしているのが誰か」を標準の形で伝える決まりはありませんでした。各サービスがアクセストークンやプロフィール取得のAPIをログインの代わりに使ううちに、宛先の違うトークンを取り違えるといった事故も起きやすくなりました。</p>
+    <p>たとえば、あるサービス向けに発行されたアクセストークンを別のサービスへ提示し、そのままログインできてしまうような取り違えです。トークンの宛先や発行者を確認する手順が標準として決まっていないと、実装する側は正しさを自分で定義するしかありませんでした。</p>
+    <h3>ないとどうなるか</h3>
+    <p>OIDCがなければ、「ソーシャルログイン」は今もサービスごとの独自実装の寄せ集めだったはずです。本人確認の結果をどう受け取り、どう検証するかという決まりがなければ、安全性は実装ごとにばらつきます。IDトークンという署名付きの標準形式と、その検証手順を用意したことで、「本人確認はIdPに任せ、サービスは検証に徹する」という分業が成り立つようになりました。</p>
+    <p>標準化の副産物として、検証を肩代わりするライブラリや認証基盤の製品が揃いました。小さなサービスでも、大手IdPと安全に連携する土台を持てるようになったのは、この取り決めが先にあったからです。</p>
+  </section>
 
   <div class="controls topControls" aria-label="ステップ操作（画面の上）">
     <button class="btn" onclick="prevStep()">← 前へ</button>
@@ -253,6 +283,21 @@ td{color:var(--muted)} td:first-child{color:var(--text);font-weight:700;white-sp
     <div class="point" id="stepPoint"><b>ポイント：</b> 各役の「持ち物」がどう増減するかを見てください。特に <b>code_verifier はブラウザ経由（フロントチャネル）には出ず、認可時はハッシュ化した code_challenge だけが送られる</b>こと（verifier本体はトークン交換時にバックチャネルでIdPへ提示されます）、そして<b>認可コードとトークンは別物</b>という2点が試験でも実務でも問われます。</div>
   </section>
 
+  <section class="card doc">
+    <div class="label">読み物</div>
+    <h2>仕組みを文章で読む — 認可コードフロー＋PKCE</h2>
+    <p>アニメーションを再生しなくても追えるよう、メインの認可コードフロー（11ステップ）を文章でもたどっておきます。</p>
+    <h3>往路：ブラウザがIdPへ運ぶ</h3>
+    <p>あなたがサービスのログイン画面で「IdPでログイン」のボタンを押すと、サービス（RP）はログインの準備を始めます。使い捨ての秘密である code_verifier を作って、そのハッシュである code_challenge を用意し、あわせて state と nonce という乱数を生成して、あなたのブラウザのセッションに保存します。verifier本体はRPの中に残り、外に出るのはハッシュ化されたchallengeだけです。</p>
+    <p>ブラウザはIdPの認可endpointへリダイレクトされます。URLには client_id や redirect_uri、scope=openid、state、nonce、code_challenge が載ります。アドレスバーに載る情報は漏れる前提なので、秘密はここに含まれません。IdPの画面であなたが本人確認と同意を終えると、IdPは認可コードを発行し、登録済みの redirect_uri へブラウザを戻します。コードと一緒に、送ったときと同じ state が返ってきます。</p>
+    <h3>復路：サーバー同士の直接通信</h3>
+    <p>コードを受け取ったRPは、まず state が保存した値と一致するかを確認します。一致しなければ、そのログインは自分が仕掛けたものではないとして中断します。問題なければ、RPのサーバーがIdPのトークンendpointへ直接HTTPSで通信し、コードと code_verifier、client_secret を提示して引き換えを要求します。このサーバー間の直接通信がバックチャネルで、ブラウザは経由しません。</p>
+    <p>IdPは verifier のハッシュが認可時の challenge と一致することを確かめ、問題なければ署名付きのIDトークンとアクセストークンを発行します。コードを盗んだだけの攻撃者は verifier を持たないため、この引き換えは成立しません。</p>
+    <h3>検証：IDトークンを信じる前に</h3>
+    <p>RPはIDトークンを受け取って終わりではありません。IdPの設定情報は Discovery で、公開鍵は JWKS で取得しておき、署名を公開鍵で検証します。さらに iss が想定したIdPか、aud が自分の client_id か、有効期限が切れていないか、nonce が開始時の値と一致するかをすべて確認し、1つでも失敗すればログインを拒否します。全部を通って初めて、RPは自前のセッションを作ってログインを完了させます。</p>
+    <p>なお、名前やメールアドレスなどの追加情報が必要な場合は、アクセストークンを使って UserInfo endpoint から取得します。IDトークンはあくまで本人確認の結果であり、プロフィール全体を運ぶ手段ではない、という役割分担です。</p>
+  </section>
+
   <h2 class="sectionTitle">IDトークン（JWT）の中身</h2>
   <p class="sectionSub">色のついた3つの部分をタップすると、役割が分かります。IDトークンは「暗号化」ではなく「署名付き」— 中身は誰でも読めるので、秘密を入れてはいけません。</p>
   <div class="card" style="margin-top:12px">
@@ -287,6 +332,24 @@ td{color:var(--muted)} td:first-child{color:var(--text);font-weight:700;white-sp
     <section class="card"><h2>パスキーとの関係</h2><p>競合ではなく、<strong>階層が違う</strong>技術です。OIDCのステップ5「IdPでの本人確認」の中身として、パスワードの代わりにパスキー（WebAuthn）が使われることが増えています。</p><ul><li>OIDC：サービス ⇔ IdP の間の「信頼の取り決め」</li><li>パスキー：あなた ⇔ IdP の間の「本人確認の手段」</li><li>つまり「Googleでログイン（OIDC）」のGoogle側ログインがパスキー、という組み合わせが今の主流形です。</li></ul></section>
     <section class="card"><h2>やってはいけないこと</h2><ul><li>Implicitフロー（トークンをURLフラグメントで直接返す旧方式）を新規採用する</li><li>IDトークンをAPIのアクセストークン代わりに使う</li><li>署名検証をせずペイロードだけ読んでログインさせる</li><li>アクセストークンをlocalStorageに無造作に置く（XSSで盗まれる）</li><li>redirect_uriをワイルドカードで広く登録する</li></ul></section>
   </div>
+
+  <section class="card doc">
+    <div class="label">強みと弱み</div>
+    <h2>OIDCの良い点と弱点</h2>
+    <h3>良い点：本人確認を分業できる</h3>
+    <p>サービスはパスワードを保管しなくてよくなり、漏洩時の大きな火種を持たずに済みます。利用者も、覚えるパスワードの数を減らせます。本人確認の結果が署名付きの標準形式で届き、検証の手順まで決まっているため、実装ごとのばらつきは小さくなります。大手IdPの多要素認証や異常検知といった安全策の恩恵を、そのまま自サービスに持ち込める点も見逃せません。</p>
+    <p>利用者の体験の面でも、一度IdPにログインしていれば、別のサービスへのログインがほぼそのまま通るシングルサインオンが実現します。サービスを渡り歩くたびに認証し直す手間がなくなります。</p>
+    <h3>弱点：IdPへの依存と検証の手間</h3>
+    <p>逆に、ログインの成否はIdPの稼働に左右されます。IdP側で障害が起きれば、自サービスが無事でもログインできません。また、IdPのアカウント自体が乗っ取られれば、それに紐づく複数サービスへ影響が広がります。集約は利便性と同時に、攻撃者にとっての狙いどころの集約でもあるのです。検証の項目も多く、署名やnonceの確認を省くような実装をすれば、OIDCの安全性は簡単に崩れます。安全に使うには、実績のあるライブラリに任せることが前提になります。</p>
+    <h3>弱点：伝わる情報の範囲の設計</h3>
+    <p>IdPから渡されるプロフィール情報は scope で制御されますが、何を要求し、何を保存するかはサービス側の設計次第です。必要以上に情報を集めれば、それはそのまま漏洩時の被害範囲になります。便利さと最小化のバランスは、仕組みではなく運用で決まります。</p>
+  </section>
+
+  <section class="card doc">
+    <div class="label">まとめ</div>
+    <h2>まとめ</h2>
+    <p>OIDCは、OAuth 2.0の認可の流れに「誰がログインしたか」を伝える標準の層を足した仕組みです。サービスはパスワードを扱わず、IdPが署名したIDトークンを検証するだけで本人確認を終えられます。その代わり、安全性は検証を省略しないことに懸かっており、IdPへの依存も生まれます。「本人確認は専門の側に任せ、自分は検証に徹する」という分業の形こそが、OIDCの本質です。次にIdP連携を実装するときは、フローの見た目よりも先に、検証項目がすべて実装されているかを確認してください。</p>
+  </section>
 
   <p class="footer">操作：<span class="kbd">Space</span> 再生／停止　<span class="kbd">→</span> 次へ　<span class="kbd">←</span> 前へ　／　このページは認可コードフロー（+PKCE、confidential client想定）の学習用モデルです。実際のパラメータや有効期限はIdP・ライブラリにより異なります。仕様：OpenID Connect Core 1.0 / OAuth 2.0（RFC 6749）/ PKCE（RFC 7636）/ RFC 9700。例のドメイン・値は記事（#2）と同じものを使っています。</p>
 </div>

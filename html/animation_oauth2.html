@@ -160,6 +160,15 @@ td{color:var(--muted)} td:first-child{color:var(--text);font-weight:700;white-sp
 .filmBtn.active{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .filmBtn.done{border-color:var(--accent)}
 .mockMetaUrl{font-family:ui-monospace,Menlo,monospace;font-size:12px;word-break:break-all;background:var(--card2);border-radius:8px;padding:9px 10px;margin-top:10px;line-height:1.6}
+/* doc prose */
+.doc{margin-top:18px}
+.doc .label{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:8px}
+.doc p{font-size:15.5px;line-height:1.9;margin:0 0 14px;color:var(--text)}
+.doc p:last-child{margin-bottom:0}
+.doc h3{font-size:16.5px;margin:24px 0 8px;border-left:4px solid var(--accent);padding-left:10px}
+.doc h3:first-of-type{margin-top:20px}
+.doc.summary p{font-size:16px;line-height:1.85;margin:0 0 8px}
+.doc.summary p:last-child{margin-bottom:0}
 </style>
 </head>
 <body>
@@ -169,6 +178,27 @@ td{color:var(--muted)} td:first-child{color:var(--text);font-weight:700;white-sp
     <p>OAuth 2.0は「認証」ではなく <strong>「認可」</strong> の仕組みです。アプリにパスワードを渡すのではなく、<strong>あなたの代わりにデータへアクセスする許可</strong> を与えます。その上に「身元確認」を載せたものがOIDCです。下のアニメーションで、現在の標準である <strong>認可コードフロー＋PKCE</strong> を1ステップずつ追ってみましょう。例は「写真プリントアプリが、あなたのGoogleフォトの写真を使えるように連携する」場面です。</p>
     <div class="badges"><span class="badge">役割 <b>認可（許可を与える）</b></span><span class="badge">主役 <b>アクセストークン</b></span><span class="badge">標準フロー <b>認可コード + PKCE</b></span><span class="badge">勉強会用 <b>スペース / ← →</b> 対応</span></div>
   </header>
+
+  <section class="card doc summary">
+    <div class="label">概要</div>
+    <p>OAuth 2.0は、アプリにパスワードを渡す代わりに、「あなたの代わりにデータへアクセスしてよい」という許可を与えるための仕組みです。</p>
+    <p>昔はアプリにIDとパスワードそのものを預けるしかなく、預けた相手から漏れればアカウントの全権限が悪用される形でした。その反省から生まれました。</p>
+    <p>許可は範囲（scope）と期限のついたアクセストークンの形で渡るので、アプリは必要な操作だけができ、許可は後から取り消すこともできます。</p>
+  </section>
+
+  <section class="card doc">
+    <div class="label">背景</div>
+    <h2>OAuth 2.0が生まれた背景 — パスワードを預ける連携の限界</h2>
+    <h3>アプリにパスワードを預ける時代</h3>
+    <p>あるサービスが、別のサービスにあるあなたのデータを使いたい。たとえば写真プリントのアプリが、写真保管サービスに預けた写真を読みたいような場合です。連携の仕組みが未熟だった頃、現実の方法はひとつしかありませんでした。そのサービスのIDとパスワードを、アプリに入力して預けることです。</p>
+    <p>中には、預かったパスワードで実際にログインし、画面の内容を読み取って連携したことにするような荒い方法まで現れました。利用者は便利さと引き換えに、アカウントそのものを第三者へ差し出していたことになります。</p>
+    <p>そもそもパスワードは「本人であることの証明」のためのもので、「他人に一部の操作を任せる」ための道具ではありません。目的の違う道具で委任を代用していたこと自体が、無理の始まりでした。</p>
+    <h3>預けたパスワードは「全部入り」の鍵だった</h3>
+    <p>パスワードは、そのアカウントでできる操作すべてを許す鍵です。写真を見せるだけのつもりで預けても、技術的には削除も変更もできてしまいます。預けた先のアプリから漏れれば被害は本体のアカウント全体に及び、連携をやめたいときはパスワード自体を変えるしかなく、他の連携まで巻き添えになります。「どのアプリに、どこまでの操作を、いつまで許すか」を切り分ける手段がありませんでした。</p>
+    <p>預ける側だけでなく、預かる側にとっても重荷でした。アプリの運営者は、他人のパスワードという最も危険な情報を保管する責任を負い、漏洩すれば信用を失います。データを出す側のサービスから見ても、正規の利用者と、パスワードを預かったアプリとを区別できませんでした。</p>
+    <h3>ないとどうなるか</h3>
+    <p>OAuthがなければ、サービス間連携は今もパスワードの預け合いのままか、連携そのものを諦めるか、どちらかだったはずです。許可の範囲を宣言し、期限つきのトークンとして発行し、取り消しもできる。そうした「委任」のための標準手順を定めたのがOAuth 2.0で、2012年にRFC 6749として標準化されました。前身にあたるOAuth 1.0もありましたが、署名の方式が複雑で実装の負担が大きく、その反省が2.0の設計に活かされています。なおOAuthが扱うのはあくまで認可、つまり許可の話であって、ログインした人が誰かという認証は担当しません。</p>
+  </section>
 
   <div class="controls topControls" aria-label="ステップ操作（画面の上）">
     <button class="btn" onclick="prevStep()">← 前へ</button>
@@ -242,6 +272,20 @@ td{color:var(--muted)} td:first-child{color:var(--text);font-weight:700;white-sp
     <div class="point" id="stepPoint"><b>ポイント：</b> 各役の「持ち物」がどう増減するかを見てください。特に <b>code_verifier はブラウザ経由（フロントチャネル）には出ず、最初はハッシュ化した code_challenge だけが送られる</b>こと、そして<b>認可コードとトークンは別物</b>という2点が重要です。</div>
   </section>
 
+  <section class="card doc">
+    <div class="label">読み物</div>
+    <h2>仕組みを文章で読む — 認可コードフロー＋PKCE</h2>
+    <p>アニメーションを再生しなくても追えるよう、メインの流れ（9ステップ）を文章でもたどっておきます。例はアニメーションと同じく、写真プリントアプリが写真保管サービスの写真を読めるよう連携する場面です。</p>
+    <h3>準備と往路：許可を取りに行く</h3>
+    <p>あなたがアプリで連携ボタンを押すと、アプリはまず使い捨ての秘密 code_verifier を作り、そのSHA256ハッシュである code_challenge と、ランダムな state を用意して保存します。続いてブラウザが認可サーバーの認可endpointへリダイレクトされ、URLには client_id、redirect_uri、scope、state、code_challenge が載ります。アドレスバーを経由するこの通信はフロントチャネルと呼ばれ、漏れる前提で設計されるため、秘密は載せません。</p>
+    <p>認可サーバーの画面であなたがログインし、同意画面で scope の範囲（この例では写真の閲覧だけ）を確認して許可すると、認可サーバーは認可コードを発行し、事前登録された redirect_uri へブラウザを戻します。アプリは戻ってきた state が保存した値と一致するか照合し、一致しなければ処理を止めます。</p>
+    <h3>引き換え：本物のトークンは裏の通信で</h3>
+    <p>コードはあくまで引換券です。アプリは認可サーバーへ直接HTTPSで通信するバックチャネルで、コードと code_verifier を提示します。認可サーバーは verifier のハッシュが最初の challenge と一致することを確かめてから、アクセストークンとリフレッシュトークンを発行します。コードを盗んだだけの攻撃者は verifier を持たないので、この引き換えは成立しません。</p>
+    <p>コード自体も短命で、使い捨てです。発行から短い時間で失効し、一度引き換えに使われれば二度目は通りません。フロントチャネルで漏れる可能性を前提に、漏れても実害に結びつきにくい設計になっています。</p>
+    <h3>利用と更新：範囲の中で使う</h3>
+    <p>アプリはアクセストークンを Authorization ヘッダーに載せてAPIを呼びます。API（リソースサーバー）はトークンの scope を見て、許可された範囲のデータだけを返します。APIの側は、アプリが誰であるかを知る必要はなく、提示されたトークンが有効で、要求された操作が scope の範囲内かどうかだけを判断します。アクセストークンの期限が切れたら、アプリはリフレッシュトークンを認可サーバーに示して新しいアクセストークンを受け取ります。あなたが連携をやめたくなれば、認可サーバー側で許可を取り消すことができ、パスワードを変える必要はありません。</p>
+  </section>
+
   <h2 class="sectionTitle">認可リクエストのURLを分解する</h2>
   <p class="sectionSub">ステップ2でブラウザが運ぶURLです。色のついたパラメータをタップすると、役割が分かります。アドレスバー経由なので、ここに秘密は載せられません。</p>
   <div class="card" style="margin-top:12px">
@@ -287,6 +331,24 @@ td{color:var(--muted)} td:first-child{color:var(--text);font-weight:700;white-sp
     <section class="card"><h2>OIDC（認証）とのつながり</h2><p>このページのフローに <code>scope=openid</code> を足し、IDトークンの受け渡しを加えたものがOIDCです。</p><ul><li>OAuth：アプリ ⇔ 認可サーバー ⇔ API の間の「許可の取り決め」</li><li>OIDC：その許可のやり取りに「ログインしたのは誰か」を標準の形で載せたもの</li><li>「Googleでログイン」の裏側では、認可（OAuth）と認証（OIDC）が同時に走っています</li></ul></section>
     <section class="card"><h2>やってはいけないこと</h2><ul><li>Implicitフロー（トークンをURLで直接返す旧方式）を新規採用する</li><li>IDトークンをAPIのアクセストークン代わりに使う</li><li>PKCEなしの認可コードフローにする（コード横取りに弱くなる）</li><li>stateの照合を省略する（ログインCSRFが成立する）</li><li>アクセストークンをlocalStorageに無造作に置く（XSSで盗まれる）</li><li>redirect_uriをワイルドカードで広く登録する</li></ul></section>
   </div>
+
+  <section class="card doc">
+    <div class="label">強みと弱み</div>
+    <h2>OAuth 2.0の良い点と弱点</h2>
+    <h3>良い点：許可を切り分けられる</h3>
+    <p>最大の利点は、許可の範囲と期限を切り分けられることです。アプリにはパスワードではなく scope つきのトークンが渡るため、閲覧だけのつもりの連携で削除まで許してしまうことがありません。連携の単位で取り消しもでき、預ける側の被害範囲を小さく抑えられます。手順が標準化されているので、異なるサービスの間でも同じ型で連携できます。</p>
+    <p>利用者の側からも、どのアプリに何を許可したかが見える形になります。認可サーバーの管理画面で連携の一覧を確認し、不要になったものを選んで外す、という操作が可能になるのは、許可がトークンとして切り分けられているからです。</p>
+    <h3>弱点：トークン自体が鍵になる</h3>
+    <p>アクセストークンは、持っている者が使えるベアラートークンが主流です。盗まれれば、期限が切れるまでは正規のアプリのふりをしてAPIを叩けます。保管場所の設計や送信経路の保護を誤ると、パスワードを預けないという利点がそのまま裏返ります。</p>
+    <h3>弱点：正しさが実装に依存する</h3>
+    <p>OAuth 2.0は枠組みの仕様で、細部の選択肢が多い分、実装の取り違えが事故に直結します。state の照合を省く、redirect_uri を緩く登録する、古いImplicitフローを採用する、といった一つひとつが攻撃の入口になります。安全な組み合わせはベストプラクティス（RFC 9700）として整理されていますが、それを守るかどうかは実装側に委ねられています。</p>
+  </section>
+
+  <section class="card doc">
+    <div class="label">まとめ</div>
+    <h2>まとめ</h2>
+    <p>OAuth 2.0は、パスワードを預ける代わりに、範囲と期限のついた許可をトークンの形で渡す仕組みです。認可コードとPKCEで引き換えの安全性を担保し、本物のトークンはサーバー同士の直接通信でだけ受け渡します。扱うのは「何をしてよいか」という認可であり、「誰か」という認証は範囲の外です。その境界を正しく引けるかどうかが、OAuth 2.0を理解する要点になります。「アプリと連携する」ボタンの裏側では、毎回この委任の手続きが静かに走っている、と思い出してもらえれば十分です。</p>
+  </section>
 
   <p class="footer">操作：<span class="kbd">Space</span> 再生／停止　<span class="kbd">→</span> 次へ　<span class="kbd">←</span> 前へ　／　このページは認可コードフロー（+PKCE）の学習用モデルです。実際のパラメータや有効期限は認可サーバー・ライブラリにより異なります。<br>出典：<a href="https://zenn.dev/monkey_gineer/articles/auth-study-02-session-jwt-oidc-pkce" target="_blank" rel="noopener">Zenn「認証認可をゼロから学ぶ #2 — ログインのあと、サーバーはどうやってあなたを覚えているのか（セッション・JWT・OIDC・PKCE）」</a>のOAuth 2.0の記述をもとに作成。仕様：OAuth 2.0（RFC 6749）/ PKCE（RFC 7636）/ OAuth 2.0 Security Best Current Practice（RFC 9700）。</p>
 </div>

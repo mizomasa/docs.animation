@@ -161,6 +161,16 @@ footer{margin-top:56px;border-top:1px solid var(--line);padding-top:18px;color:v
 .sub-h{margin:34px 0 4px;font-size:1.18rem}
 .sub-h .sub-no{color:var(--teal);font-weight:900;margin-right:.4em}
 .lead-note{color:var(--ink2);font-size:.95rem}
+/* doc prose */
+.doc p{font-size:15.5px;line-height:1.9;margin:0 0 14px}
+.doc p:last-child{margin-bottom:0}
+.doc h3{font-size:16.5px;margin:24px 0 8px}
+.doc h3:first-of-type{margin-top:20px}
+.doc ul{margin:6px 0 14px;padding-left:20px}
+.doc li{margin:5px 0;font-size:15px;line-height:1.8}
+.doc h3{border-left:4px solid var(--teal);padding-left:10px}
+.doc.summary p{font-size:16px;line-height:1.85;margin:0 0 8px}
+.doc.summary p:last-child{margin-bottom:0}
 @media (prefers-reduced-motion: reduce){
   html{scroll-behavior:auto}
   *{transition:none !important}
@@ -187,6 +197,17 @@ footer{margin-top:56px;border-top:1px solid var(--line);padding-top:18px;color:v
     </div>
     <p class="lead-note">この2つの軸を分けて考えることが、全体を理解する出発点です。以下、現在使われている認証方式を体系的に整理します。</p>
   </header>
+
+  <!-- 概要：3行 -->
+  <section class="sec doc summary" id="about">
+    <div class="sec-head">
+      <div class="no">概要</div>
+      <h2>この資料について</h2>
+    </div>
+    <p>認証方式には多くの種類がありますが、パスワード認証、パスキー認証、OAuth 2.0、SAML認証などは、そもそも同じ階層の概念ではありません。</p>
+    <p>整理するときに重要なのは、「何を使って本人を確認するのか」という認証要素の話と、「どのような仕組みで認証するのか」という実装技術や連携方式の話を、別の軸として分けて考えることです。</p>
+    <p>この資料では、現在使われている認証方式を5つの分類と5つの階層で捉え直し、具体的な方式の一覧から比較、押さえておくべき重要技術までを体系的に整理します。</p>
+  </section>
 
   <!-- 1. 全体像 -->
   <section class="sec" id="overview">
@@ -529,6 +550,18 @@ footer{margin-top:56px;border-top:1px solid var(--line);padding-top:18px;color:v
       <li>OWASP Authentication Cheat Sheet</li>
       <li>NIST SAML / OpenID Connect Guide</li>
     </ul>
+  </section>
+
+  <!-- まとめ：全体の要約 -->
+  <section class="sec doc" id="recap">
+    <div class="sec-head">
+      <div class="no">まとめ</div>
+      <h2>全体のまとめ</h2>
+    </div>
+    <p>この資料の出発点は、認証方式を「何を使って本人を確認するのか」と「どのような仕組みで認証するのか」という2つの軸に分けて考えることです。そのうえで全体像を、知識情報・所持情報・生体情報・行動/環境情報・暗号技術/フェデレーションの5つの分類で捉えました。ただし5つ目の分類は、認証の実装技術や認証情報の連携方式として整理したもので、最初の4つとは分類軸が異なります。</p>
+    <p>用語の階層としては、認証要素、認証方式・認証器、認証プロトコル・連携方式、認証後のセッション・トークン、認可という5層に分けると整理できます。たとえば「パスキーで認証する」という構成でも、要素は所持＋生体、方式はパスキー、プロトコルはWebAuthn、連携はOpenID Connect、セッションはCookie、認可はRBACと、層ごとに別の話になります。</p>
+    <p>個別の方式では、MFAは特定の方式ではなく異なる種類の要素を組み合わせる考え方であり、IPアドレスや位置情報は本人を証明する認証要素ではなく、リスク判断の補助情報です。方式の比較ではフィッシング耐性が重視されており、重要技術としてはパスキー / FIDO2、WebAuthn、OAuth 2.0、OpenID Connect、SAML 2.0、mTLS、Kerberos、Workload Identityの8つを挙げました。</p>
+    <p>設計に直結するのは、人間のユーザーをどう認証するか、システム・サービス・AIエージェントをどう認証するか、認証した主体に何を許可するかという3つの問いです。特にこれからは、ユーザー認証だけでなく、AIエージェントのアイデンティティ管理や委任認証も重要になってきます。</p>
   </section>
 
   <footer>認証方式の体系整理 ― 「何を使って確認するのか」と「どのような仕組みで認証するのか」を分けて考えるための資料です。</footer>
