@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>AgentCore Runtimeの仕組みアニメーション</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
+      * { box-sizing: border-box; }
+      :root {
+        --bg: #f3f7f7;
+        --surface: #ffffff;
+        --surface-2: #e8f0f1;
+        --ink: #132529;
+        --ink-2: #42565c;
+        --ink-3: #7b8f95;
+        --line: #d2dee0;
+        --accent: #0e7490;
+        --accent-ink: #ffffff;
+        --accent-soft: #e0f1f5;
+        --packet: #2563eb;
+        --packet-soft: #e4ebfd;
+        --danger: #b3261e;
+        --danger-soft: #fbe9e7;
+        --term-bg: #0d2129;
+        --term-ink: #e3f1f4;
+        --term-dim: #84a5ad;
+        --radius: 10px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0c1416;
+          --surface: #152226;
+          --surface-2: #1d2f34;
+          --ink: #e9f3f5;
+          --ink-2: #bfd2d7;
+          --ink-3: #8ba3aa;
+          --line: #2b4147;
+          --accent: #41c2dc;
+          --accent-ink: #052832;
+          --accent-soft: #0f333d;
+          --packet: #8fb8ff;
+          --packet-soft: #1d2a4d;
+          --danger: #f0867e;
+          --danger-soft: #3d1d1a;
+          --term-bg: #060e11;
+          --term-ink: #e3f1f4;
+          --term-dim: #6e8f97;
+          color-scheme: dark;
+        }
+      }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "IBM Plex Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        line-height: 1.75;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { max-width: 960px; margin: 0 auto; padding: 28px 18px 72px; }
+      h1 { font-size: clamp(26px, 5.4vw, 38px); line-height: 1.3; margin: 0 0 10px; letter-spacing: .01em; }
+      .lede { color: var(--ink-2); font-size: 16px; margin: 0 0 6px; max-width: 44em; }
+      .lede .mono { color: var(--accent); font-weight: 600; }
+      h2 { font-size: 21px; margin: 0 0 6px; line-height: 1.4; }
+      h3 { font-size: 16px; margin: 0 0 6px; }
+      .sec-head { margin: 40px 0 14px; }
+      .sec-head p { margin: 0; color: var(--ink-2); font-size: 14.5px; max-width: 44em; }
+      .sec-num { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 1px 10px; margin-bottom: 8px; letter-spacing: .08em; }
+      .label { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; }
+
+      /* ---------- controls ---------- */
+      .controls {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 10px 12px; margin: 18px 0;
+      }
+      .controls .btn {
+        appearance: none; border: 1px solid var(--line); background: var(--surface-2);
+        color: var(--ink); border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 14.5px; font-weight: 600;
+        cursor: pointer; min-width: 44px;
+      }
+      .controls .btn:hover { border-color: var(--accent); }
+      .controls .btn:focus-visible, .speedsel:focus-visible, .dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .controls .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 92px; }
+      .controls .btn:disabled { opacity: .38; cursor: default; }
+      .controls .btn:disabled:hover { border-color: var(--line); }
+      .controls .btn.primary:disabled:hover { border-color: var(--accent); }
+      .speedwrap { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13.5px; color: var(--ink-2); }
+      .speedsel { font: inherit; font-size: 14px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+      .progress-line { display: flex; align-items: center; gap: 12px; margin: 4px 2px 0; flex-wrap: wrap; }
+      .progress-label { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+      .progress-track { flex: 1 1 140px; height: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+      .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .45s ease; }
+      .dots { display: flex; gap: 6px; flex-wrap: wrap; }
+      .dot { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+      .dot.done { border-color: var(--accent); color: var(--accent); }
+      .dot.now { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+      /* ---------- chat mock + event log ---------- */
+      .stage-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      @media (min-width: 820px) { .stage-grid { grid-template-columns: 1fr 1fr; } }
+      .browser, .term {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+      }
+      .browser-bar {
+        display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+        background: var(--surface-2); border-bottom: 1px solid var(--line);
+      }
+      .traffic { display: flex; gap: 6px; flex: none; }
+      .traffic i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+      .traffic i:nth-child(1) { background: #e0655f; } .traffic i:nth-child(2) { background: #e8b23f; } .traffic i:nth-child(3) { background: #58b368; }
+      .win-title { font-size: 13.5px; font-weight: 700; color: var(--ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .spinner {
+        width: 16px; height: 16px; border-radius: 50%; flex: none; margin-left: auto;
+        border: 2.5px solid var(--line); border-top-color: var(--accent);
+        animation: spin .8s linear infinite; display: none;
+      }
+      .spinner.on { display: block; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .chat-body {
+        padding: 14px 14px 16px; min-height: 342px; background: var(--surface);
+        display: flex; flex-direction: column; gap: 10px;
+      }
+      .msg { max-width: 90%; padding: 9px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.6; border: 1px solid var(--line); }
+      .msg .who { display: block; font-size: 11px; font-weight: 700; color: var(--ink-3); margin-bottom: 2px; }
+      .msg.user { align-self: flex-end; background: var(--accent-soft); border-bottom-right-radius: 4px; }
+      .msg.agent { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
+      .tool-chip {
+        align-self: flex-start; font-family: "IBM Plex Mono", monospace; font-size: 12px; line-height: 1.55;
+        border: 1.5px solid var(--packet); background: var(--packet-soft); color: var(--ink);
+        border-radius: 8px; padding: 6px 10px; word-break: break-all;
+      }
+      .tool-chip.res { border-color: var(--line); background: var(--surface); color: var(--ink-2); }
+      .think { align-self: flex-start; font-size: 12.5px; color: var(--ink-3); }
+      .sess-line {
+        align-self: stretch; text-align: center; font-size: 12.5px; font-weight: 700; color: var(--ink-2);
+        border: 1.5px dashed var(--line); border-radius: 8px; padding: 6px;
+      }
+      .done-bar {
+        align-self: stretch; text-align: center; font-size: 12.5px; font-weight: 700; color: var(--accent);
+        border: 1.5px dashed var(--accent); border-radius: 8px; padding: 6px;
+      }
+      .term-head { padding: 8px 14px; font-size: 12.5px; color: var(--term-dim); background: var(--term-bg); border-bottom: 1px solid #274049; font-family: "IBM Plex Mono", monospace; }
+      .term-body {
+        background: var(--term-bg); color: var(--term-ink); margin: 0; padding: 14px 16px 18px;
+        font-family: "IBM Plex Mono", monospace; font-size: 12.4px; line-height: 1.6; min-height: 342px;
+        white-space: pre-wrap; word-break: break-all;
+      }
+      .term-body .dim { color: var(--term-dim); }
+      .term-body .hl { color: #6fd8ef; }
+      .term-body .ok { color: #7ee2b8; }
+      .term-body .warn { color: #f0867e; }
+      .fig-cap { font-size: 12.5px; color: var(--ink-3); margin: 8px 2px 0; }
+
+      /* ---------- code panel ---------- */
+      .code-body {
+        background: var(--term-bg); color: var(--term-ink); margin: 0; padding: 16px 18px 20px;
+        font-family: "IBM Plex Mono", monospace; font-size: 13px; line-height: 1.75;
+        white-space: pre; overflow-x: auto;
+      }
+      .code-body .dim { color: var(--term-dim); }
+      .code-body .kw { color: #6fd8ef; }
+      .code-body .str { color: #a7d7a0; }
+      .code-body .fn { color: #8fb8ff; }
+      .code-body .ok { color: #7ee2b8; }
+
+      /* ---------- flow diagram ---------- */
+      .flow-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 16px 16px; }
+      .actors { display: flex; align-items: stretch; gap: 0; }
+      .actor {
+        flex: 1 1 0; min-width: 0; text-align: center; padding: 12px 6px 10px; border: 1.5px solid var(--line);
+        border-radius: var(--radius); background: var(--surface-2); transition: border-color .3s, background .3s, box-shadow .3s;
+      }
+      .actor .a-icon { font-size: 24px; line-height: 1.2; display: block; }
+      .actor .a-name { font-weight: 700; font-size: 13.5px; display: block; margin-top: 4px; line-height: 1.45; }
+      .actor .a-sub { font-size: 11.5px; color: var(--ink-3); display: block; line-height: 1.5; }
+      .actor.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .actor .a-tag { display: none; margin-top: 6px; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; color: var(--accent); }
+      .actor.tag-on .a-tag { display: inline-block; }
+      .link-arrow { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 15px; }
+      @media (max-width: 700px) {
+        .actors { flex-direction: column; gap: 0; }
+        .link-arrow { transform: rotate(90deg); height: 22px; flex-basis: 22px; margin: 0 auto; }
+      }
+      .packet-bar {
+        margin-top: 16px; border: 1.5px solid var(--packet); background: var(--packet-soft); border-radius: var(--radius);
+        padding: 12px 16px; min-height: 76px;
+      }
+      .packet-bar .p-label { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; color: var(--packet); margin-bottom: 2px; }
+      .packet-bar .p-route { font-weight: 700; font-size: 15px; }
+      .packet-bar .p-body { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; margin-top: 2px; word-break: break-all; }
+      .step-card { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px; }
+      .step-card .s-kicker { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent); font-weight: 600; letter-spacing: .06em; }
+      .step-card h3 { font-size: 19px; margin: 4px 0 8px; }
+      .step-card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+      .step-card p .mono { color: var(--ink); font-weight: 600; font-size: .94em; }
+      .tag { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 1px 10px; margin-left: 8px; vertical-align: 2px; }
+      .tag.rec { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+      .tag.itr { background: var(--packet-soft); color: var(--packet); border: 1px solid var(--packet); }
+
+      /* ---------- supplements ---------- */
+      .cards { display: grid; grid-template-columns: 1fr; gap: 14px; }
+      @media (min-width: 720px) { .cards.two { grid-template-columns: 1fr 1fr; } .cards.three { grid-template-columns: repeat(3, 1fr); } .cards.four { grid-template-columns: 1fr 1fr; } }
+      @media (min-width: 960px) { .cards.four { grid-template-columns: repeat(4, 1fr); } }
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+      .card p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+      .card p + p { margin-top: 8px; }
+      .card .mono { color: var(--ink); font-weight: 600; }
+      .card .date { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 600; color: var(--accent); display: block; margin-bottom: 4px; }
+      .vs-route { font-family: "IBM Plex Mono", monospace; font-size: 13px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; line-height: 1.9; word-break: break-all; }
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+      .chip { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 600; border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 3px 12px; }
+      .chip.def { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+      .cmp-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+      table.cmp { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 14px; }
+      table.cmp th, table.cmp td { padding: 11px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; line-height: 1.6; }
+      table.cmp thead th { background: var(--surface-2); font-size: 14.5px; }
+      table.cmp tbody th { font-weight: 700; white-space: nowrap; background: var(--surface); }
+      table.cmp td { color: var(--ink-2); }
+      table.cmp td strong { color: var(--ink); }
+      table.cmp tr:last-child th, table.cmp tr:last-child td { border-bottom: none; }
+      dl.glossary { display: grid; grid-template-columns: 1fr; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 0; }
+      @media (min-width: 720px) { dl.glossary { grid-template-columns: 1fr 1fr; } }
+      .glossary .g-item { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+      .glossary dt { font-weight: 700; font-size: 15px; }
+      .glossary dt .mono { font-size: 13px; color: var(--accent); font-weight: 600; margin-left: 6px; }
+      .glossary dd { margin: 4px 0 0; font-size: 14px; color: var(--ink-2); }
+      .note-box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 6px; padding: 14px 18px; font-size: 14.5px; color: var(--ink-2); margin-top: 14px; }
+      .note-box strong { color: var(--ink); }
+      .note-box.warn { border-left-color: var(--danger); }
+
+      /* ---------- doc prose ---------- */
+      .doc { margin-top: 18px; }
+      .doc h2 { margin-bottom: 4px; }
+      .doc p { font-size: 15.5px; line-height: 1.9; margin: 0 0 14px; color: var(--ink); }
+      .doc p:last-child { margin-bottom: 0; }
+      .doc h3 { font-size: 16.5px; margin: 24px 0 8px; border-left: 4px solid var(--accent); padding-left: 10px; }
+      .doc h3:first-of-type { margin-top: 20px; }
+      .doc ul { margin: 6px 0 14px; padding-left: 20px; }
+      .doc li { margin: 5px 0; font-size: 15px; line-height: 1.8; }
+      .doc.summary p { font-size: 16px; line-height: 1.85; margin: 0 0 8px; }
+      .doc.summary p:last-child { margin-bottom: 0; }
+      footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .spinner { animation: none; }
+        .progress-fill { transition: none; }
+        .actor { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>AgentCore Runtimeの仕組み</h1>
+      <p class="lede">
+        <span class="mono">Amazon Bedrock AgentCore Runtime</span>は、AIエージェントのコードを本番環境で動かすための、AWSのマネージドな実行基盤です。
+        鍵になるのは「<strong>セッション</strong>」という単位で、会話ごとに専用の <span class="mono">microVM</span> が割り当てられ、状態を保ったまま最長で8時間動き続けます。
+        まずセッションのライフサイクルを8ステップで再生し、そのあと背景・仕組み・注意点を文章で見ていきます。
+      </p>
+
+      <!-- 概要：3行 -->
+      <section class="card doc summary">
+        <div class="label">概要</div>
+        <p>AgentCore Runtimeは、AIエージェントを本番環境で動かすための、AWSのマネージドな実行基盤です。</p>
+        <p>エージェントの実行には「利用者ごとに状態を持つ」「処理が分単位から時間単位まで長くかかる」「他人のデータと混ざってはいけない」という性質があり、通常のWebサーバーや関数実行の基盤では受け止めきれないために生まれました。</p>
+        <p>会話（セッション）ごとに専用のmicroVMが割り当てられ、状態を保ったまま最大8時間動き続けられるので、開発者はインフラではなくエージェント本体に集中できます。</p>
+      </section>
+
+      <!-- 背景：読み物 -->
+      <section class="card doc">
+        <div class="label">背景</div>
+        <h2>AgentCore Runtimeが生まれた背景 — 「作る」から「動かし続ける」へ</h2>
+        <h3>フレームワークが解いたのは「作る」まで</h3>
+        <p>Strands AgentsやLangGraphのようなフレームワークの登場で、エージェントを「作る」こと自体はぐっと簡単になりました。モデルにツールを持たせてループを回せば、手元のPCではそれらしく動きます。ところが本番に出そうとすると、作る段階にはなかった問題が並び始めます。エージェントの実行を「どこで、どういう境界で、どれだけ長く」動かすかという、運用側の問題です。</p>
+        <h3>セッションが混ざる危険</h3>
+        <p>エージェントは利用者ごとに状態を持ちます。会話の履歴、途中の計算結果、ツールに渡す認証情報まで、セッションの中に抱え込むのです。実行環境を大勢で共有する作りだと、ある利用者の状態や認証情報が、別の利用者の処理に漏れる事故が起きかねません。エージェントは利用者の代わりにデータベースや外部サービスへ触る「特権的な処理」をするため、この境界の曖昧さはそのままセキュリティの問題になります。</p>
+        <h3>エージェントの処理は長い</h3>
+        <p>通常のAPIリクエストは秒単位で終わりますが、エージェントの処理はモデル呼び出しとツール実行を何度も繰り返し、長い調査や複数ステップの作業では時間単位に及ぶこともあります。一般的なサーバーレス関数には実行時間の上限があり（たとえばLambdaは15分）、その枠にエージェントの仕事は収まりません。かといって常駐サーバーにすると、今度は会話と会話のあいだの長い待機時間にも資源を割り続けることになります。</p>
+        <h3>スケールとアイドルコストの板挟み</h3>
+        <p>利用者が増えれば同時セッションは大きく膨らみ、減ればゼロに近づきます。ピークに合わせてサーバーを用意すればアイドル時間の無駄が大きく、リクエストごとに環境を作り直せば状態が消えて会話が続きません。「利用者ごとの分離」と「状態の保持」と「使った分だけの課金」を同時に満たす実行基盤が要る、というのがRuntimeの出発点です。</p>
+        <h3>ないとどうなるか</h3>
+        <p>こうした基盤がなければ、エージェントを本番に出すチームは、コンテナ基盤の上にセッション管理、利用者ごとの分離、長時間実行、スケーリングの仕組みを自前で作り込むことになります。作れないものではありませんが、その工数はエージェント本体の改善には向かいません。Runtimeは、この「エージェントの下回り」をAWS側が引き受けるという製品です。</p>
+      </section>
+
+      <!-- 1. 操作ボタン -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+      <div class="progress-line">
+        <span class="progress-label" data-progress-label>ステップ 1 / 8</span>
+        <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+        <div class="dots" data-dots aria-label="ステップ一覧"></div>
+      </div>
+
+      <!-- セクション1. セッションのライフサイクルをアニメーションで見る -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 1</span>
+        <h2>セッションのライフサイクルをアニメーションで見る</h2>
+        <p>左が利用者から見える業務アプリの画面、右がRuntime側で起きているイベントのログです。題材は「経費のチェックを頼み、続けて表にまとめてもらう」という2ターンの会話で、ポイントは<strong>応答が返ってもセッション（microVM）は終わらない</strong>ことと、<strong>同じセッションIDが同じ環境への宛先になる</strong>ことです。</p>
+      </div>
+      <div class="stage-grid">
+        <div>
+          <div class="browser" aria-label="業務アプリ画面のモック">
+            <div class="browser-bar">
+              <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="win-title">業務アプリ — エージェントとの会話</div>
+              <span class="spinner" data-spinner aria-hidden="true"></span>
+            </div>
+            <div class="chat-body" data-chat></div>
+          </div>
+          <p class="fig-cap">利用者から見えるのは会話だけです。セッションの開始・待機・終了は、裏側で起きています。</p>
+        </div>
+        <div>
+          <div class="term" aria-label="イベントログのモック">
+            <div class="term-head">イベントログ — Runtime側で起きていること</div>
+            <pre class="term-body" data-log></pre>
+          </div>
+          <p class="fig-cap">呼び出し（InvokeAgentRuntime）とセッションの状態遷移が記録されます（値は説明用の例）。</p>
+        </div>
+      </div>
+
+      <!-- 2. 操作ボタン（連動） -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+      <div class="flow-wrap">
+        <div class="actors" role="img" aria-label="AgentCore Runtimeの登場要素：あなたのアプリ、AgentCore Runtime、microVM、モデルとツール">
+          <div class="actor" data-actor="app">
+            <span class="a-icon" aria-hidden="true">📱</span>
+            <span class="a-name">あなたのアプリ</span>
+            <span class="a-sub">会話ごとにセッションIDを<br>決めてRuntimeを呼ぶ</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="runtime">
+            <span class="a-icon" aria-hidden="true">☁️</span>
+            <span class="a-name">AgentCore Runtime</span>
+            <span class="a-sub">セッションの管理と<br>振り分け（ルーティング）</span>
+            <span class="a-tag" data-tag>セッション管理中</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="vm">
+            <span class="a-icon" aria-hidden="true">🖥️</span>
+            <span class="a-name">microVM</span>
+            <span class="a-sub">セッション専用の実行環境<br>エージェントはここで動く</span>
+            <span class="a-tag" data-tag>実行中</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">⇄</div>
+          <div class="actor" data-actor="brain">
+            <span class="a-icon" aria-hidden="true">🧠</span>
+            <span class="a-name">モデル／ツール</span>
+            <span class="a-sub">推論するモデルと<br>エージェントが使う道具</span>
+            <span class="a-tag" data-tag>処理中</span>
+          </div>
+        </div>
+        <div class="packet-bar" aria-live="polite">
+          <div class="p-label">いま起きていること</div>
+          <div class="p-route" data-packet-route>アプリ → AgentCore Runtime</div>
+          <div class="p-body mono" data-packet-body>InvokeAgentRuntime(sessionId="user42-conv-…")</div>
+        </div>
+        <div class="step-card">
+          <div class="s-kicker" data-step-kicker>STEP 1 / 8</div>
+          <h3 data-step-title>リクエストが届く</h3>
+          <p data-step-desc></p>
+        </div>
+      </div>
+
+      <!-- セクション2. 画面でこう見える -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 2</span>
+        <h2>画面でこう見える — デプロイと呼び出し</h2>
+        <p>開発者の作業は大きく3つです。エージェントのコードを用意し、Runtimeへデプロイし、あとは呼び出し側から「ARN＋セッションID」で叩く。セッションやmicroVMの管理コードは書きません。</p>
+      </div>
+      <div class="term" aria-label="デプロイの流れのモック">
+        <div class="term-head">ターミナル — デプロイから呼び出しまで</div>
+        <pre class="code-body"><span class="dim"># 1. エージェントのコードを用意する（入口を決めるだけ）</span>
+<span class="kw">from</span> bedrock_agentcore.runtime <span class="kw">import</span> BedrockAgentCoreApp
+
+app = BedrockAgentCoreApp()
+
+<span class="fn">@app.entrypoint</span>
+<span class="kw">def</span> <span class="fn">invoke</span>(payload):
+    <span class="dim"># ここにエージェントの処理。フレームワークは自由</span>
+    ...
+
+<span class="dim"># 2. Runtimeへデプロイする（スターターツールキット）</span>
+$ agentcore configure -e agent.py
+$ agentcore launch
+<span class="ok">→ デプロイ完了。エージェントのARNが払い出される</span>
+
+<span class="dim"># 3. 呼び出し側は、ARNとセッションIDを指定して叩く</span>
+InvokeAgentRuntime(
+    agentRuntimeArn = <span class="str">"arn:aws:bedrock-agentcore:...:runtime/…"</span>,
+    runtimeSessionId = <span class="str">"user42-conv-9f3…"</span>,
+    payload = { <span class="str">"prompt"</span>: <span class="str">"先月の出張経費が規定に合っているか調べて"</span> },
+)</pre>
+      </div>
+      <p class="fig-cap">コードとコマンドは説明用のイメージです。実際の手順やSDKの形は公式ドキュメント（スターターツールキット／AgentCore CLI）を確認してください。</p>
+      <div class="cards two" style="margin-top:14px">
+        <div class="card">
+          <h3>コンテナでも、コードのままでも <span class="mono" style="font-size:13px;color:var(--accent)">deploy</span></h3>
+          <p>公式FAQでは、デプロイ方法として<strong>コンテナイメージ</strong>（最大10GB）を使う方法と、<strong>コードをZIPで直接アップロード</strong>する簡易な方法の2つが案内されています。Runtimeが求めるのは「決められた形のHTTPの口をコンテナの中で用意すること」で、中の実装言語やフレームワークは問いません。</p>
+        </div>
+        <div class="card">
+          <h3>呼び出し口は「ARN＋セッションID」 <span class="mono" style="font-size:13px;color:var(--accent)">invoke</span></h3>
+          <p>デプロイされたエージェントはARNで特定され、呼び出しは <span class="mono">InvokeAgentRuntime</span> にセッションIDを添えて行います。<strong>同じIDなら同じセッション、違うIDなら新しいセッション</strong>。この単純な規則が、会話の継続と利用者ごとの分離を両立させる中心の仕掛けです。</p>
+        </div>
+      </div>
+
+      <!-- 読み物：仕組みを文章で -->
+      <section class="card doc">
+        <div class="label">読み物</div>
+        <h2>仕組みを文章で読む — セッションという単位</h2>
+        <p>アニメーションを再生しなくても流れが追えるよう、同じ内容を文章でもたどっておきます。</p>
+        <h3>セッションとmicroVM</h3>
+        <p>Runtimeの中心の単位はセッションです。呼び出し側は会話ごとに <span class="mono">runtimeSessionId</span> を決めて渡し、同じIDへの呼び出しは同じ実行環境へ届きます。各セッションには専用のFirecracker microVM（Lambdaなどでも使われている軽量な仮想マシン）が割り当てられ、CPU・メモリ・ファイルシステムがセッション単位で分離されます。セッションが終わればmicroVMごと破棄され、メモリは消去されるため、前の利用者のデータが次の利用者に残ることはありません。</p>
+        <h3>状態はセッションの中にだけ残る</h3>
+        <p>セッションが生きている間、メモリやファイルに書いた内容はそのまま残り、次のターンで続きに使えます。逆に言えば、それはセッション限りの揮発性の状態です。セッションを越えて残したい会話履歴や利用者の好みは、セッションの外に置く設計が前提で、AgentCoreではその役割を兄弟サービスのMemoryが担います。</p>
+        <h3>ライフサイクルと時間の上限</h3>
+        <p>セッションには Active（処理中）、Idle（待機中）、Stopped（終了）の3つの状態があります。終了のきっかけは、アイドル時間の超過（既定15分）、最大ライフタイムへの到達、明示的な停止APIの呼び出しなどです。最大ライフタイムはmicroVMの場合で既定8時間となっており、設定により変更できます。公式FAQでは、インスタンス型のコンピューティングでは最大14日のセッションも案内されています。「最大8時間」という数字は、1つの会話・作業がどれだけ長く続いてよいかという、設計上の天井になります。</p>
+        <h3>フレームワークとモデルは選ばない</h3>
+        <p>Runtimeが求めるのは、決められた形のHTTPの口（呼び出しを受けるエンドポイント）を用意することであり、中で動くエージェントの作り方は問いません。公式FAQでは、Strands Agents、LangGraph、CrewAI、LlamaIndex、Google ADK、OpenAI Agents SDKなどが実例として挙げられています。使うモデルもAmazon Bedrockのものに限らず、外部のモデルでもかまいません。つまりRuntimeは「エージェントの頭脳」ではなく、「エージェントの置き場所」です。</p>
+        <h3>対応プロトコル</h3>
+        <p>呼び出しの基本形はHTTPですが、公式にはMCPとA2Aへの対応も案内されています。エージェント自体をMCPサーバーとして公開したり、A2Aで他のエージェントから呼ばれる形にしたりと、エージェント同士やツールとの共通規約に沿った公開ができます。公式ドキュメントでは、セッションを同じ環境へ届け続けるためのヘッダーが、プロトコルごとに定義されています。</p>
+        <h3>AgentCoreファミリーの中のRuntime</h3>
+        <p>AgentCoreは単一の製品ではなく、エージェント運用のためのサービスの集まりです。ツール接続を担うGateway、記憶を担うMemory、認証情報やトークンの管理を担うIdentity、隔離されたコード実行のCode Interpreter、ブラウザ操作のBrowser、観測のObservabilityなどが兄弟として並びます。その中でRuntimeは、エージェントのコードそのものを動かす土台であり、他のサービスは必要に応じて組み合わせる位置づけです。</p>
+      </section>
+      <div class="note-box">
+        <strong>歩み。</strong>
+        AgentCoreは<strong>2025年7月</strong>にプレビューが公開され、<strong>2025年10月13日</strong>に一般提供（GA）となりました。GAの時点で東京を含む<strong>9つのリージョン</strong>で提供され、VPCやAWS PrivateLink、AWS CloudFormationへの対応も含まれていたと、AWS公式発表で案内されています。
+      </div>
+
+      <!-- 良い点と弱点 -->
+      <section class="card doc">
+        <div class="label">強みと弱み</div>
+        <h2>AgentCore Runtimeの良い点と弱点</h2>
+        <h3>良い点：分離とスケールを「買える」</h3>
+        <p>最大の利点は、セッションごとの分離とスケーリングを自作せずに済むことです。同時セッションがゼロから大きく増えても自動でさばかれ（公式FAQでは、数十万規模の同時セッションまで自動でスケールすると説明されています）、課金は実際に使ったCPUとメモリに対する秒単位の従量制で、モデルの応答待ちのようなI/O待ちの間はCPUがゼロにスケールします。エージェントの「待っている時間が長い」という性質と、課金の形が噛み合っているのです。</p>
+        <h3>弱点：状態は揮発し、永続化は外付けが前提</h3>
+        <p>セッション内の状態は、セッションと運命を共にします。重要なデータをセッションの中だけに置く設計はできず、永続化はMemoryや外部ストレージへ逃がす作りが必須になります。セッションIDと利用者の対応づけや、利用者ごとのセッション数の管理も、公式ドキュメントが注意書きしている通り、呼び出し側の責任として残ります。</p>
+        <h3>弱点：中身はブラックボックスで、AWSに寄る</h3>
+        <p>実行基盤を任せる代わりに、基盤の細部はAWS側の管理下に置かれます。特殊な実行環境の要件がある場合や、他のクラウドでもまったく同じ構成を再現したい場合には、自前のコンテナ基盤の方が自由は効きます。利便性と引き換えの依存であることは、導入前に織り込んでおきたい点です。</p>
+      </section>
+
+      <!-- セクション3. リスクと注意点 -->
+      <div class="sec-head">
+        <span class="sec-num">SECTION 3</span>
+        <h2>リスクと注意点 — 任せる範囲と残る責任</h2>
+        <p>基盤を任せても、権限とコストとセッション管理の責任は消えません。公式ドキュメントで裏の取れる範囲で、代表的な注意点を並べます。</p>
+      </div>
+      <div class="cards two">
+        <div class="card">
+          <h3>権限設計（IAM）</h3>
+          <p>エージェントは、Runtimeに設定された<strong>実行ロール</strong>の権限で、AWSのリソースやツールに触ります。広すぎる権限は、そのままエージェントの誤動作や情報漏えいが届く範囲になります。</p>
+          <p><strong>対策：</strong>最小権限が原則です。公式ドキュメントでは、セッションのコンテキストキーを使って、セッションごとにアクセスできる範囲（S3のプレフィックスなど）を絞る方法も案内されています。</p>
+        </div>
+        <div class="card">
+          <h3>コストの読み方</h3>
+          <p>課金は、セッションが生きている間のCPUとメモリの実消費に対する<strong>秒単位の従量制</strong>です。I/O待ちではCPUの課金が下がる一方、メモリはセッション保持中ずっと対象になるため、止め忘れたアイドルセッションは静かにコストを積みます。</p>
+          <p><strong>対策：</strong>アイドルタイムアウトを実態に合わせて設定し、不要なセッションは明示的に止めます。なお、モデルの推論料金はRuntimeとは別に発生します。</p>
+        </div>
+        <div class="card">
+          <h3>上限とコールドスタート</h3>
+          <p>1セッションの上限はmicroVMで<strong>最大8時間</strong>です。それを超える作業は、途中経過をセッションの外に保存して引き継ぐ設計が要ります。また新しいセッションはmicroVMの起動を伴うため、初回の応答には起動分の時間がかかることがあります（公式ドキュメントでも、セッションが切り替わるとコールドスタートによる遅延がありうると説明されています）。</p>
+          <p><strong>対策：</strong>長時間の処理は、応答を返したあとも裏で続ける「バックグラウンド実行」として切り出す設計が、公式ドキュメントで案内されています。</p>
+        </div>
+        <div class="card">
+          <h3>セッションIDの管理責任</h3>
+          <p>どの利用者がどのセッションIDかという対応づけは、<strong>呼び出し側のアプリが保持する</strong>のが公式ドキュメントの前提です。IDの付け方や渡し方を誤れば、文脈が混ざったり、他人のセッションに届いたりしかねません。</p>
+          <p><strong>対策：</strong>利用者ごとに一意で十分に長いID（公式ドキュメントでは33文字以上）を発行し、対応づけはバックエンドで管理します。プラットフォームの新しいバージョンでは、セッションを作成した利用者以外からのアクセスを拒否する仕組みも案内されていますが、自前の管理が不要になるわけではありません。</p>
+        </div>
+      </div>
+      <div class="note-box warn">
+        <strong>「分離」は境界であって、認証そのものではありません。</strong>
+        microVMの分離は「セッション同士が混ざらない」ことを守りますが、「Runtimeを呼んでよいのは誰か」は別の設計です。公式FAQでも、Amazon CognitoやMicrosoft Entra ID、Oktaといった既存のIDプロバイダと連携して、エージェントへのアクセスを制御する使い方が案内されています。
+      </div>
+
+      <!-- まとめ -->
+      <section class="card doc">
+        <div class="label">まとめ</div>
+        <h2>まとめ</h2>
+        <p>AgentCore Runtimeは、エージェントを「作る」ための道具ではなく、「本番で動かし続ける」ための置き場所です。会話ごとに専用のmicroVMを割り当て、状態を保ったまま最長8時間動き続け、終われば環境ごと消去する。この割り切りによって、利用者同士の分離、長時間実行、スケーリングという本番運用の難所をAWS側に寄せています。代わりに、状態の永続化や、セッションと利用者の対応づけは、開発者側の設計として残ります。フレームワークやモデルを選ばない作りなので、「頭脳は自由に作り、置き場所は借りる」という分担が、Runtimeの本質だと言えます。</p>
+      </section>
+
+      <!-- 用語解説 -->
+      <div class="sec-head">
+        <span class="sec-num">GLOSSARY</span>
+        <h2>用語解説</h2>
+      </div>
+      <dl class="glossary">
+        <div class="g-item">
+          <dt>セッション<span class="mono">session</span></dt>
+          <dd>1つの会話・作業に対応する実行の単位。セッションが生きている間、専用のmicroVMが状態を保持し続けます。Runtimeの管理と課金は、このセッションを単位に考えます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>runtimeSessionId</dt>
+          <dd>セッションを識別するID。呼び出し側が決めて渡し（公式ドキュメントでは33文字以上）、同じIDへの呼び出しは同じmicroVMへ届きます。利用者とIDの対応づけはアプリ側の責任です。</dd>
+        </div>
+        <div class="g-item">
+          <dt>microVM<span class="mono">Firecracker</span></dt>
+          <dd>軽量な仮想マシン。AWSのFirecracker技術で作られ、Lambdaなどでも使われています。Runtimeではセッションごとに1つ割り当てられ、CPU・メモリ・ファイルシステムの分離境界になります。</dd>
+        </div>
+        <div class="g-item">
+          <dt>ライフサイクル<span class="mono">Active / Idle / Stopped</span></dt>
+          <dd>セッションの3つの状態。処理中がActive、応答を返して待機中がIdle、アイドル時間の超過や上限到達でStoppedになります。StoppedになったmicroVMは破棄され、メモリは消去されます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>実行ロール<span class="mono">execution role</span></dt>
+          <dd>セッション内のエージェントがAWSリソースへアクセスする際に使うIAMロール。このロールの権限範囲が、そのままエージェントができることの範囲になります。</dd>
+        </div>
+        <div class="g-item">
+          <dt>コールドスタート<span class="mono">cold start</span></dt>
+          <dd>新しいセッションでmicroVMを起動する際に生じる、初回応答までの待ち時間。セッションが続いている間の呼び出しでは発生しません。</dd>
+        </div>
+        <div class="g-item">
+          <dt>A2A<span class="mono">Agent2Agent</span></dt>
+          <dd>異なる基盤で動くエージェント同士が通信するためのプロトコル。AgentCore RuntimeはMCPとあわせてA2Aへの対応が公式に案内されており、エージェントを「呼ばれる側」として公開できます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>Gateway / Memory<span class="mono">AgentCore family</span></dt>
+          <dd>AgentCoreの兄弟サービス。Gatewayは既存のAPIやLambda関数をMCPツールとして公開する橋渡し、Memoryはセッションを越えて残す短期・長期の記憶を担います。Runtimeと組み合わせて使います。</dd>
+        </div>
+      </dl>
+
+      <footer>
+        このページのコード・画面・ログは説明用の例です。AgentCore Runtimeに関する記述は、Amazon Bedrock AgentCore開発者ガイド（セッションと分離、ライフサイクル設定）、公式FAQ、公式料金ページ、AWS What's New「Amazon Bedrock AgentCore is now generally available」（2025年10月13日）といった一次情報に基づいています。セッションの最大時間（既定8時間）やアイドルタイムアウト（既定15分）などの数値は公式ドキュメントの既定値・上限であり、設定やバージョンによって変わるため、最新の仕様は公式ドキュメントで確認してください。
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var STEPS = [
+          {
+            title: "リクエストが届く — セッションID付きの呼び出し",
+            tag: "",
+            desc: "呼び出し側のアプリは、会話ごとに決めた <span class='mono'>runtimeSessionId</span>（公式ドキュメントでは33文字以上）を付けてRuntimeを呼びます。このIDが「どのセッションか」の宛先です。まだ対応するセッションがなければ、この呼び出しがセッション作成の合図になります。",
+            route: "アプリ → AgentCore Runtime",
+            packet: "InvokeAgentRuntime(sessionId=\"user42-conv-…\", prompt=\"先月の出張経費が…\")",
+            actors: ["app", "runtime"],
+            tags: []
+          },
+          {
+            title: "セッション作成 — 専用のmicroVMが起動する",
+            tag: "<span class='tag rec'>分離</span>",
+            desc: "Runtimeは、このセッション専用の <span class='mono'>microVM</span> を用意します。CPU・メモリ・ファイルシステムは他のセッションから分離され、エージェントのコードが読み込まれて実行を始めます。<strong>利用者ごとに実行環境そのものを分ける</strong>のが、Runtimeの分離の考え方です。",
+            route: "AgentCore Runtime → microVM（新規）",
+            packet: "microVM起動 ＋ エージェントのコードを読み込み",
+            actors: ["runtime", "vm"],
+            tags: ["vm"]
+          },
+          {
+            title: "エージェントが実行される（1ターン目）",
+            tag: "",
+            desc: "microVMの中でエージェントが動きます。モデルが推論し、必要に応じてツールを呼び出します。この間、会話の文脈や作業途中のデータは、セッション（microVM）の中に保持されます。",
+            route: "microVM ⇄ モデル／ツール",
+            packet: "ツール実行： 経費データを検索 → 3件ヒット",
+            actors: ["vm", "brain"],
+            tags: ["vm", "brain"]
+          },
+          {
+            title: "応答を返す — でもセッションは終わらない",
+            tag: "<span class='tag itr'>ここが要点</span>",
+            desc: "1ターン目の答えが返ります。ここが通常の関数実行と違う点で、<strong>microVMは破棄されず、状態を保ったまま Idle（待機）に入ります</strong>。会話が続く限り、環境は生きたままです。",
+            route: "microVM → アプリ（セッションはIdleへ）",
+            packet: "応答「3件とも規定内でした」 ／ セッション状態： Idle",
+            actors: ["vm", "app"],
+            tags: ["vm"]
+          },
+          {
+            title: "次のターン — 同じセッションIDで届く",
+            tag: "",
+            desc: "続きの依頼が、同じセッションID付きで届きます。RuntimeはIDを見て、待機していた<strong>同じmicroVM</strong>へリクエストを届けます。別のIDで呼べば、別のセッション（まっさらな環境）になります。",
+            route: "アプリ → Runtime → 同じmicroVM",
+            packet: "InvokeAgentRuntime(sessionId=同じID, prompt=\"その3件を表にして\")",
+            actors: ["app", "runtime", "vm"],
+            tags: []
+          },
+          {
+            title: "状態が残っているので、続きから処理できる",
+            tag: "",
+            desc: "前のターンの検索結果や作業ファイルがそのまま残っているため、エージェントは「その3件」が何を指すか分かります。<strong>文脈の引き継ぎを、アプリ側で毎回送り直す必要がありません</strong>。",
+            route: "microVM ⇄ モデル／ツール",
+            packet: "前ターンの検索結果（3件）を参照して表を作成",
+            actors: ["vm", "brain"],
+            tags: ["vm", "brain"]
+          },
+          {
+            title: "セッション終了 — アイドルが続くと止まる",
+            tag: "",
+            desc: "最後の呼び出しから既定で<strong>15分</strong>が過ぎると、セッションは終了します。明示的に止めるAPI（<span class='mono'>StopRuntimeSession</span>）や、最大ライフタイム（microVMでは既定<strong>8時間</strong>）への到達でも終了します。時間の上限は設定で変更できます。",
+            route: "AgentCore Runtime → microVM（終了）",
+            packet: "アイドル15分（既定）経過 → セッション Stopped",
+            actors: ["runtime", "vm"],
+            tags: []
+          },
+          {
+            title: "終了後 — 環境は消去され、次は新しいmicroVM",
+            tag: "",
+            desc: "終了したmicroVMは破棄され、メモリは消去されます。次に同じIDで呼んでも、新しいmicroVMがまっさらな状態で起動します。<strong>セッションを越えて残したい情報は、セッションの外（AgentCore Memoryなど）に置く</strong>のが前提の設計です。",
+            route: "AgentCore Runtime（次の呼び出しに備える）",
+            packet: "microVM終了・メモリ消去 → 次回は新規セッション",
+            actors: ["runtime"],
+            tags: []
+          }
+        ];
+
+        /* ---------- chat mock states ---------- */
+        var U1 = "<div class='msg user'><span class='who'>あなた</span>先月の出張経費が、規定に合っているか調べて。</div>";
+        var SESS1 = "<div class='sess-line'>⚙ セッション開始 — 専用microVMを起動しました</div>";
+        var THINK1 = "<div class='think'>🧠 エージェントが処理中…（microVMの中で実行）</div>";
+        var TC1 = "<div class='tool-chip'>🔧 ツール実行： 経費データを検索（先月・出張）</div>";
+        var TR1 = "<div class='tool-chip res'>↩ 結果: 「3件ヒット」</div>";
+        var A1 = "<div class='msg agent'><span class='who'>エージェント</span>先月の出張経費は3件あり、全件とも規定の範囲内でした。</div>";
+        var IDLE = "<div class='sess-line'>💤 応答を返却 — セッションは状態を保ったまま待機中（Idle）</div>";
+        var U2 = "<div class='msg user'><span class='who'>あなた</span>じゃあ、その3件を表にまとめて。</div>";
+        var THINK2 = "<div class='think'>🧠 前のターンの結果を使って処理中…</div>";
+        var A2 = "<div class='msg agent'><span class='who'>エージェント</span>先ほどの3件を表にまとめました。前の検索結果をそのまま使っています。</div>";
+        var STOP = "<div class='sess-line'>⏱ アイドル15分が経過 — セッションを終了します</div>";
+        var DONE = "<div class='done-bar'>✓ セッション終了 — microVMは破棄され、メモリは消去されました</div>";
+
+        var VIEW = [
+          { spin: false, chat: U1 },
+          { spin: true,  chat: U1 + SESS1 },
+          { spin: true,  chat: U1 + SESS1 + THINK1 + TC1 },
+          { spin: false, chat: U1 + TC1 + TR1 + A1 + IDLE },
+          { spin: false, chat: U1 + TC1 + TR1 + A1 + IDLE + U2 },
+          { spin: false, chat: U1 + TC1 + TR1 + A1 + IDLE + U2 + THINK2 + A2 },
+          { spin: false, chat: U1 + TC1 + TR1 + A1 + IDLE + U2 + A2 + STOP },
+          { spin: false, chat: U1 + TC1 + TR1 + A1 + IDLE + U2 + A2 + STOP + DONE }
+        ];
+
+        /* ---------- event log (cumulative) ---------- */
+        var LOG_LINES = [
+          ["<span class='dim'># 呼び出し側アプリ → Runtime</span>",
+           "InvokeAgentRuntime(",
+           "  agentRuntimeArn = \"arn:aws:bedrock-agentcore:...:runtime/…\",",
+           "  runtimeSessionId = \"user42-conv-9f3…\" <span class='dim'># 33文字以上</span>",
+           "  payload = { prompt: \"先月の出張経費が規定に合っているか調べて\" })"],
+          ["<span class='dim'># 新しいセッションID → セッション作成</span>",
+           "専用 microVM を起動（CPU・メモリ・ファイルシステムを分離）",
+           "エージェントのコードを読み込み、受け付け開始",
+           "<span class='ok'>✓ セッション状態: Active</span>"],
+          ["→ モデルへ送信（履歴＋ツールの定義）",
+           "← モデル: ツール呼び出しを返す",
+           "[実行] 経費検索ツール → <span class='hl'>3件ヒット</span>",
+           "→ 結果をモデルへ返し、回答を生成"],
+          ["<span class='ok'>← 応答をアプリへ返却</span>",
+           "<span class='dim'># microVMは破棄されない</span>",
+           "セッション状態: Active → <span class='hl'>Idle</span>（状態は保持）"],
+          ["<span class='dim'># アプリ → Runtime（2ターン目）</span>",
+           "InvokeAgentRuntime(runtimeSessionId = <span class='hl'>同じID</span>)",
+           "→ 待機していた同じ microVM へルーティング"],
+          ["セッション内の状態を参照: 前ターンの検索結果 3件",
+           "メモリ・ファイルシステムはそのまま残っている",
+           "<span class='ok'>✓ 表を作成して応答</span>"],
+          ["<span class='dim'># 最後の呼び出しから15分（既定）経過</span>",
+           "アイドルタイムアウト → セッション状態: <span class='warn'>Stopped</span>",
+           "<span class='dim'>（明示的な停止や、最大8時間への到達でも終了）</span>"],
+          ["microVM を終了し、メモリを消去",
+           "<span class='dim'># 次に同じIDで呼ぶと、新しいmicroVMで最初から</span>",
+           "<span class='dim'># セッションを越えて残す情報は AgentCore Memory の役割</span>"]
+        ];
+        function logHTML(upto) {
+          var out = [];
+          for (var i = 0; i <= upto; i++) out = out.concat(LOG_LINES[i]);
+          return out.join("\n");
+        }
+
+        var idx = 0;
+        var playing = false;
+        var speed = 1;
+        var timer = null;
+        var BASE_MS = 3400;
+
+        var els = {
+          label: document.querySelector("[data-progress-label]"),
+          fill: document.querySelector("[data-progress-fill]"),
+          dotsWrap: document.querySelector("[data-dots]"),
+          spinner: document.querySelector("[data-spinner]"),
+          chat: document.querySelector("[data-chat]"),
+          log: document.querySelector("[data-log]"),
+          route: document.querySelector("[data-packet-route]"),
+          packet: document.querySelector("[data-packet-body]"),
+          kicker: document.querySelector("[data-step-kicker]"),
+          stepTitle: document.querySelector("[data-step-title]"),
+          stepDesc: document.querySelector("[data-step-desc]")
+        };
+
+        /* build dots */
+        var dots = [];
+        for (var i = 0; i < STEPS.length; i++) {
+          (function (n) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "dot";
+            b.textContent = String(n + 1);
+            b.setAttribute("aria-label", "ステップ" + (n + 1) + "へ移動");
+            b.addEventListener("click", function () { pause(); goTo(n); });
+            els.dotsWrap.appendChild(b);
+            dots.push(b);
+          })(i);
+        }
+
+        var actorEls = {};
+        document.querySelectorAll("[data-actor]").forEach(function (el) {
+          actorEls[el.getAttribute("data-actor")] = el;
+        });
+
+        function render() {
+          var s = STEPS[idx];
+          var v = VIEW[idx];
+          els.label.textContent = "ステップ " + (idx + 1) + " / " + STEPS.length;
+          els.fill.style.width = ((idx + 1) / STEPS.length * 100) + "%";
+          dots.forEach(function (d, i) {
+            d.classList.toggle("now", i === idx);
+            d.classList.toggle("done", i < idx);
+          });
+          /* chat mock + log */
+          els.spinner.classList.toggle("on", v.spin);
+          els.chat.innerHTML = v.chat;
+          els.log.innerHTML = logHTML(idx);
+          /* flow */
+          els.route.textContent = s.route;
+          els.packet.textContent = s.packet;
+          els.kicker.textContent = "STEP " + (idx + 1) + " / " + STEPS.length;
+          els.stepTitle.innerHTML = s.title + (s.tag || "");
+          els.stepDesc.innerHTML = s.desc;
+          Object.keys(actorEls).forEach(function (k) {
+            actorEls[k].classList.toggle("active", s.actors.indexOf(k) !== -1);
+            actorEls[k].classList.toggle("tag-on", s.tags.indexOf(k) !== -1);
+          });
+          /* controls state */
+          document.querySelectorAll("[data-action='prev']").forEach(function (b) { b.disabled = idx === 0; });
+          document.querySelectorAll("[data-action='next']").forEach(function (b) { b.disabled = idx === STEPS.length - 1; });
+          document.querySelectorAll("[data-action='play']").forEach(function (b) {
+            b.textContent = playing ? "⏸ 一時停止" : (idx === STEPS.length - 1 ? "↺ もう一度" : "▶ 再生");
+          });
+        }
+
+        function goTo(n) {
+          idx = Math.max(0, Math.min(STEPS.length - 1, n));
+          render();
+        }
+        function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+        function startTimer() {
+          stopTimer();
+          timer = setInterval(function () {
+            if (idx >= STEPS.length - 1) { pause(); return; }
+            goTo(idx + 1);
+            if (idx >= STEPS.length - 1) { pause(); }
+          }, BASE_MS / speed);
+        }
+        function play() {
+          if (idx >= STEPS.length - 1) { goTo(0); }
+          playing = true;
+          render();
+          startTimer();
+        }
+        function pause() {
+          playing = false;
+          stopTimer();
+          render();
+        }
+
+        document.querySelectorAll("[data-controls]").forEach(function (bar) {
+          bar.addEventListener("click", function (e) {
+            var btn = e.target.closest("[data-action]");
+            if (!btn || btn.disabled) return;
+            var a = btn.getAttribute("data-action");
+            if (a === "prev") { pause(); goTo(idx - 1); }
+            else if (a === "next") { pause(); goTo(idx + 1); }
+            else if (a === "reset") { pause(); goTo(0); }
+            else if (a === "play") { playing ? pause() : play(); }
+          });
+        });
+        document.querySelectorAll("[data-speed]").forEach(function (sel) {
+          sel.addEventListener("change", function () {
+            speed = parseFloat(sel.value);
+            document.querySelectorAll("[data-speed]").forEach(function (o) { o.value = sel.value; });
+            if (playing) startTimer();
+          });
+        });
+
+        render();
+      })();
+    </script>
+  </body>
+</html>
