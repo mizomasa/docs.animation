@@ -584,6 +584,97 @@ COPY_OPTIONS (<span class="str">'mergeSchema'</span> = <span class="str">'true'<
         <p>データを他の組織や他のプラットフォームへ渡す場合は、ファイルを送るのではなく、Delta Sharingというオープンプロトコルで「共有」を作る方法があります。共有するテーブルやビューを指定し、受け手（レシピエント）にアクセス権を与えると、受け手は自分の環境から、権限の範囲内で最新のデータを直接読めます。コピーを渡さないので、鮮度の問題や「渡した後の管理不能」が起きにくく、アクセスの記録も共有元の側に残ります。</p>
       </section>
 
+      <!-- UDFとダイナミックビュー -->
+      <section class="card doc">
+        <div class="label">設計と実装 — 関数とビュー</div>
+        <h2>UDFとダイナミックビュー — ロジックと出し分けをデータ側に寄せる</h2>
+        <p>読み出しの設計では、「どのテーブルを、どの列まで見せるか」だけでなく、「よく使う計算をどこに置くか」「見る人によって結果をどう変えるか」もデータ側で決められます。そのための部品が、関数（UDF）とダイナミックビューです。</p>
+        <h3>UDFとは何か — 計算をデータ側の部品にする</h3>
+        <p>UDF（ユーザー定義関数）は、よく使う計算や整形に名前を付けて、データの側に登録しておく仕組みです。税込金額の計算や文字列の整形といった処理を利用側のプログラムごとに書くと、同じはずの計算が場所ごとに微妙にずれていきます。関数としてUnity Catalogに登録しておけば定義は1か所になり、SQLの式の中で通常の関数のように呼び出せます。関数は <span class="mono">カタログ.スキーマ.関数名</span> という3階層の名前を持ち、テーブルやビューと同じ名簿の管理対象として、誰が使ってよいかを権限で決められます。書き方は、SQLの式やクエリで定義するSQL UDFと、Pythonのコードで定義するPython UDFが中心です。</p>
+        <h3>UDFの作り方と使い方</h3>
+        <p>SQL UDFは <span class="mono">CREATE FUNCTION</span> で登録します。次の例は、税抜金額から税込金額を求める関数を、共通のスキーマに置くイメージです。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">SQL — SQL UDFを登録する（税込計算）</div>
+            <pre class="code-body"><span class="dim">-- 計算の定義はここ1か所に寄せる</span>
+<span class="kw">CREATE OR REPLACE FUNCTION</span> catalog.common.with_tax(amount <span class="kw">DECIMAL</span>(12, 2))
+<span class="kw">RETURNS DECIMAL</span>(12, 2)
+<span class="kw">LANGUAGE SQL</span>
+<span class="kw">RETURN</span> amount * 1.1;</pre>
+          </div>
+        </div>
+        <p>SQLで書き切れない整形はPython UDFにします。本体はドル記号2つ（<span class="mono">$$</span>）で囲んで書き、引数と戻り値の型を宣言します。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">SQL — Python UDFを登録する（メールアドレスのマスク）</div>
+            <pre class="code-body"><span class="kw">CREATE OR REPLACE FUNCTION</span> catalog.common.mask_email(email <span class="kw">STRING</span>)
+<span class="kw">RETURNS STRING</span>
+<span class="kw">LANGUAGE PYTHON</span>
+<span class="kw">AS</span> $$
+  <span class="kw">if</span> email <span class="kw">is None</span>:
+    <span class="kw">return None</span>
+  local, _, domain = email.<span class="fn">partition</span>(<span class="str">'@'</span>)
+  <span class="kw">return</span> (local[:1] + <span class="str">'***@'</span> + domain) <span class="kw">if</span> domain <span class="kw">else</span> <span class="str">'***'</span>
+$$;</pre>
+          </div>
+        </div>
+        <p>呼び出しはSELECTの中で行います。実行する側には、関数への <span class="mono">EXECUTE</span> 権限と、カタログ・スキーマへの <span class="mono">USAGE</span> 権限が必要です。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">SQL — UDFを呼び出す</div>
+            <pre class="code-body"><span class="kw">SELECT</span>
+  order_id,
+  catalog.common.<span class="fn">with_tax</span>(amount) <span class="kw">AS</span> amount_with_tax,
+  catalog.common.<span class="fn">mask_email</span>(customer_email) <span class="kw">AS</span> email_masked
+<span class="kw">FROM</span> catalog.gold.orders;</pre>
+          </div>
+        </div>
+        <p>Python UDFには制約もあります。実行は分離された環境で行われ、ファイルシステムやSparkセッションへ直接触れることはできないため、値を受け取って値を返す「変換」に使うものです。利用できるコンピュートにも条件があり、サーバーレスまたはProのSQLウェアハウス、あるいはDatabricks Runtime 13.3 LTS以上のコンピュートが必要です。外部ライブラリが要る場合は、<span class="mono">ENVIRONMENT</span> 句で依存関係を指定して持ち込みます。</p>
+        <h3>ダイナミックビューとは何か — 見る人によって答えが変わるビュー</h3>
+        <p>ダイナミックビューは、クエリを実行した人が誰かによって、返る行や列の値が変わるビューです。ビュー定義の中に、実行中のユーザーを返す <span class="mono">current_user()</span> や、所属グループを判定する <span class="mono">is_account_group_member()</span> といった関数を埋め込むことで実現します。たとえば、監査グループのメンバーにはメールアドレスをそのまま見せ、それ以外には伏せ字にして返す、といった出し分けがビュー1つの定義で完結します。読み手にはビューへの <span class="mono">SELECT</span> 権限だけを与え、土台のテーブルへの読み取り権限は与えないのが前提で、利用者はビューの存在だけを知っていればよくなります。</p>
+        <h3>ダイナミックビューの作り方</h3>
+        <p>作り方は通常の <span class="mono">CREATE VIEW</span> と変わらず、列の定義に <span class="mono">CASE WHEN</span>、行の絞り込みに <span class="mono">WHERE</span> 句の条件として、所属判定を組み込みます。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">SQL — ダイナミックビュー（列のマスクと行の絞り込み）</div>
+            <pre class="code-body"><span class="kw">CREATE OR REPLACE VIEW</span> catalog.gold.sales_shared <span class="kw">AS</span>
+<span class="kw">SELECT</span>
+  order_id,
+  region,
+  <span class="kw">CASE</span>
+    <span class="kw">WHEN</span> <span class="fn">is_account_group_member</span>(<span class="str">'auditors'</span>) <span class="kw">THEN</span> customer_email
+    <span class="kw">ELSE</span> <span class="str">'REDACTED'</span>
+  <span class="kw">END AS</span> customer_email,
+  amount
+<span class="kw">FROM</span> catalog.silver.orders
+<span class="kw">WHERE</span>
+  <span class="kw">CASE</span>
+    <span class="kw">WHEN</span> <span class="fn">is_account_group_member</span>(<span class="str">'managers'</span>) <span class="kw">THEN TRUE</span>
+    <span class="kw">ELSE</span> amount &lt;= 1000000
+  <span class="kw">END</span>;</pre>
+          </div>
+          <p class="code-cap">監査グループにはメールアドレスをそのまま、それ以外には伏せ字で返す列のマスクと、高額な明細はマネージャーだけが見られる行の絞り込みを、1つのビューに同居させた例です。</p>
+        </div>
+        <p>グループ判定には、アカウントレベルのグループを見る <span class="mono">is_account_group_member()</span> を使います。ワークスペース単位のグループを見る <span class="mono">is_member()</span> は旧来の互換用のため、Unity Catalogのデータに対しては前者が推奨されます。</p>
+        <h3>行フィルタ・列マスクとの関係 — テーブルに付けるか、ビューで分けるか</h3>
+        <p>「仕組み」の章で触れた行フィルタと列マスクは、発想こそ近いものの、制御を付ける場所が違います。行フィルタと列マスクは、UDFをテーブルそのもの（または列）に直接取り付ける方式です。行フィルタは「行の値を受け取り、見せてよいかを真偽で返す」SQL UDFを <span class="mono">ALTER TABLE ... SET ROW FILTER</span> で付け、列マスクは <span class="mono">ALTER COLUMN ... SET MASK</span> で列に付けます。土台のテーブルを直接守るので、どの経路から読んでも制御が効き、新しいオブジェクトを作らずに済むのが利点です。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">SQL — 行フィルタをテーブルに付ける</div>
+            <pre class="code-body"><span class="dim">-- フィルタはSQL UDFで定義する</span>
+<span class="kw">CREATE OR REPLACE FUNCTION</span> catalog.common.region_filter(region <span class="kw">STRING</span>)
+<span class="kw">RETURNS BOOLEAN</span>
+<span class="kw">RETURN</span> <span class="fn">is_account_group_member</span>(<span class="str">'admins'</span>) <span class="kw">OR</span> region = <span class="str">'JP'</span>;
+
+<span class="kw">ALTER TABLE</span> catalog.silver.orders
+  <span class="kw">SET ROW FILTER</span> catalog.common.region_filter <span class="kw">ON</span> (region);</pre>
+          </div>
+        </div>
+        <p>一方のダイナミックビューは、出し分けのロジックをビューという別オブジェクトに置く方式です。複数のテーブルを結合して形を整えた上で出し分けたい場合や、共有用に整形した姿で渡したい場合に向きます。クエリ最適化（述語プッシュダウン）も効くため、条件によっては行フィルタより高速になることもあります。弱点もあり、ポリシーとしての定義がシステムテーブルに残らないため大規模な監査には向きにくく、絞られた行の存在を推測するような問い合わせへの耐性では、テーブル側の制御に劣ります。まとめると、個別のテーブルを直接守るなら行フィルタ・列マスク、読み手向けに整えた「公開面」として出し分けるならダイナミックビュー、という使い分けになります。なお、多数のテーブルに同じルールを一括で効かせたい場合は、タグに基づいてポリシーを適用するABAC（属性ベースアクセス制御）という上位の仕組みもあります。</p>
+        <h3>エージェントI/Oとのつながり — 読み出し設計としてのUDFとビュー</h3>
+        <p>この2つの部品は、AIエージェントにデータを読ませる設計でも効きます。エージェントには生テーブルへの権限を渡さず、ダイナミックビューへの <span class="mono">SELECT</span> だけを渡せば、「見せてよい行と列」の境界をデータ側に固定できます。出し分けはクエリの実行主体に対して評価されるため、エージェントがサービスプリンシパルで動く場合も、接続の作り方に依存せず同じ制御が効きます。また、エージェントが頻繁に行う計算や整形をUDFとして登録しておけば、エージェントは長いSQLをその場で組み立てる代わりに、名前のある関数を呼ぶだけで済み、計算の定義も1か所に寄ります。権限と出し分けと計算をデータ側に寄せるほど、エージェント側の実装は「何をしたいか」の記述に近づきます。</p>
+      </section>
+
       <!-- ===== アニメーション2：AIエージェントからのI/O ===== -->
       <div data-player="p2">
         <div class="controls" data-controls>
