@@ -836,6 +836,165 @@ tools = UCFunctionToolkit(
         <p>導入の順序としては、まず読み取り専用で始め、監査ログで「エージェントが実際に何を読んだか」を観測できるようにしてから、書き込みを段階的に開けるのが堅実です。Unity Catalogの監査ログには、誰（どのサービスプリンシパル）が、どの資産に、いつアクセスしたかが残るため、事後の検証が可能です。コスト面では、エージェントのクエリは暴走すると大きなスキャンになり得るので、SQLウェアハウスのサイズや自動停止、クエリの行数・時間の上限を設計に含めます。「賢く動くこと」と「暴走しても被害が小さいこと」は別の設計であり、後者は権限と上限で担保します。</p>
       </section>
 
+      <!-- AI系の深掘り -->
+      <section class="card doc">
+        <div class="label">設計と実装 — AI機能の深掘り</div>
+        <h2>AI系の深掘り — AI Functions・Vector Search・Genie</h2>
+        <p>エージェントI/Oの章では「接続手段の選び方」として名前だけ挙げた3つの機能を、ここで掘り下げます。共通する発想は、AIの処理をエージェント側のプログラムではなく、データの置き場の近くで実行することです。処理がデータ側に寄るほど、権限の効き方も、結果の再現性も、設計しやすくなります。</p>
+        <h3>AI Functions — SQLの中でLLMを呼ぶ</h3>
+        <p>AI Functionsは、LLMによる処理をSQLの組み込み関数として呼び出す仕組みです。2つの系統があり、分類・抽出・要約といった決まった仕事にはタスク特化の関数を、モデルとプロンプトを自分で指定したい場合には汎用の <span class="mono">ai_query</span> を使います。タスク特化の顔ぶれは、分類の <span class="mono">ai_classify</span>、項目抽出の <span class="mono">ai_extract</span>、要約の <span class="mono">ai_summarize</span>、翻訳の <span class="mono">ai_translate</span>、感情分析の <span class="mono">ai_analyze_sentiment</span>、伏せ字化の <span class="mono">ai_mask</span>、文書を構造化する <span class="mono">ai_parse_document</span>、時系列予測の <span class="mono">ai_forecast</span> などです。ベータ扱いの関数もあり顔ぶれは増え続けているため、導入時には公式ドキュメントで最新の対応状況を確認するのが前提になります。なお、ClassicのSQLウェアハウスでは使えないなど、実行環境には条件があります。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">SQL — AI Functionsで分類と抽出を一度に行う</div>
+            <pre class="code-body"><span class="kw">SELECT</span>
+  ticket_id,
+  <span class="fn">ai_classify</span>(body, <span class="kw">ARRAY</span>(<span class="str">'障害'</span>, <span class="str">'質問'</span>, <span class="str">'要望'</span>)) <span class="kw">AS</span> category,
+  <span class="fn">ai_extract</span>(body, <span class="kw">ARRAY</span>(<span class="str">'製品名'</span>, <span class="str">'発生日'</span>)) <span class="kw">AS</span> entities
+<span class="kw">FROM</span> catalog.silver.support_tickets;</pre>
+          </div>
+          <p class="code-cap">関数は行ごとに評価されるため、SELECTに書くだけでテーブル全件への一括処理（バッチ推論）になります。</p>
+        </div>
+        <p>自由な指示が必要なら <span class="mono">ai_query</span> です。基盤モデルAPIのエンドポイント名とプロンプトを渡して呼びます。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">SQL — ai_queryでモデルとプロンプトを指定する</div>
+            <pre class="code-body"><span class="kw">SELECT</span>
+  review_id,
+  <span class="fn">ai_query</span>(
+    <span class="str">'&lt;基盤モデルのエンドポイント名&gt;'</span>,
+    <span class="str">'次のレビューを50字以内で要約してください: '</span> || review_text
+  ) <span class="kw">AS</span> summary
+<span class="kw">FROM</span> catalog.silver.reviews;</pre>
+          </div>
+        </div>
+        <p>実務での主戦場は、対話ではなくバッチ処理です。AI Functionsはパイプラインやジョブ、ストリーミングの中に組み込め、並列化やリトライは基盤側が担うため、「新しく届いた行だけを分類してSilverに足す」といった処理をSQLの形のまま運用できます。設計上の意味は大きく、テキストの分類や抽出のような定型のAI処理は、わざわざエージェントを経由させず、データが流れる工程の中で済ませる選択肢が取れます。エージェントは「その場で判断が要る処理」に絞り、定型処理はデータ側に寄せる、という分担が可能になります。</p>
+        <h3>Vector Search — 意味で探すインデックス</h3>
+        <p>ベクトル検索は、文章を埋め込みベクトルに変え、「意味の近さ」で探す仕組みです。公式ドキュメントでは現在 <span class="mono">AI Search</span> という名称が前面に出ていますが、APIやSDKにはVector Searchの名前が残っています。構成要素は2つで、検索を受け付ける窓口であるエンドポイントと、その配下に置かれるインデックスです。インデックスには、ソースのDeltaテーブルと自動で同期するDelta Syncインデックスと、ベクトルをAPI経由で直接読み書きするDirect Vector Accessインデックスがあります。実務で中心になるのは前者です。</p>
+        <p>Delta Syncインデックスでは、埋め込みの用意の仕方が2通りあります。テキスト列と埋め込みモデルのエンドポイントを指定してDatabricks側に作らせる方式と、自前で計算した埋め込みの列をテーブルに持たせる方式です。同期の回し方にも、変更を継続的に反映する継続（Continuous）モードと、実行したタイミングで反映するトリガー（Triggered）モードがあります。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">Python — Delta Syncインデックスの作成と類似検索</div>
+            <pre class="code-body"><span class="kw">from</span> databricks.vector_search.client <span class="kw">import</span> VectorSearchClient
+
+client = VectorSearchClient()
+
+<span class="dim"># 埋め込みはDatabricks側で計算させる方式</span>
+index = client.<span class="fn">create_delta_sync_index</span>(
+    endpoint_name=<span class="str">"&lt;エンドポイント名&gt;"</span>,
+    index_name=<span class="str">"catalog.gold.docs_index"</span>,
+    source_table_name=<span class="str">"catalog.gold.docs"</span>,
+    primary_key=<span class="str">"doc_id"</span>,
+    embedding_source_column=<span class="str">"body"</span>,
+    embedding_model_endpoint_name=<span class="str">"&lt;埋め込みモデルのエンドポイント名&gt;"</span>,
+    pipeline_type=<span class="str">"TRIGGERED"</span>)
+
+<span class="dim"># 質問文に意味の近い断片を取る</span>
+results = index.<span class="fn">similarity_search</span>(
+    query_text=<span class="str">"返品の期限は何日ですか"</span>,
+    columns=[<span class="str">"doc_id"</span>, <span class="str">"body"</span>],
+    num_results=5)</pre>
+          </div>
+          <p class="code-cap">検索はPython SDKのほか、REST APIやSQLの <span class="mono">vector_search()</span> 関数からも実行できます。問い合わせる主体には、インデックスへの <span class="mono">SELECT</span> 権限が必要です。</p>
+        </div>
+        <h3>RAGでの使い方</h3>
+        <p>RAGの実装は、このインデックスを中心に組み立てます。流れは、文書をGoldテーブルに整える（必要なら <span class="mono">ai_parse_document</span> で文書を構造化し、検索に適した長さへ分割する）、Delta Syncインデックスを張って同期させる、エージェントは質問を受けたらインデックスを検索して根拠の断片を引き、その断片を添えてモデルに答えさせる、という形です。出典のdoc_idを一緒に返すよう設計しておくと、回答に根拠への参照を付けられます。注意点は鮮度で、インデックスはソーステーブルの複製である以上、同期には遅延があります。継続モードでも反映は即時ではなく、トリガーモードでは同期を実行するまで中身は古いままです。「いま登録した文書が、検索にいつから効くか」は、同期の回し方まで含めて設計する必要があります。</p>
+        <h3>Genie — 自然言語でデータに聞く</h3>
+        <p>Genieは、自然言語の質問をSQLに変換して答える仕組みですが、その精度はスペースの設計でほぼ決まります。スペースに登録するのは、対象のテーブルやメトリックビュー（列の説明や同義語、見せない列の指定も含む）、用語や計算ルールを文章で伝える指示文、「こう聞かれたらこう書く」というサンプルクエリ、そして検証済みのSQL関数です。サンプルクエリと関数は「信頼できる資産」として扱われ、Genieは生成の際にこれらを優先的に使います。想定質問と正解SQLのペアであるベンチマークを用意しておけば、スペースの変更で答えが崩れていないかを継続的に確かめられます。生成されたSQLは、質問した利用者のUnity Catalog権限の範囲で実行されます。権限のないテーブルは読めず、行フィルタや列マスクもそのまま効くため、Genieを入れることが統治の抜け穴にはなりません。</p>
+        <h3>Genieをエージェントから使う</h3>
+        <p>エージェントからは、会話API（Conversation API）でスペースを呼びます。会話を開始して質問を送ると処理は非同期に進み、メッセージの状態をポーリングして完了を待ちます。完了したメッセージには、文章の答えに加えて、生成されたSQLとその実行結果が添付（attachments）として返るため、エージェントは「答え」だけでなく「根拠のSQLとデータ」を受け取って次の判断に使えます。同じ会話にメッセージを足せば、前の質問の文脈を引き継いだ追加の質問もできます。マネージドMCPサーバー経由でGenieをツールとして呼ぶ形はエージェントI/Oの章で触れたとおりで、APIを直接使うかMCPで包むかは、エージェント側の実装方式に合わせた選択になります。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">Python — 会話APIでGenieスペースに質問する</div>
+            <pre class="code-body"><span class="kw">from</span> databricks.sdk <span class="kw">import</span> WorkspaceClient
+
+w = WorkspaceClient()  <span class="dim"># 認証情報は環境変数などから解決される</span>
+
+<span class="dim"># 会話を開始し、完了まで待つ（内部でポーリングする）</span>
+msg = w.genie.<span class="fn">start_conversation_and_wait</span>(
+    space_id=<span class="str">"&lt;スペースID&gt;"</span>,
+    content=<span class="str">"先月の売上を製品カテゴリ別に教えて"</span>)
+
+<span class="dim"># 添付には文章の答え・生成SQL・結果が入る</span>
+<span class="kw">for</span> att <span class="kw">in</span> msg.attachments <span class="kw">or</span> []:
+    ...
+
+<span class="dim"># 同じ会話への追加の質問</span>
+follow = w.genie.<span class="fn">create_message_and_wait</span>(
+    space_id=<span class="str">"&lt;スペースID&gt;"</span>,
+    conversation_id=msg.conversation_id,
+    content=<span class="str">"それを地域別にも分けて"</span>)</pre>
+          </div>
+        </div>
+        <h3>3つの使い分け</h3>
+        <p>整理すると、使い分けの軸は「処理の形が決まっているか」です。分類・抽出・要約のように、入力と出力の形が決まった定型処理を大量の行に適用するならAI Functionsで、データの流れの中に埋め込みます。文書やナレッジを意味で引きたいならVector Searchのインデックスを用意し、エージェントの検索道具にします。数字についてのアドホックな質問に、統治された範囲で答えさせたいならGenieで、スペースの設計に手間を先払いします。どれも「AIの処理を、権限の効くデータ側に寄せる」という同じ方向の部品であり、エージェント本体は、判断と段取りに専念させる設計が取りやすくなります。</p>
+      </section>
+
+      <!-- Lakebase -->
+      <section class="card doc">
+        <div class="label">設計と実装 — Lakebase</div>
+        <h2>Lakebase — エージェントのためのOLTP</h2>
+        <p>比較の章では、Lakebaseを「プラットフォーム内のマネージドPostgres」として位置づけだけ紹介しました。ここでは、エージェントやアプリが実際に使う場面を想定して、使いどころと設計を掘り下げます。</p>
+        <h3>なぜレイクハウスにOLTPが要るのか</h3>
+        <p>Deltaテーブルは、大量のデータをまとめて読み書きする分析の作法に最適化されており、1行だけを素早く読む・書き換える、という操作は不得意です。ところがエージェントを実務に置くと、この種の読み書きが頻繁に発生します。会話の状態や短期メモリの保存、処理の途中経過の記録、アプリのセッションや設定といった「小さくて速くて、頻繁に変わる状態」です。これらをDeltaに無理に持たせると、レイテンシも同時実行の競合も抱え込むことになります。Lakebaseは、この「状態の置き場」をレイクハウスの内側に用意するための部品です。</p>
+        <h3>Lakebaseの仕組み — マネージドPostgresと同期テーブル</h3>
+        <p>Lakebaseの実体は、Databricksが運用するマネージドなPostgreSQLです（公式ドキュメントで一般提供と案内されています）。通常のPostgresと同じ接続方式で使え、ドライバやORM、psqlといった既存の道具がそのまま使えます。内部ではストレージとコンピュートが分離されており、データベースはUnity Catalogの統治のもとに置かれます。認証はDatabricksのIDに紐づくロールで行い、アプリからはサービスプリンシパルの資格情報で接続するのが基本形です。pgvectorをはじめとするPostgresの拡張も使えるため、状態保存に加えて小規模なベクトル検索の置き場にもなります。</p>
+        <p>レイクハウス側との接続は、同期テーブル（synced tables）が担います。Unity Catalogのテーブルを指定すると、その複製がLakebase内に読み取り専用のPostgresテーブルとして作られ、マネージドなパイプラインが変更を追随して反映します。同期の回し方は、全体を写すスナップショット、実行時に差分を反映するトリガー、変更を継続的に流す継続（Continuous）の3モードから選び、トリガーと継続ではソース側で変更データフィード（CDF）を有効にしておく必要があります。方向が逆の仕組みとして、Postgres側の変更をDeltaへ取り込むLakehouse Syncも用意されています。</p>
+        <h3>エージェントからの使い方</h3>
+        <p>エージェントから見れば、Lakebaseは「ただのPostgres」です。会話状態のような表を作り、通常のドライバで読み書きします。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">Python — 会話状態をLakebaseに保存する（イメージ）</div>
+            <pre class="code-body"><span class="kw">import</span> psycopg
+
+<span class="dim"># 接続情報と資格情報は環境変数やシークレット管理から渡す</span>
+conn = psycopg.<span class="fn">connect</span>(host=<span class="str">"&lt;Lakebaseのホスト名&gt;"</span>,
+                       dbname=<span class="str">"&lt;データベース名&gt;"</span>,
+                       user=<span class="str">"&lt;ロール名&gt;"</span>,
+                       password=<span class="str">"&lt;OAuthトークン&gt;"</span>)
+
+<span class="dim"># 会話の状態は行単位で読み書きする</span>
+<span class="kw">with</span> conn.<span class="fn">cursor</span>() <span class="kw">as</span> cur:
+    cur.<span class="fn">execute</span>(
+        <span class="str">"INSERT INTO agent_state (session_id, state, updated_at)"</span>
+        <span class="str">" VALUES (%s, %s, now())"</span>
+        <span class="str">" ON CONFLICT (session_id) DO UPDATE SET state = EXCLUDED.state"</span>,
+        (session_id, state_json))
+conn.<span class="fn">commit</span>()</pre>
+          </div>
+          <p class="code-cap">接続は標準のPostgresドライバで行います。資格情報にはDatabricksのOAuthトークンを使う形が案内されており、トークンは短命なため、接続のたびに新しいものを取得する実装にします。</p>
+        </div>
+        <p>分析側とのつながりも設計のうちです。エージェントがLakebaseに書いた状態や結果は、Lakehouse SyncでDeltaへ取り込めば、そのまま集計や評価の対象になります。逆に、レイクハウス側で計算したスコアやマスタは、同期テーブルでLakebaseへ配っておけば、エージェントは低レイテンシの参照で使えます。「アプリのデータがそのまま分析対象になり、分析の成果がそのままアプリに戻る」という循環を、同じプラットフォームの中で組めるのがLakebaseの設計上の価値です。</p>
+        <h3>Deltaテーブルとの使い分け</h3>
+        <p>判断軸は、操作の粒度と鮮度の要求です。行単位の更新、低レイテンシの参照、同時実行の多い状態保存はLakebaseへ。大量データの集計、履歴の保持、時点を遡る参照（タイムトラベル）はDeltaへ、が基本の線引きになります。注意点は同期の性質で、同期テーブルはあくまで複製であり、反映には遅延があります。強い一貫性が要る読み取りを複製側で代用しないこと、そして同期テーブルは読み取り専用なので、アプリ自身の書き込みは通常のPostgresテーブルに分けることが、設計の前提になります。両者は置き換えではなく、「状態はLakebase、記録と分析はDelta、間を同期でつなぐ」という役割分担で捉えるのが正確です。</p>
+      </section>
+
+      <!-- パフォーマンス -->
+      <section class="card doc">
+        <div class="label">設計と実装 — パフォーマンス</div>
+        <h2>パフォーマンス — 速くする設計と運用</h2>
+        <p>Databricksの速さは、単一の設定ではなく、データの置き方、実行エンジン、コンピュートの大きさの組み合わせで決まります。ここでは料金の話を離れ、設計と運用として押さえるべき点を、Delta側、読み取り、ウェアハウス、ストリーミング、エージェントI/Oの順に整理します。</p>
+        <h3>Delta側の最適化 — OPTIMIZEとクラスタリングを「回す」</h3>
+        <p>Deltaテーブルの読み取り速度を落とす典型的な原因は、小さなファイルの増殖です。ストリーミングや頻繁な追記でファイルが細切れになると、開くファイルの数そのものが遅さになります。これを大きなファイルへまとめ直すのが <span class="mono">OPTIMIZE</span> です。もう1つが、データの並びです。Deltaはファイルごとに列の最小値・最大値といった統計を持ち、条件に合わないファイルを読み飛ばします（データスキッピング）。この仕掛けが効くかどうかは、似た値の行が同じファイルに寄っているかで決まります。その並びを管理するのがクラスタリングで、現在はパーティション分割やZ-Orderに代わり、リキッドクラスタリングが推奨されています。クラスタリングキーは最大4列まで指定でき、後から変更しても既存ファイルの全面書き換えにはならず、以降のOPTIMIZEで徐々に効いてきます。大事なのは、これらを一度きりの作業ではなく、ジョブに組み込んで定期的に回す運用にすることです。Unity Catalogのマネージドテーブルでは、最適化の要否を基盤側が判断して自動で実行する予測最適化（Predictive Optimization）も用意されています。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">SQL — クラスタリングの指定とOPTIMIZE</div>
+            <pre class="code-body"><span class="dim">-- よく絞り込みに使う列をクラスタリングキーにする</span>
+<span class="kw">ALTER TABLE</span> catalog.gold.orders <span class="kw">CLUSTER BY</span> (order_date, customer_id);
+
+<span class="dim">-- ファイルの統合と並びの適用を定期ジョブで回す</span>
+<span class="kw">OPTIMIZE</span> catalog.gold.orders;</pre>
+          </div>
+        </div>
+        <h3>読み取りを速くする仕掛け — 統計、Photon、キャッシュ</h3>
+        <p>読み取り側の土台は、前述のデータスキッピングです。統計は既定で先頭から一定数の列について集められるため、絞り込みによく使う列はテーブルの前方に置く、あるいはクラスタリングキーに含める、といった配慮が効きます。その上で実行を担うのがPhotonです。Photonはベクトル化されたネイティブ実行エンジンで、SQLウェアハウスでは既定で有効になっており、集計や結合といった分析クエリを高速化します。さらに、読み直しを減らす仕掛けとして、コンピュートのローカルディスクにデータのコピーを置くディスクキャッシュと、同じクエリの結果を再利用する結果キャッシュがあります。キャッシュは「2回目以降」を速くする仕掛けなので、効き方はワークロードの繰り返し具合に依存します。初回から速くしたいなら、まずファイルの置き方と並びを整えるのが順序です。</p>
+        <h3>SQLウェアハウスの設計 — サイズ、台数、自動停止</h3>
+        <p>SQLウェアハウスの設計変数は主に3つです。第1にクラスタサイズで、1台あたりの処理能力を決めます。大きなクエリを速く返したいならサイズを上げます。第2にクラスタの台数（最小・最大）で、同時に流れるクエリの数をさばくための自動スケーリングの範囲を決めます。同時実行が詰まっているなら、サイズではなく台数を増やすのが効きます。第3に自動停止で、アイドル状態が続いたら止めるまでの時間を設定し、起動しっぱなしを防ぎます。サーバーレス型は、コンピュートの調達と伸縮を基盤側が担い、起動も速いため、負荷の波が読みにくい用途に向きます。従来型（Pro/Classic）は、ネットワークや構成の要件が厳しい場合の選択肢です。エージェントのように短いクエリを多数投げる利用者と、人の分析のように重いクエリを少数投げる利用者では適切な設定が違うため、用途ごとにウェアハウスを分けるのが基本になります。</p>
+        <h3>ストリーミングと書き込み — 間隔とチェックポイント</h3>
+        <p>ストリーミング処理では、マイクロバッチの間隔（トリガー間隔）が、そのままレイテンシとコストのトレードオフになります。間隔を短くすれば鮮度は上がりますが、1回あたりの処理が小刻みになり、ファイルも細かく増えて、後のOPTIMIZEの負担も増えます。鮮度の要求が「分単位」で足りるなら、無理に秒単位へ寄せないのが設計です。可用性の面ではチェックポイントが要で、処理の進捗と状態をチェックポイントに残すことで、再起動しても続きから再開でき、二重処理を防げます。チェックポイントの置き場は、処理対象のテーブルと同様に、永続化されるストレージに固定します。</p>
+        <h3>エージェントI/Oでの効きどころ — 「1回の読み取り」を小さくする</h3>
+        <p>エージェントの体感速度は、基盤全体の速さよりも、1回の道具呼び出しでどれだけのデータを動かすかで決まります。設計の要点は3つあります。まず、エージェントには生テーブルを走査させず、ビューやUC関数で「必要な行と列に絞った結果」だけを返させること。返す行数が減れば、転送も、モデルが読む量も、推論の時間もまとめて減ります。次に、よく聞かれる質問は、その場で集計させず、Goldの集計済みテーブルやマテリアライズドビューに寄せておくことです。最後に、参照のレイテンシそのものが支配的な用途では、同期テーブルでLakebaseへ配った複製を読む選択肢も含めることです。エージェントの応答が遅いとき、疑う順序は「モデルの速さ」より先に「1回の読み取りの大きさ」です。</p>
+      </section>
+
       <!-- 良い点と弱点／注意点 -->
       <section class="card doc">
         <div class="label">強みと弱み</div>
