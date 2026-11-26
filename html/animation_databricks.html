@@ -1,0 +1,1253 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Databricksの仕組みとエージェントI/O</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
+      * { box-sizing: border-box; }
+      :root {
+        --bg: #f7f4f2;
+        --surface: #ffffff;
+        --surface-2: #f0e9e6;
+        --ink: #291713;
+        --ink-2: #5c4741;
+        --ink-3: #97827c;
+        --line: #e0d3ce;
+        --accent: #b91c1c;
+        --accent-ink: #ffffff;
+        --accent-soft: #fbeae8;
+        --packet: #2563eb;
+        --packet-soft: #e4ebfd;
+        --danger: #b3261e;
+        --danger-soft: #fbe9e7;
+        --term-bg: #26120f;
+        --term-ink: #f4e9e6;
+        --term-dim: #b08d84;
+        --radius: 10px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #17100e;
+          --surface: #221916;
+          --surface-2: #2f2320;
+          --ink: #f5ebe8;
+          --ink-2: #d3bcb5;
+          --ink-3: #a68d85;
+          --line: #45322d;
+          --accent: #f87171;
+          --accent-ink: #2b0d0d;
+          --accent-soft: #40201d;
+          --packet: #8fb8ff;
+          --packet-soft: #1d2a4d;
+          --danger: #f0867e;
+          --danger-soft: #3d1d1a;
+          --term-bg: #120a09;
+          --term-ink: #f4e9e6;
+          --term-dim: #8a6a62;
+          color-scheme: dark;
+        }
+      }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "IBM Plex Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        line-height: 1.75;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { max-width: 960px; margin: 0 auto; padding: 28px 18px 72px; }
+      h1 { font-size: clamp(26px, 5.4vw, 38px); line-height: 1.3; margin: 0 0 10px; letter-spacing: .01em; }
+      .lede { color: var(--ink-2); font-size: 16px; margin: 0 0 6px; max-width: 44em; }
+      .lede .mono { color: var(--accent); font-weight: 600; }
+      h2 { font-size: 21px; margin: 0 0 6px; line-height: 1.4; }
+      h3 { font-size: 16px; margin: 0 0 6px; }
+      .sec-head { margin: 40px 0 14px; }
+      .sec-head p { margin: 0; color: var(--ink-2); font-size: 14.5px; max-width: 44em; }
+      .sec-num { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 1px 10px; margin-bottom: 8px; letter-spacing: .08em; }
+      .label { font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; }
+
+      /* ---------- controls ---------- */
+      .controls {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 10px 12px; margin: 18px 0;
+      }
+      .controls .btn {
+        appearance: none; border: 1px solid var(--line); background: var(--surface-2);
+        color: var(--ink); border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 14.5px; font-weight: 600;
+        cursor: pointer; min-width: 44px;
+      }
+      .controls .btn:hover { border-color: var(--accent); }
+      .controls .btn:focus-visible, .speedsel:focus-visible, .dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .controls .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 92px; }
+      .controls .btn:disabled { opacity: .38; cursor: default; }
+      .controls .btn:disabled:hover { border-color: var(--line); }
+      .controls .btn.primary:disabled:hover { border-color: var(--accent); }
+      .speedwrap { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13.5px; color: var(--ink-2); }
+      .speedsel { font: inherit; font-size: 14px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+      .progress-line { display: flex; align-items: center; gap: 12px; margin: 4px 2px 0; flex-wrap: wrap; }
+      .progress-label { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+      .progress-track { flex: 1 1 140px; height: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+      .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .45s ease; }
+      .dots { display: flex; gap: 6px; flex-wrap: wrap; }
+      .dot { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+      .dot.done { border-color: var(--accent); color: var(--accent); }
+      .dot.now { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+      /* ---------- chat mock + event log ---------- */
+      .stage-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      @media (min-width: 820px) { .stage-grid { grid-template-columns: 1fr 1fr; } }
+      .browser, .term {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+      }
+      .browser-bar {
+        display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+        background: var(--surface-2); border-bottom: 1px solid var(--line);
+      }
+      .traffic { display: flex; gap: 6px; flex: none; }
+      .traffic i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+      .traffic i:nth-child(1) { background: #e0655f; } .traffic i:nth-child(2) { background: #e8b23f; } .traffic i:nth-child(3) { background: #58b368; }
+      .win-title { font-size: 13.5px; font-weight: 700; color: var(--ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .spinner {
+        width: 16px; height: 16px; border-radius: 50%; flex: none; margin-left: auto;
+        border: 2.5px solid var(--line); border-top-color: var(--accent);
+        animation: spin .8s linear infinite; display: none;
+      }
+      .spinner.on { display: block; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .chat-body {
+        padding: 14px 14px 16px; min-height: 342px; background: var(--surface);
+        display: flex; flex-direction: column; gap: 10px;
+      }
+      .msg { max-width: 90%; padding: 9px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.6; border: 1px solid var(--line); }
+      .msg .who { display: block; font-size: 11px; font-weight: 700; color: var(--ink-3); margin-bottom: 2px; }
+      .msg.user { align-self: flex-end; background: var(--accent-soft); border-bottom-right-radius: 4px; }
+      .msg.agent { align-self: flex-start; background: var(--surface-2); border-bottom-left-radius: 4px; }
+      .tool-chip {
+        align-self: flex-start; font-family: "IBM Plex Mono", monospace; font-size: 12px; line-height: 1.55;
+        border: 1.5px solid var(--packet); background: var(--packet-soft); color: var(--ink);
+        border-radius: 8px; padding: 6px 10px; word-break: break-all;
+      }
+      .tool-chip.res { border-color: var(--line); background: var(--surface); color: var(--ink-2); }
+      .think { align-self: flex-start; font-size: 12.5px; color: var(--ink-3); }
+      .sess-line {
+        align-self: stretch; text-align: center; font-size: 12.5px; font-weight: 700; color: var(--ink-2);
+        border: 1.5px dashed var(--line); border-radius: 8px; padding: 6px;
+      }
+      .done-bar {
+        align-self: stretch; text-align: center; font-size: 12.5px; font-weight: 700; color: var(--accent);
+        border: 1.5px dashed var(--accent); border-radius: 8px; padding: 6px;
+      }
+      .term-head { padding: 8px 14px; font-size: 12.5px; color: var(--term-dim); background: var(--term-bg); border-bottom: 1px solid #4a2c26; font-family: "IBM Plex Mono", monospace; }
+      .term-body {
+        background: var(--term-bg); color: var(--term-ink); margin: 0; padding: 14px 16px 18px;
+        font-family: "IBM Plex Mono", monospace; font-size: 12.4px; line-height: 1.6; min-height: 342px;
+        white-space: pre-wrap; word-break: break-all;
+      }
+      .term-body .dim { color: var(--term-dim); }
+      .term-body .hl { color: #6fd8ef; }
+      .term-body .ok { color: #7ee2b8; }
+      .term-body .warn { color: #f0867e; }
+      .fig-cap { font-size: 12.5px; color: var(--ink-3); margin: 8px 2px 0; }
+
+      /* ---------- lakehouse diagram ---------- */
+      .lh { padding: 14px; display: flex; flex-direction: column; gap: 8px; min-height: 342px; background: var(--surface); }
+      .lh-row { display: flex; gap: 8px; }
+      .lh-chip {
+        flex: 1 1 0; min-width: 0; text-align: center; font-size: 12px; font-weight: 700; line-height: 1.45;
+        border: 1.5px solid var(--line); border-radius: 8px; padding: 7px 4px; background: var(--surface-2); color: var(--ink-2);
+        transition: border-color .3s, background .3s, box-shadow .3s;
+      }
+      .lh-chip small { display: block; font-weight: 400; font-size: 10.5px; color: var(--ink-3); }
+      .lh-layer {
+        border: 1.5px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--surface);
+        transition: border-color .3s, background .3s, box-shadow .3s;
+      }
+      .lh-layer .lh-name { font-weight: 700; font-size: 13.5px; }
+      .lh-layer .lh-name .mono { font-size: 11.5px; color: var(--accent); font-weight: 600; margin-left: 6px; }
+      .lh-layer .lh-rows { font-family: "IBM Plex Mono", monospace; font-size: 11.3px; color: var(--ink-2); line-height: 1.55; white-space: pre-wrap; word-break: break-all; }
+      .lh-chip.on, .lh-layer.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); color: var(--ink); }
+      .lh-arrow { text-align: center; color: var(--ink-3); font-size: 13px; line-height: 1.1; }
+      .lh-arrow .mono { font-size: 11px; }
+      .lh-uc {
+        border: 1.5px dashed var(--line); border-radius: 8px; padding: 8px 12px; font-size: 12.5px; font-weight: 700;
+        color: var(--ink-2); text-align: center; transition: border-color .3s, background .3s;
+      }
+      .lh-uc small { display: block; font-weight: 400; font-size: 11px; color: var(--ink-3); }
+      .lh-uc.on { border-color: var(--accent); border-style: solid; background: var(--accent-soft); color: var(--ink); }
+
+      /* ---------- code panel ---------- */
+      .code-body {
+        background: var(--term-bg); color: var(--term-ink); margin: 0; padding: 16px 18px 20px;
+        font-family: "IBM Plex Mono", monospace; font-size: 13px; line-height: 1.75;
+        white-space: pre; overflow-x: auto;
+      }
+      .code-body .dim { color: var(--term-dim); }
+      .code-body .kw { color: #6fd8ef; }
+      .code-body .str { color: #a7d7a0; }
+      .code-body .fn { color: #8fb8ff; }
+      .code-body .ok { color: #7ee2b8; }
+      .code-wrap { margin: 12px 0 4px; }
+      .code-cap { font-size: 12.5px; color: var(--ink-3); margin: 6px 2px 0; }
+
+      /* ---------- flow diagram ---------- */
+      .flow-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 16px 16px; }
+      .actors { display: flex; align-items: stretch; gap: 0; }
+      .actor {
+        flex: 1 1 0; min-width: 0; text-align: center; padding: 12px 6px 10px; border: 1.5px solid var(--line);
+        border-radius: var(--radius); background: var(--surface-2); transition: border-color .3s, background .3s, box-shadow .3s;
+      }
+      .actor .a-icon { font-size: 24px; line-height: 1.2; display: block; }
+      .actor .a-name { font-weight: 700; font-size: 13.5px; display: block; margin-top: 4px; line-height: 1.45; }
+      .actor .a-sub { font-size: 11.5px; color: var(--ink-3); display: block; line-height: 1.5; }
+      .actor.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .actor .a-tag { display: none; margin-top: 6px; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; color: var(--accent); }
+      .actor.tag-on .a-tag { display: inline-block; }
+      .link-arrow { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 15px; }
+      @media (max-width: 700px) {
+        .actors { flex-direction: column; gap: 0; }
+        .link-arrow { transform: rotate(90deg); height: 22px; flex-basis: 22px; margin: 0 auto; }
+      }
+      .packet-bar {
+        margin-top: 16px; border: 1.5px solid var(--packet); background: var(--packet-soft); border-radius: var(--radius);
+        padding: 12px 16px; min-height: 76px;
+      }
+      .packet-bar .p-label { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; color: var(--packet); margin-bottom: 2px; }
+      .packet-bar .p-route { font-weight: 700; font-size: 15px; }
+      .packet-bar .p-body { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; margin-top: 2px; word-break: break-all; }
+      .step-card { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px; }
+      .step-card .s-kicker { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent); font-weight: 600; letter-spacing: .06em; }
+      .step-card h3 { font-size: 19px; margin: 4px 0 8px; }
+      .step-card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+      .step-card p .mono { color: var(--ink); font-weight: 600; font-size: .94em; }
+      .tag { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 1px 10px; margin-left: 8px; vertical-align: 2px; }
+      .tag.rec { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+      .tag.itr { background: var(--packet-soft); color: var(--packet); border: 1px solid var(--packet); }
+
+      /* ---------- supplements ---------- */
+      .cards { display: grid; grid-template-columns: 1fr; gap: 14px; }
+      @media (min-width: 720px) { .cards.two { grid-template-columns: 1fr 1fr; } .cards.three { grid-template-columns: repeat(3, 1fr); } .cards.four { grid-template-columns: 1fr 1fr; } }
+      @media (min-width: 960px) { .cards.four { grid-template-columns: repeat(4, 1fr); } }
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+      .card p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+      .card p + p { margin-top: 8px; }
+      .card .mono { color: var(--ink); font-weight: 600; }
+      .vs-route { font-family: "IBM Plex Mono", monospace; font-size: 13px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; line-height: 1.9; word-break: break-all; }
+      .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+      .chip { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 600; border: 1px solid var(--line); background: var(--surface-2); border-radius: 999px; padding: 3px 12px; }
+      .chip.def { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+      .cmp-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+      table.cmp { border-collapse: collapse; width: 100%; min-width: 680px; font-size: 14px; }
+      table.cmp th, table.cmp td { padding: 11px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; line-height: 1.6; }
+      table.cmp thead th { background: var(--surface-2); font-size: 14.5px; }
+      table.cmp tbody th { font-weight: 700; white-space: nowrap; background: var(--surface); }
+      table.cmp td { color: var(--ink-2); }
+      table.cmp td strong { color: var(--ink); }
+      table.cmp tr:last-child th, table.cmp tr:last-child td { border-bottom: none; }
+      dl.glossary { display: grid; grid-template-columns: 1fr; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 0; }
+      @media (min-width: 720px) { dl.glossary { grid-template-columns: 1fr 1fr; } }
+      .glossary .g-item { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+      .glossary dt { font-weight: 700; font-size: 15px; }
+      .glossary dt .mono { font-size: 13px; color: var(--accent); font-weight: 600; margin-left: 6px; }
+      .glossary dd { margin: 4px 0 0; font-size: 14px; color: var(--ink-2); }
+      .note-box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 6px; padding: 14px 18px; font-size: 14.5px; color: var(--ink-2); margin-top: 14px; }
+      .note-box strong { color: var(--ink); }
+      .note-box.warn { border-left-color: var(--danger); }
+
+      /* ---------- doc prose ---------- */
+      .doc { margin-top: 18px; }
+      .doc h2 { margin-bottom: 4px; }
+      .doc p { font-size: 15.5px; line-height: 1.9; margin: 0 0 14px; color: var(--ink); }
+      .doc p:last-child { margin-bottom: 0; }
+      .doc h3 { font-size: 16.5px; margin: 24px 0 8px; border-left: 4px solid var(--accent); padding-left: 10px; }
+      .doc h3:first-of-type { margin-top: 20px; }
+      .doc ul { margin: 6px 0 14px; padding-left: 20px; }
+      .doc li { margin: 5px 0; font-size: 15px; line-height: 1.8; }
+      .doc.summary p { font-size: 16px; line-height: 1.85; margin: 0 0 8px; }
+      .doc.summary p:last-child { margin-bottom: 0; }
+      footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .spinner { animation: none; }
+        .progress-fill { transition: none; }
+        .actor { transition: none; }
+        .lh-chip, .lh-layer { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Databricksの仕組みとエージェントI/O</h1>
+      <p class="lede">
+        <span class="mono">Databricks</span>は、データレイクとデータウェアハウスを1つに統合した「<strong>レイクハウス</strong>」のプラットフォームです。
+        このページでは、そもそもDatabricksが何で、業務DBやDWHと何が違うのかという序盤から、データの登録側・読み出し側の設計と実装パターン、
+        そして<strong>AIエージェントからDatabricksへ読み書きする</strong>ための接続・権限・安全設計までを、アニメーションと文章でたどります。
+      </p>
+
+      <!-- 概要：3行 -->
+      <section class="card doc summary">
+        <div class="label">概要</div>
+        <p>Databricksは、クラウドのオブジェクトストレージに置いたデータを、データウェアハウス並みの信頼性とSQLで扱えるようにした統合データ基盤です。</p>
+        <p>データレイクの「何でも置けるが信頼性が低い」と、DWHの「信頼できるが閉じている・高い」という弱点を同時に解消するために、レイクハウスという形で生まれました。</p>
+        <p>取り込みから加工、BI、機械学習、そしてAIエージェントの読み書きまでが、Unity Catalogの権限管理のもとで同じデータに対して行えます。</p>
+      </section>
+
+      <!-- 背景：読み物 -->
+      <section class="card doc">
+        <div class="label">背景</div>
+        <h2>Databricksが生まれた背景 — 置き場が分かれていた時代</h2>
+        <h3>業務DB・データレイク・DWHの併存とサイロ化</h3>
+        <p>組織のデータは、長い間3つの置き場に分かれていました。日々の業務を回す業務データベース（RDB）、とにかく安く大量に貯めるためのデータレイク、そして分析専用に整えられたデータウェアハウス（DWH）です。分析をしたいだけなのに、業務DBからレイクへ、レイクからDWHへとデータを何度もコピーするパイプラインが育ち、コピーのたびに鮮度が落ち、定義がずれ、障害点が増えていきました。同じ「売上」という数字が置き場ごとに微妙に違う、という事態も珍しくありませんでした。</p>
+        <h3>データレイクの弱点 — 安いけれど「沼」になる</h3>
+        <p>データレイクは、構造化データも画像やログのような非構造化データも、ファイルのまま安く置けるのが強みです。しかしファイルの寄せ集めには、書き込みの原子性を保証するトランザクションがありません。書き込みの途中で失敗すれば中途半端なファイルが残り、誰かが書いている最中に読めば壊れた結果が返ります。スキーマ（列の定義）も強制されないため、気づかないうちに形式の違うデータが混ざり、やがて誰も中身を信用できない「データの沼（データスワンプ）」と化すのが、レイクの典型的な末路でした。</p>
+        <h3>DWHの弱点 — 信頼できるが、閉じていて高い</h3>
+        <p>一方のDWHは、スキーマとトランザクションが厳格で、SQLによる集計は高速で信頼できます。その代わり、取り込めるのは整った構造化データが中心で、画像・音声・自由なテキストといった機械学習の材料は置きにくい。ストレージとコンピュートが一体の製品が多く、データを貯めるほど、使っていない時間も含めて費用が膨らみます。MLの学習ではDWHからデータを引き出して別の場所で処理することになり、結局またコピーが生まれます。</p>
+        <h3>レイクハウスという答え</h3>
+        <p>レイクハウスは、この2つを「ストレージはレイクのまま開いておき、その上にDWHの性質を載せる」ことで統合する考え方です。データ自体はクラウドのオブジェクトストレージにオープンな形式で置き、その上にトランザクション管理の層（DatabricksではDelta Lake）を被せて、ACID、スキーマ管理、履歴（タイムトラベル）を持たせます。コンピュートはストレージから独立していて、SQLの集計、Sparkの加工、MLの学習、エージェントの読み書きが、コピーではない同じデータに対して、それぞれ最適なエンジンで動きます。DatabricksはApache Sparkの開発元が作った会社であり、このレイクハウスを製品として推し進めてきた中心的な存在です。</p>
+        <h3>ないとどうなるか</h3>
+        <p>統合基盤がなければ、データ基盤は「コピーの連鎖」であり続けます。分析のたびにETLを組み、鮮度と正しさの検証に追われ、AIエージェントにデータを読ませようとしても「どのコピーが正なのか」「誰に見せてよいデータか」を接続のたびに個別に解くことになります。レイクハウスの価値は、速さそのものよりも先に、データの置き場と統治を1か所に寄せられる点にあります。</p>
+      </section>
+
+      <!-- 比較の章 -->
+      <section class="card doc">
+        <div class="label">比較</div>
+        <h2>業務DB・データレイク・DWHとの違い</h2>
+        <p>4つの置き場は「どれが優れているか」ではなく「何のためにあるか」が違います。観点ごとに並べると、Databricks（レイクハウス）がどの空白を埋めたのかが見えてきます。</p>
+      </section>
+      <div class="cmp-wrap" style="margin-top:14px">
+        <table class="cmp">
+          <thead>
+            <tr><th>観点</th><th>業務DB（RDB）</th><th>データレイク</th><th>DWH</th><th>Databricks（レイクハウス）</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th>主な用途</th>
+              <td>業務アプリの読み書き。注文や在庫など「今の状態」を保持する</td>
+              <td>あらゆるデータの保管庫。将来の用途に備えて貯める</td>
+              <td>経営分析・レポート。集計済みの数字を速く返す</td>
+              <td><strong>保管・加工・分析・ML・AIを1か所で</strong>。レイクとDWHの役割を兼ねる</td>
+            </tr>
+            <tr>
+              <th>データ形式</th>
+              <td>行指向のテーブル。スキーマは厳格</td>
+              <td>ファイルそのまま（CSV、JSON、画像、ログ等）。形式は自由</td>
+              <td>列指向のテーブル。構造化データ中心</td>
+              <td>オブジェクトストレージ上の<strong>オープンな列指向形式（Delta Lake＝Parquet＋取引ログ）</strong>。非構造化ファイルもボリュームで併置できる</td>
+            </tr>
+            <tr>
+              <th>トランザクション</th>
+              <td>ACIDが前提。行単位の更新・削除が日常</td>
+              <td><strong>基本的にない</strong>。同時書き込みや途中失敗で壊れやすい</td>
+              <td>ACIDあり。ただし更新より「投入と集計」が主役</td>
+              <td>Delta Lakeが<strong>ACID、MERGE（upsert）、タイムトラベル</strong>をレイク上で提供する</td>
+            </tr>
+            <tr>
+              <th>スケールのさせ方</th>
+              <td>主に垂直（マシンを強くする）。水平分散は難しい</td>
+              <td>ストレージはほぼ無限に増やせる。処理側は別途用意</td>
+              <td>製品の枠内で拡張。コンピュートとストレージが連動しがち</td>
+              <td><strong>コンピュートとストレージが分離</strong>。処理のときだけクラスタやSQLウェアハウスを必要な大きさで起動する</td>
+            </tr>
+            <tr>
+              <th>コンピュートとストレージ</th>
+              <td>一体。同じマシンに同居</td>
+              <td>分離（置くだけ）。処理エンジンは外付け</td>
+              <td>一体型が多い（分離型の製品も増えている）</td>
+              <td><strong>分離が前提</strong>。SQLウェアハウス、Sparkクラスタ、サーバーレス等を使い分ける</td>
+            </tr>
+            <tr>
+              <th>得意な処理</th>
+              <td><strong>OLTP</strong>：1件ずつの高速な読み書き</td>
+              <td>保存そのもの。処理の得意不得意はエンジン次第</td>
+              <td><strong>OLAP</strong>：大量データの集計・分析</td>
+              <td><strong>OLAP、ETL、ML学習、ストリーミング</strong>。行単位のOLTPは守備範囲外（後述のLakebaseが担う）</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note-box">
+        <strong>業務DBが不要になる、という話ではありません。</strong>
+        レイクハウスは「分析とAIのための統合基盤」で、ミリ秒単位の応答が要るアプリの読み書きは引き続き業務DBの仕事です。なおDatabricksは、プラットフォーム内にマネージドなPostgresである <span class="mono">Lakebase</span> も持ち、Unity Catalogのデータを同期して低レイテンシに読ませたり、エージェントの状態保存に使ったりする形で、OLTP側の置き場も同じ統治のもとに寄せようとしています（Lakebaseは公式ドキュメントで一般提供と案内されています）。
+      </div>
+
+      <!-- ===== アニメーション1：レイクハウスの全体像 ===== -->
+      <div data-player="p1">
+        <div class="controls" data-controls>
+          <button class="btn" data-action="reset" type="button">最初から</button>
+          <button class="btn" data-action="prev" type="button">← 前へ</button>
+          <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+          <button class="btn" data-action="next" type="button">次へ →</button>
+          <label class="speedwrap">速度
+            <select class="speedsel" data-speed aria-label="再生速度">
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+            </select>
+          </label>
+        </div>
+        <div class="progress-line">
+          <span class="progress-label" data-progress-label>ステップ 1 / 7</span>
+          <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+          <div class="dots" data-dots aria-label="ステップ一覧"></div>
+        </div>
+
+        <div class="sec-head">
+          <span class="sec-num">SECTION 1</span>
+          <h2>アニメーション — レイクハウスの全体像</h2>
+          <p>左がレイクハウスの断面図、右がそのとき起きている処理のログです。データがソースから入り、<strong>Bronze → Silver → Gold</strong>と進むにつれて「業務で使える形」に磨かれていく様子と、その全体を下から <strong>Unity Catalog</strong> が統治している構図を見てください。</p>
+        </div>
+        <div class="stage-grid">
+          <div>
+            <div class="browser" aria-label="レイクハウス断面図のモック">
+              <div class="browser-bar">
+                <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+                <div class="win-title">レイクハウス断面図 — データの流れ</div>
+                <span class="spinner" data-spinner aria-hidden="true"></span>
+              </div>
+              <div class="lh" data-stage></div>
+            </div>
+            <p class="fig-cap">層の名前（Bronze/Silver/Gold）は「メダリオンアーキテクチャ」と呼ばれる、Databricksが推奨するデータの整理の型です。</p>
+          </div>
+          <div>
+            <div class="term" aria-label="処理ログのモック">
+              <div class="term-head">処理ログ — パイプライン側で起きていること</div>
+              <pre class="term-body" data-log></pre>
+            </div>
+            <p class="fig-cap">取り込み・加工・統治のイベントが順に記録されます（値は説明用の例）。</p>
+          </div>
+        </div>
+
+        <div class="controls" data-controls>
+          <button class="btn" data-action="reset" type="button">最初から</button>
+          <button class="btn" data-action="prev" type="button">← 前へ</button>
+          <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+          <button class="btn" data-action="next" type="button">次へ →</button>
+          <label class="speedwrap">速度
+            <select class="speedsel" data-speed aria-label="再生速度">
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+            </select>
+          </label>
+        </div>
+        <div class="flow-wrap">
+          <div class="actors" role="img" aria-label="レイクハウスの登場要素：データソース、取り込み、Bronze、Silver、Gold、利用側">
+            <div class="actor" data-actor="src">
+              <span class="a-icon" aria-hidden="true">🗄️</span>
+              <span class="a-name">データソース</span>
+              <span class="a-sub">業務DB・SaaS<br>ファイル・ログ</span>
+            </div>
+            <div class="link-arrow" aria-hidden="true">→</div>
+            <div class="actor" data-actor="bronze">
+              <span class="a-icon" aria-hidden="true">🥉</span>
+              <span class="a-name">Bronze</span>
+              <span class="a-sub">生データを<br>そのまま保持</span>
+              <span class="a-tag" data-tag>取り込み中</span>
+            </div>
+            <div class="link-arrow" aria-hidden="true">→</div>
+            <div class="actor" data-actor="silver">
+              <span class="a-icon" aria-hidden="true">🥈</span>
+              <span class="a-name">Silver</span>
+              <span class="a-sub">整形・重複排除<br>品質チェック済み</span>
+              <span class="a-tag" data-tag>加工中</span>
+            </div>
+            <div class="link-arrow" aria-hidden="true">→</div>
+            <div class="actor" data-actor="gold">
+              <span class="a-icon" aria-hidden="true">🥇</span>
+              <span class="a-name">Gold</span>
+              <span class="a-sub">用途別に集計<br>そのまま使える形</span>
+              <span class="a-tag" data-tag>集計中</span>
+            </div>
+            <div class="link-arrow" aria-hidden="true">→</div>
+            <div class="actor" data-actor="use">
+              <span class="a-icon" aria-hidden="true">📊</span>
+              <span class="a-name">利用側</span>
+              <span class="a-sub">BI・ML<br>AIエージェント</span>
+              <span class="a-tag" data-tag>参照中</span>
+            </div>
+          </div>
+          <div class="packet-bar" aria-live="polite">
+            <div class="p-label">いま起きていること</div>
+            <div class="p-route" data-packet-route>データソース</div>
+            <div class="p-body mono" data-packet-body>業務DB / SaaS / ファイル にデータが日々生まれる</div>
+          </div>
+          <div class="step-card">
+            <div class="s-kicker" data-step-kicker>STEP 1 / 7</div>
+            <h3 data-step-title>データは業務の現場で生まれる</h3>
+            <p data-step-desc></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 仕組みを文章で読む -->
+      <section class="card doc">
+        <div class="label">読み物</div>
+        <h2>仕組みを文章で読む — レイクハウスを支える4つの部品</h2>
+        <p>アニメーションの流れを、部品ごとに分解して文章でも押さえておきます。</p>
+        <h3>Delta Lake — ファイルの上に「テーブルらしさ」を載せる</h3>
+        <p>Delta Lakeは、Parquetファイルの集まりの横に <span class="mono">_delta_log</span> という取引ログを置く、オープンなテーブル形式です。書き込みは「ファイルを追加し、ログにコミットを記録する」ことで初めて確定し、読み手はログが指すファイルの組だけを見ます。これにより、オブジェクトストレージの上でもACIDトランザクションが成り立ち、書き込みの途中失敗が中途半端な状態を残しません。過去のバージョンを指して読むタイムトラベル（<span class="mono">VERSION AS OF</span> / <span class="mono">TIMESTAMP AS OF</span>）や、間違えた書き込みを巻き戻す復旧も、この履歴があるからできます。書き込み時にはスキーマが検証され（スキーマ強制）、列の追加のような変更はスキーマ進化として明示的に許す設計です。DatabricksではDeltaがテーブルの既定の形式になっています。</p>
+        <h3>コンピュートとストレージの分離</h3>
+        <p>データの実体はクラウドのオブジェクトストレージ（S3、ADLS、GCS）にあり、Databricks側のコンピュートは「処理のときだけ存在する」存在です。SQLの集計にはSQLウェアハウス、重い加工にはSparkクラスタ、定型の実行にはジョブやサーバーレスコンピュート、という具合に、処理の性質ごとにエンジンと大きさを選んで起動し、終われば止めます。貯める量と処理の量が独立に伸縮するので、「データは増え続けるが、処理は夜間だけ」という運用でも、ストレージの費用とコンピュートの費用を別々に最適化できます。</p>
+        <h3>Unity Catalog — 全体を統治する名簿と門番</h3>
+        <p>Unity Catalogは、レイクハウス内のすべてのデータ資産を登録し、権限を一元管理する仕組みです。資産は <span class="mono">カタログ.スキーマ.テーブル</span> という3階層の名前で指し、テーブル以外にもビュー、ファイル置き場であるボリューム、モデル、そして後述する関数やMCPサービスまでが同じ枠組みの管理対象（セキュラブル）になります。権限はこの名簿に対して <span class="mono">GRANT</span> で与え、行フィルタや列マスクのような細かい制御もここで定義します。どのテーブルがどのテーブルから作られたかというリネージ（系譜）や、誰が何にアクセスしたかという監査ログもUnity Catalog側に集まります。「どのデータを、誰が、どこまで見てよいか」を接続ごとではなく名簿の側で決めるのが、エージェントにデータを読ませる時代に効いてくる設計です。</p>
+        <h3>ワークスペースと実行環境 — 人とプログラムの入口</h3>
+        <p>利用者や開発者はワークスペースという入口から入ります。探索や試行錯誤にはノートブック、SQLの編集とダッシュボードにはSQLエディタとSQLウェアハウス、定期実行にはジョブ（Lakeflow Jobs）、宣言的なパイプライン構築にはSpark Declarative Pipelines（旧称Delta Live Tables）といった道具が並びます。どれを使っても、読み書きの先にあるのは同じDeltaテーブルとUnity Catalogの権限です。入口が違っても統治が一貫する、というのがレイクハウスの使い方の芯になります。</p>
+      </section>
+
+      <!-- 登録する側の設計・実装 -->
+      <section class="card doc">
+        <div class="label">設計と実装 — 登録する側</div>
+        <h2>登録する側の設計・実装 — 取り込みとメダリオン</h2>
+        <h3>取り込みパターン — バッチとストリーミング</h3>
+        <p>Bronzeへの取り込みは、大きく分けて「ファイルを着地させてから取り込む」形と「流れてくるデータをそのまま受ける」形があります。ファイルの着地には、SaaSや業務DBから定期的に同期するマネージドな取り込み（Lakeflow Connect）や、単にオブジェクトストレージへファイルを置く運用が使われます。着地したファイルの取り込みでは、SQLの <span class="mono">COPY INTO</span> が素直な選択肢で、取り込み済みファイルを内部で記録するため、同じコマンドを再実行しても二重に取り込まれません。継続的にファイルが増えるなら <span class="mono">Auto Loader</span>（Sparkの <span class="mono">cloudFiles</span>）が向いていて、新着ファイルの検出とスキーマの保管場所（schemaLocation）を指定して、ストリーミングとして少しずつ流し込めます。Kafka等からイベントが直接流れてくる場合は、Structured Streamingで受けてDeltaへ書き続けます。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">Python（PySpark）— Auto LoaderでBronzeへ流し込むイメージ</div>
+            <pre class="code-body"><span class="dim"># 着地したJSONファイルを、新着分だけBronzeテーブルへ</span>
+raw = (spark.readStream
+    .format(<span class="str">"cloudFiles"</span>)
+    .option(<span class="str">"cloudFiles.format"</span>, <span class="str">"json"</span>)
+    .option(<span class="str">"cloudFiles.schemaLocation"</span>, <span class="str">"&lt;スキーマ保管場所&gt;"</span>)
+    .load(<span class="str">"&lt;着地先のパス&gt;"</span>))
+
+(raw.writeStream
+    .format(<span class="str">"delta"</span>)
+    .option(<span class="str">"checkpointLocation"</span>, <span class="str">"&lt;チェックポイント&gt;"</span>)
+    .table(<span class="str">"catalog.bronze.events"</span>))</pre>
+          </div>
+          <p class="code-cap">Auto Loaderは「どのファイルまで処理したか」をチェックポイントで覚えるため、再起動しても続きから処理できます。</p>
+        </div>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">SQL — COPY INTOによるバッチ取り込み</div>
+            <pre class="code-body"><span class="dim">-- 取り込み済みのファイルは自動でスキップされる（冪等）</span>
+<span class="kw">COPY INTO</span> catalog.bronze.events
+<span class="kw">FROM</span> <span class="str">'&lt;着地先のパス&gt;'</span>
+FILEFORMAT = JSON
+COPY_OPTIONS (<span class="str">'mergeSchema'</span> = <span class="str">'true'</span>);</pre>
+          </div>
+        </div>
+        <h3>メダリオン設計 — 層ごとに「してよいこと」を決める</h3>
+        <p>Bronzeは「生のまま」が原則です。ソースの構造を変えず、取り込み時刻やファイル名のようなメタデータを添えて、追記中心に保持します。あとから加工ルールが間違っていたと分かっても、Bronzeから作り直せることがこの層の存在意義です。Silverでは、型の整形、重複の排除、欠損の扱い、コード値の統一といった「データとしての正しさ」を入れ、エンティティ（顧客、注文、商品）ごとの信頼できる明細を作ります。Goldは利用用途の側に寄せ、ダッシュボード向けの集計、MLの特徴量、エージェントが読むためのビューなど、用途ごとに最適化した形で置きます。層を分けることで、「生データに触ってよい人」と「業務利用だけの人」で権限も自然に分けられます。</p>
+        <h3>書き込みの作法 — MERGE、冪等性、スキーマ進化</h3>
+        <p>SilverやGoldへの反映では、<span class="mono">MERGE</span> によるupsertが中心になります。キーで突き合わせ、あれば更新、なければ挿入、という処理を1つのトランザクションで確定させるため、ジョブが途中で落ちて再実行しても、同じ入力からは同じ結果になる（冪等である）ように設計できます。差分だけを渡す設計にすれば、再実行のコストも抑えられます。スキーマの変更は、列の追加のような後方互換なものはスキーマ進化で取り込みつつ、型の変更のような破壊的なものは新しいテーブルやバージョンとして扱うのが無難です。物理配置については、従来のパーティション分割に代わり、Databricksではリキッドクラスタリング（<span class="mono">CLUSTER BY</span>）が新しいテーブルの推奨とされており、よく使う絞り込み列を指定しておくと、読み取り時のファイルスキップが効くようになります。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">SQL — MERGEによるSilverへのupsert</div>
+            <pre class="code-body"><span class="kw">MERGE INTO</span> catalog.silver.customers <span class="kw">AS</span> t
+<span class="kw">USING</span> updates <span class="kw">AS</span> s
+  <span class="kw">ON</span> t.customer_id = s.customer_id
+<span class="kw">WHEN MATCHED THEN UPDATE SET</span> *
+<span class="kw">WHEN NOT MATCHED THEN INSERT</span> *;</pre>
+          </div>
+          <p class="code-cap">「updates」は検証済みの差分だけを入れたステージング（作業用テーブル）を指す想定です。検証前のデータを直接MERGEしないのが、後述するエージェントの書き込みでも同じ作法になります。</p>
+        </div>
+      </section>
+
+      <!-- 読み出す側の設計・実装 -->
+      <section class="card doc">
+        <div class="label">設計と実装 — 読み出す側</div>
+        <h2>読み出す側の設計・実装 — 「読ませる範囲」を設計する</h2>
+        <h3>基本の読み出し — SQLウェアハウスと各種コネクタ</h3>
+        <p>外のプログラムから読む場合の主役はSQLウェアハウスです。JDBC/ODBCドライバを使えばBIツールや既存アプリから通常のSQLで引けますし、Pythonなら公式のDatabricks SQLコネクタで、接続してカーソルで実行する、DB-API風の書き方ができます。HTTPで叩きたい場合は、後述するSQL Statement Execution APIがRESTの入口になります。いずれの経路でも、実行はUnity Catalogの権限のもとで行われ、「接続できたこと」と「読めること」は別々に管理されます。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">Python — Databricks SQLコネクタで読むイメージ</div>
+            <pre class="code-body"><span class="kw">from</span> databricks <span class="kw">import</span> sql
+
+<span class="kw">with</span> sql.<span class="fn">connect</span>(
+    server_hostname=<span class="str">"&lt;ワークスペースのホスト名&gt;"</span>,
+    http_path=<span class="str">"&lt;SQLウェアハウスのHTTPパス&gt;"</span>,
+    access_token=<span class="str">"&lt;トークン&gt;"</span>,
+) <span class="kw">as</span> conn:
+    <span class="kw">with</span> conn.<span class="fn">cursor</span>() <span class="kw">as</span> cur:
+        cur.<span class="fn">execute</span>(
+            <span class="str">"SELECT product, amount FROM catalog.gold.daily_sales"</span>
+            <span class="str">" WHERE day = '2026-11-01' ORDER BY amount DESC LIMIT 5"</span>)
+        rows = cur.<span class="fn">fetchall</span>()</pre>
+          </div>
+          <p class="code-cap">トークンはコードに直書きせず、環境変数やシークレット管理から渡すのが前提です。</p>
+        </div>
+        <h3>ビューと権限で「読ませる範囲」を切る</h3>
+        <p>読み手に生のテーブルをそのまま見せるのではなく、用途に合わせたビューを公開面にするのが設計の基本です。ビュー側で、必要な列だけに絞る、個人情報を含む列を落とす、期間や区分で範囲を絞る、といった加工をしておけば、権限はビューに対する <span class="mono">SELECT</span> だけを与えればよくなります。行フィルタや列マスクをUnity Catalog側で定義すれば、同じテーブルでも見る人によって行や列の見え方が変わる、という制御も可能です。「何を読ませるか」は接続の作り方ではなく、名簿とビューの設計で決める、というのがレイクハウスの読み出しの考え方です。</p>
+        <h3>組織の外へ渡す — Delta Sharing</h3>
+        <p>データを他の組織や他のプラットフォームへ渡す場合は、ファイルを送るのではなく、Delta Sharingというオープンプロトコルで「共有」を作る方法があります。共有するテーブルやビューを指定し、受け手（レシピエント）にアクセス権を与えると、受け手は自分の環境から、権限の範囲内で最新のデータを直接読めます。コピーを渡さないので、鮮度の問題や「渡した後の管理不能」が起きにくく、アクセスの記録も共有元の側に残ります。</p>
+      </section>
+
+      <!-- ===== アニメーション2：AIエージェントからのI/O ===== -->
+      <div data-player="p2">
+        <div class="controls" data-controls>
+          <button class="btn" data-action="reset" type="button">最初から</button>
+          <button class="btn" data-action="prev" type="button">← 前へ</button>
+          <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+          <button class="btn" data-action="next" type="button">次へ →</button>
+          <label class="speedwrap">速度
+            <select class="speedsel" data-speed aria-label="再生速度">
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+            </select>
+          </label>
+        </div>
+        <div class="progress-line">
+          <span class="progress-label" data-progress-label>ステップ 1 / 8</span>
+          <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+          <div class="dots" data-dots aria-label="ステップ一覧"></div>
+        </div>
+
+        <div class="sec-head">
+          <span class="sec-num">SECTION 2</span>
+          <h2>アニメーション — AIエージェントからのI/O</h2>
+          <p>左が利用者とエージェントの会話、右がDatabricks側で起きているイベントのログです。ポイントは、エージェントが直接テーブルを触るのではなく、<strong>接続手段（MCPサーバーやAPI）を経由し、Unity Catalogの権限チェックを通ってから</strong>Deltaテーブルに届くこと、そして書き込みが<strong>ステージング → 検証 → MERGE</strong>の順で確定することです。</p>
+        </div>
+        <div class="stage-grid">
+          <div>
+            <div class="browser" aria-label="エージェントとの会話画面のモック">
+              <div class="browser-bar">
+                <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+                <div class="win-title">業務アプリ — エージェントとの会話</div>
+                <span class="spinner" data-spinner aria-hidden="true"></span>
+              </div>
+              <div class="chat-body" data-chat></div>
+            </div>
+            <p class="fig-cap">利用者から見えるのは会話だけです。接続、権限チェック、読み書きは裏側で起きています。</p>
+          </div>
+          <div>
+            <div class="term" aria-label="イベントログのモック">
+              <div class="term-head">イベントログ — Databricks側で起きていること</div>
+              <pre class="term-body" data-log></pre>
+            </div>
+            <p class="fig-cap">認証、権限チェック、クエリ、書き込み、監査ログへの記録が順に残ります（値は説明用の例）。</p>
+          </div>
+        </div>
+
+        <div class="controls" data-controls>
+          <button class="btn" data-action="reset" type="button">最初から</button>
+          <button class="btn" data-action="prev" type="button">← 前へ</button>
+          <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+          <button class="btn" data-action="next" type="button">次へ →</button>
+          <label class="speedwrap">速度
+            <select class="speedsel" data-speed aria-label="再生速度">
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+            </select>
+          </label>
+        </div>
+        <div class="flow-wrap">
+          <div class="actors" role="img" aria-label="エージェントI/Oの登場要素：AIエージェント、接続手段、Unity Catalog、Deltaテーブル">
+            <div class="actor" data-actor="agent">
+              <span class="a-icon" aria-hidden="true">🤖</span>
+              <span class="a-name">AIエージェント</span>
+              <span class="a-sub">計画を立て<br>ツールを選ぶ</span>
+              <span class="a-tag" data-tag>思考中</span>
+            </div>
+            <div class="link-arrow" aria-hidden="true">→</div>
+            <div class="actor" data-actor="conn">
+              <span class="a-icon" aria-hidden="true">🔌</span>
+              <span class="a-name">接続手段</span>
+              <span class="a-sub">MCPサーバー／<br>Statement Execution API</span>
+              <span class="a-tag" data-tag>接続中</span>
+            </div>
+            <div class="link-arrow" aria-hidden="true">→</div>
+            <div class="actor" data-actor="uc">
+              <span class="a-icon" aria-hidden="true">🛡️</span>
+              <span class="a-name">Unity Catalog</span>
+              <span class="a-sub">認証された主体の<br>権限をチェック</span>
+              <span class="a-tag" data-tag>チェック中</span>
+            </div>
+            <div class="link-arrow" aria-hidden="true">→</div>
+            <div class="actor" data-actor="delta">
+              <span class="a-icon" aria-hidden="true">🗂️</span>
+              <span class="a-name">Deltaテーブル</span>
+              <span class="a-sub">Goldの参照と<br>ステージングへの書き込み</span>
+              <span class="a-tag" data-tag>I/O実行中</span>
+            </div>
+          </div>
+          <div class="packet-bar" aria-live="polite">
+            <div class="p-label">いま起きていること</div>
+            <div class="p-route" data-packet-route>利用者 → AIエージェント</div>
+            <div class="p-body mono" data-packet-body>「先月の売上トップ5と在庫状況を教えて」</div>
+          </div>
+          <div class="step-card">
+            <div class="s-kicker" data-step-kicker>STEP 1 / 8</div>
+            <h3 data-step-title>利用者が自然言語で依頼する</h3>
+            <p data-step-desc></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- エージェントI/Oの設計・実装パターン -->
+      <section class="card doc">
+        <div class="label">設計と実装 — エージェントI/O</div>
+        <h2>エージェントI/Oの設計・実装パターン</h2>
+        <h3>接続手段の選び方 — 「何をさせたいか」で決める</h3>
+        <p>エージェントからDatabricksへ届く経路は複数あり、用途で使い分けます。自然言語の質問に答えさせたいなら <span class="mono">Genie</span> が向いています。Genieは、対象のテーブルや指標の定義、例示を与えた空間（スペース）に対して自然言語で問い合わせると、SQLを生成して実行し、根拠とともに答えを返す仕組みで、エージェントからはGenie向けのマネージドMCPサーバーや会話API経由で呼びます。決まった形の処理をツールとして切り出したいなら、SQLやPythonで書いた <span class="mono">Unity Catalog関数</span> をツール化する方法があり、関数はそのままMCPサーバーとして公開もでき、PythonからはUCFunctionToolkitでエージェントのツールに変換できます。文書の検索（RAG）には、Deltaテーブルから埋め込みインデックスを作るベクトル検索（AI Search）が使え、インデックスはテーブルの変更に追随して同期されます。自由なSQLを実行させたい場合は、Databricks SQL向けのマネージドMCPサーバーか、RESTのSQL Statement Execution APIを直接叩く形になります。公式ドキュメントでは、これらのワークスペース向けMCPエンドポイントはパブリックプレビューと案内されており（Genie等の提供形態は変わりやすいため、導入時に最新の公式ドキュメントで確認するのが確実です）。</p>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">設定 — マネージドMCPサーバーへの接続イメージ（MCPクライアント側）</div>
+            <pre class="code-body">{
+  <span class="str">"mcpServers"</span>: {
+    <span class="str">"databricks-sql"</span>: {
+      <span class="str">"url"</span>: <span class="str">"https://&lt;workspace-hostname&gt;/api/2.0/mcp/sql"</span>,
+      <span class="str">"headers"</span>: { <span class="str">"Authorization"</span>: <span class="str">"Bearer &lt;token&gt;"</span> }
+    },
+    <span class="str">"uc-functions"</span>: {
+      <span class="str">"url"</span>: <span class="str">"https://&lt;workspace-hostname&gt;/api/2.0/mcp/functions/&lt;catalog&gt;/&lt;schema&gt;"</span>,
+      <span class="str">"headers"</span>: { <span class="str">"Authorization"</span>: <span class="str">"Bearer &lt;token&gt;"</span> }
+    }
+  }
+}</pre>
+          </div>
+          <p class="code-cap">エンドポイントの形は公式ドキュメントに基づく例です。関数向けはカタログとスキーマを指定し、その配下の関数がツールとして見えるようになります。</p>
+        </div>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">Python — SQL Statement Execution APIをSDKから叩くイメージ</div>
+            <pre class="code-body"><span class="kw">from</span> databricks.sdk <span class="kw">import</span> WorkspaceClient
+
+w = WorkspaceClient()  <span class="dim"># 認証情報は環境変数などから解決される</span>
+resp = w.statement_execution.<span class="fn">execute_statement</span>(
+    warehouse_id=<span class="str">"&lt;SQLウェアハウスのID&gt;"</span>,
+    catalog=<span class="str">"catalog"</span>, schema=<span class="str">"gold"</span>,
+    statement=<span class="str">"SELECT product, amount FROM daily_sales"</span>
+              <span class="str">" ORDER BY amount DESC LIMIT 5"</span>,
+    wait_timeout=<span class="str">"30s"</span>)  <span class="dim"># 同期で待つ上限。超えたらIDでポーリング</span>
+rows = resp.result.data_array</pre>
+          </div>
+          <p class="code-cap">Statement Execution APIは「SQLを投げて結果をJSONで受け取る」RESTの入口です。長いクエリは非同期にして、ステートメントIDで結果を取りに行く形にできます。</p>
+        </div>
+        <div class="code-wrap">
+          <div class="term">
+            <div class="term-head">Python — UC関数をエージェントのツールにするイメージ</div>
+            <pre class="code-body"><span class="kw">from</span> databricks_langchain <span class="kw">import</span> UCFunctionToolkit
+
+<span class="dim"># 関数側で入力チェックと権限が効くので、エージェントには「安全な道具」だけを渡せる</span>
+tools = UCFunctionToolkit(
+    function_names=[<span class="str">"catalog.tools.lookup_inventory"</span>]).tools</pre>
+          </div>
+        </div>
+        <h3>認証 — エージェントの「身分証」をどう持たせるか</h3>
+        <p>エージェントの接続では、人のアカウントを借りるのではなく、サービスプリンシパルという機械用のアカウントを用意するのが基本です。認証はOAuthのマシン間（M2M）フローを用い、クライアントIDとシークレットから短命なアクセストークンを取得して使います。個人アクセストークン（PAT）は手軽な反面、個人に紐づき、失効や棚卸しの管理が曖昧になりやすいため、本番のエージェントではOAuthへの移行が推奨される、というのが公式の案内です。シークレットはコードやプロンプトに含めず、シークレット管理の仕組みから実行時に渡します。</p>
+        <h3>権限設計 — 最小権限と「公開面」の分離</h3>
+        <p>権限はサービスプリンシパルに対して、必要最小限だけを与えます。読み取りは、生テーブルではなく用途別のビューやUC関数への権限に絞るのが要点で、これにより「エージェントが見てよい範囲」は、エージェント側のプロンプトではなくUnity Catalog側の定義で決まります。プロンプトインジェクションでエージェントが想定外の指示に従ってしまっても、権限のないデータには原理的に届きません。書き込みはさらに一段厳しくし、専用のステージングテーブルへの書き込みだけを許可して、本テーブルへの反映は検証を挟んだ別工程（MERGE）にするのが安全な型です。</p>
+        <h3>安全性 — 読み取り専用から始める</h3>
+        <p>導入の順序としては、まず読み取り専用で始め、監査ログで「エージェントが実際に何を読んだか」を観測できるようにしてから、書き込みを段階的に開けるのが堅実です。Unity Catalogの監査ログには、誰（どのサービスプリンシパル）が、どの資産に、いつアクセスしたかが残るため、事後の検証が可能です。コスト面では、エージェントのクエリは暴走すると大きなスキャンになり得るので、SQLウェアハウスのサイズや自動停止、クエリの行数・時間の上限を設計に含めます。「賢く動くこと」と「暴走しても被害が小さいこと」は別の設計であり、後者は権限と上限で担保します。</p>
+      </section>
+
+      <!-- 良い点と弱点／注意点 -->
+      <section class="card doc">
+        <div class="label">強みと弱み</div>
+        <h2>Databricksの良い点と弱点</h2>
+        <h3>良い点：置き場と統治が1か所に寄る</h3>
+        <p>最大の強みは、データのコピーを減らし、権限・リネージ・監査をUnity Catalogに一元化できることです。BIでもMLでもエージェントでも、参照する先が同じで、見てよい範囲の定義も同じ。この一貫性が、データ基盤の運用コストと、AI活用の際の「出してよいデータか」という判断コストを下げます。Delta Lakeがオープンな形式であることも大きく、データ自体は特定ベンダーの専有形式に閉じ込められません。</p>
+        <h3>弱点：コスト管理が設計問題になる</h3>
+        <p>コンピュートは使った分だけ課金される従量制が基本で、起動しっぱなしのクラスタ、大きすぎるSQLウェアハウス、無計画な全件スキャンは、そのまま請求に跳ねます。安く済ませるには、自動停止の設定、ジョブ用の使い捨てコンピュート、サーバーレスの活用といった「止める設計」が要ります。統合基盤の便利さと、コストの見通しの難しさは表裏一体です。</p>
+        <h3>弱点：学習コストと概念の多さ</h3>
+        <p>Spark、Delta Lake、Unity Catalog、各種の実行環境と、押さえるべき概念は少なくありません。特に、コンピュートの種類の使い分けや、Deltaの物理最適化（ファイルサイズ、クラスタリング、VACUUM等の保守）は、効果が大きい分だけ運用知識を要求します。小さく始めて、必要な部分から型を固める進め方が現実的です。</p>
+        <h3>注意点：ベンダー依存と守備範囲</h3>
+        <p>Delta Lake自体はオープンでも、Unity Catalogによる統治や各種マネージド機能はDatabricksのプラットフォームに依存します。また、レイクハウスは分析とAIのための基盤であり、行単位の高速なOLTPは守備範囲の外です（その領域はLakebaseのような別製品が担います）。「何でもDatabricksで」ではなく、業務DBや他の基盤との役割分担を前提に置くことが、導入の成否を分けます。</p>
+      </section>
+
+      <!-- まとめ -->
+      <section class="card doc">
+        <div class="label">まとめ</div>
+        <h2>まとめ</h2>
+        <p>Databricksは、データレイクの開放性とDWHの信頼性を、Delta LakeとUnity Catalogで束ねたレイクハウスのプラットフォームです。設計の芯は3つあります。データはBronze・Silver・Goldと段階を踏んで磨くこと。読み書きの範囲は接続方法ではなく名簿とビューと権限で決めること。そしてエージェントのような新しい読み手・書き手に対しても、サービスプリンシパルと最小権限という、従来と同じ原則で向き合うことです。エージェントI/Oは特別な魔法ではなく、「統治されたデータ基盤に、機械のアカウントで、道具経由で触る」という、基盤側の設計の延長にあります。</p>
+      </section>
+
+      <!-- 用語解説 -->
+      <div class="sec-head">
+        <span class="sec-num">GLOSSARY</span>
+        <h2>用語解説</h2>
+      </div>
+      <dl class="glossary">
+        <div class="g-item">
+          <dt>レイクハウス<span class="mono">lakehouse</span></dt>
+          <dd>データレイクとデータウェアハウスの長所を組み合わせた基盤の考え方。オープンな形式でオブジェクトストレージに置いたデータに、トランザクションやスキーマ管理といったDWHの性質を載せます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>Delta Lake</dt>
+          <dd>Parquetファイルと取引ログ（_delta_log）で構成されるオープンなテーブル形式。ACIDトランザクション、タイムトラベル、スキーマ強制と進化、MERGEを提供します。Databricksではテーブルの既定形式です。</dd>
+        </div>
+        <div class="g-item">
+          <dt>Unity Catalog</dt>
+          <dd>データ資産の名簿と権限管理の仕組み。カタログ.スキーマ.テーブルという3階層の名前で資産を指し、GRANTによる権限、行フィルタ・列マスク、リネージ、監査ログを担います。</dd>
+        </div>
+        <div class="g-item">
+          <dt>メダリオンアーキテクチャ<span class="mono">medallion</span></dt>
+          <dd>データをBronze（生）、Silver（整形・検証済み）、Gold（用途別に集計）の3層で整理する設計パターン。層を進むごとにデータの品質と業務への近さが上がります。</dd>
+        </div>
+        <div class="g-item">
+          <dt>Auto Loader<span class="mono">cloudFiles</span></dt>
+          <dd>着地したファイルを増分で取り込む仕組み。新着ファイルの検出とスキーマの管理を担い、Structured StreamingとしてBronzeへ流し込む使い方をします。</dd>
+        </div>
+        <div class="g-item">
+          <dt>SQLウェアハウス<span class="mono">SQL warehouse</span></dt>
+          <dd>SQLの実行に特化したコンピュート。BIツールや外部プログラムからのクエリを受け、サーバーレス型も選べます。JDBC/ODBCや各種APIの接続先になります。</dd>
+        </div>
+        <div class="g-item">
+          <dt>Genie</dt>
+          <dd>自然言語でデータに問い合わせる機能。対象テーブルや指標の定義を与えた空間に対して質問すると、SQLを生成・実行して答えを返します。エージェント向けのMCPサーバーも提供されています。</dd>
+        </div>
+        <div class="g-item">
+          <dt>サービスプリンシパル<span class="mono">service principal</span></dt>
+          <dd>プログラムやエージェントが使う機械用のアカウント。OAuthのマシン間認証でトークンを取得し、この主体に対してUnity Catalogの権限を与えます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>Delta Sharing</dt>
+          <dd>データをコピーせずに、組織やプラットフォームを越えて共有するためのオープンプロトコル。共有元が指定した範囲を、受け手が自分の環境から直接読みます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>Lakebase</dt>
+          <dd>Databricksプラットフォーム内のマネージドなPostgres。Unity Catalogのデータを同期して低レイテンシに読ませたり、エージェントの状態保存に使ったりと、OLTP寄りの置き場を担います。</dd>
+        </div>
+      </dl>
+
+      <footer>
+        このページのコード・画面・ログは説明用の例です。Databricksに関する記述は、Databricks公式ドキュメント（レイクハウスとメダリオンアーキテクチャ、Delta Lake、Unity Catalog、Auto Loader、マネージドMCPサーバー、SQL Statement Execution API、Lakebase等）といった一次情報に基づいています。MCPエンドポイントなど一部の機能は公式ドキュメントでパブリックプレビュー等と案内されており、提供形態や名称は変わることがあるため、最新の仕様は公式ドキュメントで確認してください。料金や数値の上限は変動するため、このページでは扱っていません。
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+
+        /* ================= 共通プレイヤー ================= */
+        function makePlayer(root, cfg) {
+          var idx = 0;
+          var playing = false;
+          var speed = 1;
+          var timer = null;
+          var BASE_MS = 3600;
+
+          var els = {
+            label: root.querySelector("[data-progress-label]"),
+            fill: root.querySelector("[data-progress-fill]"),
+            dotsWrap: root.querySelector("[data-dots]"),
+            route: root.querySelector("[data-packet-route]"),
+            packet: root.querySelector("[data-packet-body]"),
+            kicker: root.querySelector("[data-step-kicker]"),
+            stepTitle: root.querySelector("[data-step-title]"),
+            stepDesc: root.querySelector("[data-step-desc]"),
+            stage: root.querySelector("[data-stage]"),
+            chat: root.querySelector("[data-chat]"),
+            log: root.querySelector("[data-log]"),
+            spinner: root.querySelector("[data-spinner]")
+          };
+
+          var actorEls = {};
+          root.querySelectorAll("[data-actor]").forEach(function (el) {
+            actorEls[el.getAttribute("data-actor")] = el;
+          });
+
+          var dots = [];
+          cfg.steps.forEach(function (_, i) {
+            (function (n) {
+              var b = document.createElement("button");
+              b.type = "button";
+              b.className = "dot";
+              b.textContent = String(n + 1);
+              b.setAttribute("aria-label", "ステップ" + (n + 1) + "へ移動");
+              b.addEventListener("click", function () { pause(); goTo(n); });
+              els.dotsWrap.appendChild(b);
+              dots.push(b);
+            })(i);
+          });
+
+          function render() {
+            var s = cfg.steps[idx];
+            els.label.textContent = "ステップ " + (idx + 1) + " / " + cfg.steps.length;
+            els.fill.style.width = ((idx + 1) / cfg.steps.length * 100) + "%";
+            dots.forEach(function (d, i) {
+              d.classList.toggle("now", i === idx);
+              d.classList.toggle("done", i < idx);
+            });
+            if (cfg.renderStage) cfg.renderStage(idx, els);
+            if (els.log && cfg.logHTML) els.log.innerHTML = cfg.logHTML(idx);
+            els.route.textContent = s.route;
+            els.packet.textContent = s.packet;
+            els.kicker.textContent = "STEP " + (idx + 1) + " / " + cfg.steps.length;
+            els.stepTitle.innerHTML = s.title + (s.tag || "");
+            els.stepDesc.innerHTML = s.desc;
+            Object.keys(actorEls).forEach(function (k) {
+              actorEls[k].classList.toggle("active", s.actors.indexOf(k) !== -1);
+              actorEls[k].classList.toggle("tag-on", (s.tags || []).indexOf(k) !== -1);
+            });
+            root.querySelectorAll("[data-action='prev']").forEach(function (b) { b.disabled = idx === 0; });
+            root.querySelectorAll("[data-action='next']").forEach(function (b) { b.disabled = idx === cfg.steps.length - 1; });
+            root.querySelectorAll("[data-action='play']").forEach(function (b) {
+              b.textContent = playing ? "⏸ 一時停止" : (idx === cfg.steps.length - 1 ? "↺ もう一度" : "▶ 再生");
+            });
+          }
+
+          function goTo(n) {
+            idx = Math.max(0, Math.min(cfg.steps.length - 1, n));
+            render();
+          }
+          function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+          function startTimer() {
+            stopTimer();
+            timer = setInterval(function () {
+              if (idx >= cfg.steps.length - 1) { pause(); return; }
+              goTo(idx + 1);
+              if (idx >= cfg.steps.length - 1) { pause(); }
+            }, BASE_MS / speed);
+          }
+          function play() {
+            if (idx >= cfg.steps.length - 1) { goTo(0); }
+            playing = true;
+            render();
+            startTimer();
+          }
+          function pause() {
+            playing = false;
+            stopTimer();
+            render();
+          }
+
+          root.querySelectorAll("[data-controls]").forEach(function (bar) {
+            bar.addEventListener("click", function (e) {
+              var btn = e.target.closest("[data-action]");
+              if (!btn || btn.disabled) return;
+              var a = btn.getAttribute("data-action");
+              if (a === "prev") { pause(); goTo(idx - 1); }
+              else if (a === "next") { pause(); goTo(idx + 1); }
+              else if (a === "reset") { pause(); goTo(0); }
+              else if (a === "play") { playing ? pause() : play(); }
+            });
+          });
+          root.querySelectorAll("[data-speed]").forEach(function (sel) {
+            sel.addEventListener("change", function () {
+              speed = parseFloat(sel.value);
+              root.querySelectorAll("[data-speed]").forEach(function (o) { o.value = sel.value; });
+              if (playing) startTimer();
+            });
+          });
+
+          render();
+        }
+
+        /* ================= アニメーション1：レイクハウスの全体像 ================= */
+        function lhChip(label, sub, on) {
+          return "<div class='lh-chip" + (on ? " on" : "") + "'>" + label + (sub ? "<small>" + sub + "</small>" : "") + "</div>";
+        }
+        function lhLayer(name, mono, rows, on) {
+          return "<div class='lh-layer" + (on ? " on" : "") + "'><div class='lh-name'>" + name +
+            "<span class='mono'>" + mono + "</span></div><div class='lh-rows'>" + rows + "</div></div>";
+        }
+        function lhHTML(st) {
+          return "<div class='lh-row'>" +
+              lhChip("業務DB", "注文・在庫", st.src) +
+              lhChip("SaaS / 外部API", "販売・顧客", st.src) +
+              lhChip("ファイル / ログ", "JSON・CSV・IoT", st.src) +
+            "</div>" +
+            "<div class='lh-arrow'>↓ <span class='mono'>取り込み： Auto Loader / COPY INTO / Streaming</span></div>" +
+            lhLayer("Bronze", "catalog.bronze", st.bronzeRows, st.bronze) +
+            "<div class='lh-arrow'>↓</div>" +
+            lhLayer("Silver", "catalog.silver", st.silverRows, st.silver) +
+            "<div class='lh-arrow'>↓</div>" +
+            lhLayer("Gold", "catalog.gold", st.goldRows, st.gold) +
+            "<div class='lh-arrow'>↓</div>" +
+            "<div class='lh-row'>" +
+              lhChip("BIダッシュボード", "", st.use) +
+              lhChip("ML / 特徴量", "", st.use) +
+              lhChip("AIエージェント", "", st.use) +
+            "</div>" +
+            "<div class='lh-uc" + (st.uc ? " on" : "") + "'>🛡️ Unity Catalog — 権限・リネージ・監査が全体を統治<small>カタログ.スキーマ.テーブル の3階層で資産を管理</small></div>";
+        }
+
+        var EMPTY = "（まだ空）";
+        var VIEW1 = [
+          lhHTML({ src: true,  bronze: false, silver: false, gold: false, use: false, uc: false,
+                   bronzeRows: EMPTY, silverRows: EMPTY, goldRows: EMPTY }),
+          lhHTML({ src: true,  bronze: false, silver: false, gold: false, use: false, uc: false,
+                   bronzeRows: "ファイルが着地し始めている…", silverRows: EMPTY, goldRows: EMPTY }),
+          lhHTML({ src: true,  bronze: true,  silver: false, gold: false, use: false, uc: false,
+                   bronzeRows: "生データそのまま＋取り込み時刻などのメタデータ\n注文JSON / 在庫CSV / アプリのログ …（追記中心）", silverRows: EMPTY, goldRows: EMPTY }),
+          lhHTML({ src: true,  bronze: true,  silver: true,  gold: false, use: false, uc: false,
+                   bronzeRows: "生データそのまま＋取り込み時刻などのメタデータ\n注文JSON / 在庫CSV / アプリのログ …（追記中心）",
+                   silverRows: "型を整形・重複を排除・コード値を統一\ncustomers / orders（検証済みの明細）", goldRows: EMPTY }),
+          lhHTML({ src: true,  bronze: true,  silver: true,  gold: true,  use: false, uc: false,
+                   bronzeRows: "生データそのまま＋取り込み時刻などのメタデータ\n注文JSON / 在庫CSV / アプリのログ …（追記中心）",
+                   silverRows: "型を整形・重複を排除・コード値を統一\ncustomers / orders（検証済みの明細）",
+                   goldRows: "daily_sales（日次売上の集計）\ninventory_view（在庫のビュー）など用途別" }),
+          lhHTML({ src: true,  bronze: true,  silver: true,  gold: true,  use: true,  uc: false,
+                   bronzeRows: "生データそのまま＋取り込み時刻などのメタデータ\n注文JSON / 在庫CSV / アプリのログ …（追記中心）",
+                   silverRows: "型を整形・重複を排除・コード値を統一\ncustomers / orders（検証済みの明細）",
+                   goldRows: "daily_sales（日次売上の集計）\ninventory_view（在庫のビュー）など用途別" }),
+          lhHTML({ src: true,  bronze: true,  silver: true,  gold: true,  use: true,  uc: true,
+                   bronzeRows: "生データそのまま＋取り込み時刻などのメタデータ\n注文JSON / 在庫CSV / アプリのログ …（追記中心）",
+                   silverRows: "型を整形・重複を排除・コード値を統一\ncustomers / orders（検証済みの明細）",
+                   goldRows: "daily_sales（日次売上の集計）\ninventory_view（在庫のビュー）など用途別" })
+        ];
+        var SPIN1 = [false, true, true, true, true, false, false];
+
+        var LOG1 = [
+          ["<span class='dim'># データソース側</span>",
+           "業務DB: 注文・在庫が日々更新される",
+           "SaaS: 販売・顧客データが蓄積される",
+           "ファイル/ログ: JSON・CSV・イベントが流れ続ける"],
+          ["<span class='dim'># 取り込みジョブ</span>",
+           "新着ファイルを検出（Auto Loader）",
+           "→ Bronzeへ、そのままの形で流し込み開始"],
+          ["<span class='ok'>✓ Bronzeへ着地</span> catalog.bronze.events",
+           "Delta形式でコミット（途中で落ちても壊れない）",
+           "取り込み時刻・ファイル名をメタデータとして付与"],
+          ["<span class='dim'># 加工ジョブ（Bronze → Silver）</span>",
+           "型変換・重複排除・欠損の扱いを適用",
+           "品質チェックを通過した行だけを反映",
+           "<span class='ok'>✓ Silverが更新</span> catalog.silver.orders ほか"],
+          ["<span class='dim'># 集計ジョブ（Silver → Gold）</span>",
+           "日次売上の集計、在庫ビューの作成",
+           "<span class='ok'>✓ Goldが更新</span> catalog.gold.daily_sales ほか"],
+          ["<span class='dim'># 利用側からの参照</span>",
+           "BI: ダッシュボードがGoldを集計表示",
+           "ML: Silver/Goldから特徴量を生成",
+           "AIエージェント: 権限の範囲でGoldとビューを参照"],
+          ["<span class='dim'># Unity Catalog</span>",
+           "すべての層が catalog.schema.table で名簿管理",
+           "GRANTで権限を付与、行フィルタ・列マスクを適用",
+           "リネージ: gold.daily_sales ← silver.orders ← bronze.events",
+           "<span class='ok'>✓ アクセスは監査ログに記録される</span>"]
+        ];
+
+        var STEPS1 = [
+          {
+            title: "データは業務の現場で生まれる",
+            tag: "",
+            desc: "出発点は、業務DBの注文や在庫、SaaSの販売データ、アプリのログといった「現場のデータ」です。これらは形式も更新のされ方もばらばらで、そのままでは分析にもAIにも使いにくい状態にあります。",
+            route: "データソース",
+            packet: "業務DB / SaaS / ファイル・ログ にデータが日々生まれる",
+            actors: ["src"],
+            tags: []
+          },
+          {
+            title: "取り込み — まず「生のまま」着地させる",
+            tag: "",
+            desc: "取り込みでは、あえて加工しません。<span class='mono'>Auto Loader</span> や <span class='mono'>COPY INTO</span>、ストリーミングで、ソースの形のまま最初の層へ流し込みます。加工は後の層の仕事であり、取り込みの仕事は「漏らさず、壊さず、受け取ること」です。",
+            route: "データソース → Bronze",
+            packet: "Auto Loader / COPY INTO / Structured Streaming",
+            actors: ["src", "bronze"],
+            tags: ["bronze"]
+          },
+          {
+            title: "Bronze — 生データをそのまま保持する",
+            tag: "<span class='tag rec'>再現の起点</span>",
+            desc: "Bronzeには生データがDeltaテーブルとして保持され、取り込み時刻などのメタデータが添えられます。ここが残っているからこそ、後の加工ルールが間違っていたと分かっても、<strong>ソースに戻らずBronzeから作り直せます</strong>。",
+            route: "Bronze（Deltaテーブル）",
+            packet: "catalog.bronze.events — 追記中心・メタデータ付き",
+            actors: ["bronze"],
+            tags: ["bronze"]
+          },
+          {
+            title: "Silver — 整形して「データとしての正しさ」を入れる",
+            tag: "",
+            desc: "Silverでは、型の整形、重複の排除、欠損の扱い、コード値の統一を行い、品質チェックを通った明細だけを置きます。顧客・注文・商品といったエンティティごとの、<strong>信頼できる明細</strong>がこの層の成果物です。",
+            route: "Bronze → Silver",
+            packet: "型変換・重複排除・欠損処理 → catalog.silver.*",
+            actors: ["bronze", "silver"],
+            tags: ["silver"]
+          },
+          {
+            title: "Gold — 用途の形に集計・モデル化する",
+            tag: "",
+            desc: "Goldは利用用途の側に寄せた層です。日次売上の集計、ダッシュボード向けの形、在庫のような参照用ビューなど、「そのまま使える形」で置きます。層が進むごとに、データの量は減り、業務への近さが上がります。",
+            route: "Silver → Gold",
+            packet: "集計・モデル化 → catalog.gold.daily_sales ほか",
+            actors: ["silver", "gold"],
+            tags: ["gold"]
+          },
+          {
+            title: "利用側 — 同じデータを、別々の道具で使う",
+            tag: "",
+            desc: "BI、ML、AIエージェントは、それぞれ別のコピーを作るのではなく、<strong>同じDeltaテーブルを参照</strong>します。数字の定義が利用側ごとにずれる問題が、構造的に起きにくくなります。",
+            route: "Gold → BI / ML / AIエージェント",
+            packet: "コピーではなく、同じDeltaテーブルへの参照",
+            actors: ["gold", "use"],
+            tags: ["use"]
+          },
+          {
+            title: "Unity Catalog — 全体を下から統治する",
+            tag: "<span class='tag itr'>統治</span>",
+            desc: "すべての層は <span class='mono'>Unity Catalog</span> の名簿に登録され、権限、行フィルタ・列マスク、リネージ、監査ログが一元管理されます。「Bronzeはエンジニアだけ、Goldは業務利用可」のような線引きも、この名簿の側で定義します。",
+            route: "Unity Catalog（全層）",
+            packet: "GRANT / 行フィルタ・列マスク / リネージ / 監査ログ",
+            actors: ["src", "bronze", "silver", "gold", "use"],
+            tags: []
+          }
+        ];
+
+        /* ================= アニメーション2：AIエージェントからのI/O ================= */
+        var U1 = "<div class='msg user'><span class='who'>あなた</span>先月の売上トップ5の商品と、いまの在庫状況を教えて。</div>";
+        var THINK = "<div class='think'>🧠 計画： Goldの売上集計と在庫ビューを読む → 使うツールを選ぶ</div>";
+        var AUTH = "<div class='sess-line'>🔐 サービスプリンシパルで接続 — OAuthトークンを取得</div>";
+        var TC1 = "<div class='tool-chip'>🔌 MCPツール呼び出し： 売上集計と在庫を取得</div>";
+        var UC = "<div class='sess-line'>🛡️ Unity Catalog — 権限チェックOK（ビューへのSELECTのみ許可）</div>";
+        var TR1 = "<div class='tool-chip res'>↩ 結果: 売上トップ5＋各商品の在庫数</div>";
+        var A1 = "<div class='msg agent'><span class='who'>エージェント</span>先月の売上トップ5はこちらです。在庫が残りわずかな商品が1つ含まれています。</div>";
+        var U2 = "<div class='msg user'><span class='who'>あなた</span>この調査メモを、あとで参照できるように保存しておいて。</div>";
+        var TC2 = "<div class='tool-chip'>✍ 書き込み： ステージングテーブルへメモを保存</div>";
+        var MERGE = "<div class='sess-line'>✓ 検証OK → MERGEで本テーブルへ反映</div>";
+        var A2 = "<div class='msg agent'><span class='who'>エージェント</span>調査メモを保存しました。誰がいつ書いたかも記録されています。</div>";
+        var DONE = "<div class='done-bar'>✓ 完了 — 読み書きの記録は監査ログに残りました</div>";
+
+        var VIEW2 = [
+          { spin: false, chat: U1 },
+          { spin: true,  chat: U1 + THINK },
+          { spin: true,  chat: U1 + THINK + AUTH + TC1 },
+          { spin: true,  chat: U1 + THINK + AUTH + TC1 + UC },
+          { spin: true,  chat: U1 + THINK + AUTH + TC1 + UC + TR1 },
+          { spin: false, chat: U1 + THINK + AUTH + TC1 + UC + TR1 + A1 },
+          { spin: true,  chat: U1 + THINK + AUTH + TC1 + UC + TR1 + A1 + U2 + TC2 },
+          { spin: false, chat: U1 + THINK + AUTH + TC1 + UC + TR1 + A1 + U2 + TC2 + MERGE + A2 + DONE }
+        ];
+
+        var LOG2 = [
+          ["<span class='dim'># 利用者 → エージェント</span>",
+           "依頼: \"先月の売上トップ5と在庫状況を教えて\""],
+          ["<span class='dim'># エージェントの計画</span>",
+           "読む対象を決定: gold.daily_sales（集計済み）",
+           "　　　　　　　 ＋ gold.inventory_view（在庫）",
+           "使う道具: MCPツール（関数／SQL）"],
+          ["<span class='dim'># 接続と認証</span>",
+           "OAuth M2M: サービスプリンシパルのトークンを取得",
+           "→ MCPサーバーへ接続 <span class='ok'>✓ 認証OK</span>"],
+          ["<span class='dim'># Unity Catalog の権限チェック</span>",
+           "主体: service-principal / agent-01",
+           "権限: catalog.gold のビューへ SELECT のみ",
+           "<span class='ok'>✓ アクセス許可</span> <span class='dim'>（生テーブルへの権限はなし）</span>"],
+          ["<span class='dim'># SQLウェアハウスで実行</span>",
+           "SELECT product, amount FROM gold.daily_sales …",
+           "SELECT product, stock FROM gold.inventory_view …",
+           "<span class='hl'>→ 5行＋在庫数を返却</span>"],
+          ["<span class='ok'>← 結果をエージェントへ返却</span>",
+           "回答を生成して利用者へ提示"],
+          ["<span class='dim'># 書き込み（下書き）</span>",
+           "INSERT INTO catalog.agent_work.staging_memo …",
+           "<span class='ok'>✓ ステージングへ保存</span> <span class='dim'>（本テーブルはまだ無変更）</span>"],
+          ["<span class='dim'># 検証 → 反映</span>",
+           "検証OK → MERGE INTO catalog.agent_work.agent_memo",
+           "<span class='ok'>✓ 反映完了</span>",
+           "監査ログ: agent-01 がメモを作成（時刻・対象を記録）"]
+        ];
+
+        var STEPS2 = [
+          {
+            title: "利用者が自然言語で依頼する",
+            tag: "",
+            desc: "利用者はテーブル名もSQLも知りません。「どのデータを読むべきか」の判断は、エージェント側が引き受けます。ここから先の設計は、エージェントが暴走しても被害が小さいように組まれています。",
+            route: "利用者 → AIエージェント",
+            packet: "「先月の売上トップ5と在庫状況を教えて」",
+            actors: ["agent"],
+            tags: []
+          },
+          {
+            title: "エージェントが計画し、道具を選ぶ",
+            tag: "",
+            desc: "売上は集計済みのGold、在庫は公開されたビュー、という具合に、<strong>あらかじめ用意された道具の中から</strong>選びます。生テーブルへの自由なアクセスは、そもそも道具に含まれていません。",
+            route: "AIエージェント（計画）",
+            packet: "読む対象： Goldの売上集計 ＋ 在庫ビュー → ツールを選択",
+            actors: ["agent"],
+            tags: ["agent"]
+          },
+          {
+            title: "接続と認証 — サービスプリンシパルで入る",
+            tag: "",
+            desc: "エージェントは人のアカウントを借りず、専用の <span class='mono'>サービスプリンシパル</span> として接続します。OAuthのマシン間フローで短命なトークンを取得し、MCPサーバーやAPIへ提示します。",
+            route: "エージェント → 接続手段",
+            packet: "MCPサーバーへ接続（OAuthトークンで認証）",
+            actors: ["agent", "conn"],
+            tags: ["conn"]
+          },
+          {
+            title: "Unity Catalogが権限をチェックする",
+            tag: "<span class='tag rec'>統治</span>",
+            desc: "接続できたことと、読めることは別です。<span class='mono'>Unity Catalog</span> が主体の権限を確認し、許可されたビューへのSELECTだけが通ります。行フィルタや列マスクも、この関門で効きます。",
+            route: "接続手段 → Unity Catalog",
+            packet: "主体： サービスプリンシパル ／ 権限： ビューへのSELECTのみ",
+            actors: ["conn", "uc"],
+            tags: ["uc"]
+          },
+          {
+            title: "Deltaテーブルを読む",
+            tag: "",
+            desc: "SQLウェアハウスがクエリを実行し、Deltaテーブルから結果を返します。読んでいるのは誰かが用意したコピーではなく、<strong>統治下にある実データ</strong>です。",
+            route: "Unity Catalog → Deltaテーブル",
+            packet: "SELECT … FROM catalog.gold.daily_sales / inventory_view",
+            actors: ["uc", "delta"],
+            tags: ["delta"]
+          },
+          {
+            title: "結果が戻り、エージェントが答える",
+            tag: "",
+            desc: "結果セットを受け取り、エージェントが自然言語の回答を組み立てます。数字の出どころであるテーブルは、監査の側にも記録が残っています。",
+            route: "Deltaテーブル → エージェント",
+            packet: "結果セット（5行＋在庫数）がエージェントへ返る",
+            actors: ["delta", "agent"],
+            tags: []
+          },
+          {
+            title: "書き込みは、まずステージングへ",
+            tag: "<span class='tag itr'>安全設計</span>",
+            desc: "保存の依頼には、本テーブルへ直接書かず、専用の <span class='mono'>ステージングテーブル</span> へ下書きとして書きます。エージェントに与える書き込み権限は、原則としてこの範囲までに絞ります。",
+            route: "エージェント → ステージング",
+            packet: "INSERT INTO catalog.agent_work.staging_memo …",
+            actors: ["agent", "delta"],
+            tags: ["delta"]
+          },
+          {
+            title: "検証を経てMERGEで反映し、記録が残る",
+            tag: "",
+            desc: "形式や内容の検証を通ったものだけが、<span class='mono'>MERGE</span> で本テーブルへ反映されます。誰が・いつ・何をしたかは監査ログに残るため、エージェントの読み書きは後から追跡できます。",
+            route: "検証 → MERGE → 監査ログ",
+            packet: "MERGE INTO agent_memo … ／ 監査ログに記録",
+            actors: ["uc", "delta"],
+            tags: []
+          }
+        ];
+
+        function logHTML(lines) {
+          return function (upto) {
+            var out = [];
+            for (var i = 0; i <= upto; i++) out = out.concat(lines[i]);
+            return out.join("\n");
+          };
+        }
+
+        var p1 = document.querySelector("[data-player='p1']");
+        if (p1) {
+          makePlayer(p1, {
+            steps: STEPS1,
+            logHTML: logHTML(LOG1),
+            renderStage: function (i, els) {
+              els.stage.innerHTML = VIEW1[i];
+              els.spinner.classList.toggle("on", SPIN1[i]);
+            }
+          });
+        }
+        var p2 = document.querySelector("[data-player='p2']");
+        if (p2) {
+          makePlayer(p2, {
+            steps: STEPS2,
+            logHTML: logHTML(LOG2),
+            renderStage: function (i, els) {
+              els.chat.innerHTML = VIEW2[i].chat;
+              els.spinner.classList.toggle("on", VIEW2[i].spin);
+            }
+          });
+        }
+      })();
+    </script>
+  </body>
+</html>
