@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="data:," />
+    <title>Skills over MCPの仕組みアニメーション</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <style>
+      button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) { min-height: 2.25rem; }
+      * { box-sizing: border-box; }
+      :root {
+        --bg: #f4f6f5;
+        --surface: #ffffff;
+        --surface-2: #eef2f0;
+        --ink: #17211d;
+        --ink-2: #44534c;
+        --ink-3: #6b7a72;
+        --line: #d5ded9;
+        --accent: #0e7a5f;
+        --accent-ink: #ffffff;
+        --accent-soft: #dff0e9;
+        --packet: #b45309;
+        --packet-soft: #fdf0dd;
+        --danger: #b3261e;
+        --danger-soft: #fbe9e7;
+        --term-bg: #101613;
+        --term-ink: #c9e7d6;
+        --term-dim: #7d968a;
+        --radius: 10px;
+        color-scheme: light;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0e1311;
+          --surface: #161d1a;
+          --surface-2: #1d2622;
+          --ink: #e6ede9;
+          --ink-2: #b3c2ba;
+          --ink-3: #84958c;
+          --line: #2c3833;
+          --accent: #2fbf9a;
+          --accent-ink: #06231a;
+          --accent-soft: #14332a;
+          --packet: #f0a832;
+          --packet-soft: #3a2c12;
+          --danger: #f0867e;
+          --danger-soft: #3d1d1a;
+          --term-bg: #070a09;
+          --term-ink: #c9e7d6;
+          --term-dim: #71877b;
+          color-scheme: dark;
+        }
+      }
+      html { scroll-behavior: smooth; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: "IBM Plex Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+        line-height: 1.75;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { max-width: 960px; margin: 0 auto; padding: 28px 18px 72px; }
+      h1 { font-size: clamp(26px, 5.4vw, 38px); line-height: 1.3; margin: 0 0 10px; letter-spacing: .01em; }
+      .lede { color: var(--ink-2); font-size: 16px; margin: 0 0 6px; max-width: 42em; }
+      .lede .mono { color: var(--accent); font-weight: 600; }
+      h2 { font-size: 21px; margin: 0 0 6px; line-height: 1.4; }
+      h3 { font-size: 16px; margin: 0 0 6px; }
+      .sec-head { margin: 40px 0 14px; }
+      .sec-head p { margin: 0; color: var(--ink-2); font-size: 14.5px; max-width: 44em; }
+      .sec-num { display: inline-block; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 999px; padding: 1px 10px; margin-bottom: 8px; letter-spacing: .08em; }
+
+      /* ---------- controls ---------- */
+      .controls {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+        padding: 10px 12px; margin: 18px 0;
+      }
+      .controls .btn {
+        appearance: none; border: 1px solid var(--line); background: var(--surface-2);
+        color: var(--ink); border-radius: 8px; padding: 6px 14px; font: inherit; font-size: 14.5px; font-weight: 600;
+        cursor: pointer; min-width: 44px;
+      }
+      .controls .btn:hover { border-color: var(--accent); }
+      .controls .btn:focus-visible, .speedsel:focus-visible, .dot:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .controls .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 92px; }
+      .controls .btn:disabled { opacity: .38; cursor: default; }
+      .controls .btn:disabled:hover { border-color: var(--line); }
+      .controls .btn.primary:disabled:hover { border-color: var(--accent); }
+      .speedwrap { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 13.5px; color: var(--ink-2); }
+      .speedsel { font: inherit; font-size: 14px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+      .progress-line { display: flex; align-items: center; gap: 12px; margin: 4px 2px 0; flex-wrap: wrap; }
+      .progress-label { font-family: "IBM Plex Mono", monospace; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+      .progress-track { flex: 1 1 140px; height: 6px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+      .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .45s ease; }
+      .dots { display: flex; gap: 6px; flex-wrap: wrap; }
+      .dot { width: 36px; height: 36px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--surface); color: var(--ink-2); font-family: "IBM Plex Mono", monospace; font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+      .dot.done { border-color: var(--accent); color: var(--accent); }
+      .dot.now { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+      /* ---------- chat mock + rpc panel ---------- */
+      .stage-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+      @media (min-width: 820px) { .stage-grid { grid-template-columns: 1fr 1fr; } }
+      .browser, .term {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden;
+      }
+      .browser-bar {
+        display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+        background: var(--surface-2); border-bottom: 1px solid var(--line);
+      }
+      .traffic { display: flex; gap: 6px; flex: none; }
+      .traffic i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+      .traffic i:nth-child(1) { background: #e0655f; } .traffic i:nth-child(2) { background: #e8b23f; } .traffic i:nth-child(3) { background: #58b368; }
+      .win-title { font-size: 13.5px; font-weight: 700; color: var(--ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+      .spinner {
+        width: 16px; height: 16px; border-radius: 50%; flex: none; margin-left: auto;
+        border: 2.5px solid var(--line); border-top-color: var(--accent);
+        animation: spin .8s linear infinite; display: none;
+      }
+      .spinner.on { display: block; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .chat-body { padding: 16px 16px 18px; min-height: 342px; display: flex; flex-direction: column; gap: 10px; }
+      .srv-panel { border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; background: var(--surface-2); }
+      .srv-panel .srv-head { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; color: var(--ink-3); margin-bottom: 4px; }
+      .srv-row { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13.5px; flex-wrap: wrap; }
+      .srv-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ink-3); flex: none; }
+      .srv-dot.on { background: var(--accent); }
+      .srv-dot.busy { background: var(--packet); }
+      .srv-name { font-weight: 700; }
+      .srv-meta { color: var(--ink-3); font-size: 12px; }
+      .srv-state { margin-left: auto; font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+      .srv-state.ok { color: var(--accent); }
+      .srv-state.busy { color: var(--packet); }
+      .tools-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+      .tools-row .t-label { font-size: 12px; color: var(--ink-3); font-weight: 700; }
+      .chip {
+        display: inline-flex; align-items: center; gap: 6px; font-family: "IBM Plex Mono", monospace; font-size: 12.5px; font-weight: 600;
+        border-radius: 999px; padding: 2px 11px; border: 1.5px solid var(--accent); color: var(--accent); background: var(--accent-soft);
+      }
+      .chip.gray { border-color: var(--line); color: var(--ink-2); background: var(--surface-2); }
+      .chat-msgs { display: flex; flex-direction: column; gap: 9px; flex: 1; }
+      .chat-empty { color: var(--ink-3); font-size: 13.5px; text-align: center; padding: 14px 8px; border: 1px dashed var(--line); border-radius: 8px; }
+      .msg { max-width: 90%; padding: 9px 13px; border-radius: 12px; font-size: 14px; line-height: 1.65; }
+      .msg .who { display: block; font-size: 11px; font-weight: 700; opacity: .7; margin-bottom: 1px; }
+      .msg.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px; }
+      .msg.ai { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+      .tool-line {
+        align-self: stretch; display: flex; align-items: center; gap: 8px;
+        font-family: "IBM Plex Mono", monospace; font-size: 12.5px; line-height: 1.55;
+        border: 1.5px dashed var(--packet); color: var(--packet); background: var(--packet-soft);
+        border-radius: 8px; padding: 7px 12px; word-break: break-all;
+      }
+      .tool-line.done { border-style: solid; border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+      .term-head { padding: 8px 14px; font-size: 12.5px; color: var(--term-dim); background: var(--term-bg); border-bottom: 1px solid #223028; font-family: "IBM Plex Mono", monospace; }
+      .term-body {
+        background: var(--term-bg); color: var(--term-ink); margin: 0; padding: 14px 16px 18px;
+        font-family: "IBM Plex Mono", monospace; font-size: 12.4px; line-height: 1.6; min-height: 342px;
+        white-space: pre-wrap; word-break: break-all;
+      }
+      .term-body .dim { color: var(--term-dim); }
+      .term-body .hl { color: #f0a832; }
+      .fig-cap { font-size: 12.5px; color: var(--ink-3); margin: 8px 2px 0; }
+
+      /* ---------- flow diagram ---------- */
+      .flow-wrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 16px 16px; }
+      .actors { display: flex; align-items: stretch; gap: 0; }
+      .actor {
+        flex: 1 1 0; min-width: 0; text-align: center; padding: 12px 6px 10px; border: 1.5px solid var(--line);
+        border-radius: var(--radius); background: var(--surface-2); transition: border-color .3s, background .3s, box-shadow .3s;
+      }
+      .actor .a-icon { font-size: 24px; line-height: 1.2; display: block; }
+      .actor .a-name { font-weight: 700; font-size: 13.5px; display: block; margin-top: 4px; line-height: 1.45; }
+      .actor .a-sub { font-size: 11.5px; color: var(--ink-3); display: block; line-height: 1.5; }
+      .actor.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .actor .a-tag { display: none; margin-top: 6px; font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; color: var(--accent); }
+      .actor.tag-on .a-tag { display: inline-block; }
+      .link-arrow { flex: 0 0 22px; display: flex; align-items: center; justify-content: center; color: var(--ink-3); font-size: 15px; }
+      @media (max-width: 640px) {
+        .actors { flex-direction: column; gap: 0; }
+        .link-arrow { transform: rotate(90deg); height: 22px; flex-basis: 22px; margin: 0 auto; }
+      }
+      .packet-bar {
+        margin-top: 16px; border: 1.5px solid var(--packet); background: var(--packet-soft); border-radius: var(--radius);
+        padding: 12px 16px; min-height: 76px;
+      }
+      .packet-bar .p-label { font-size: 11.5px; font-weight: 700; letter-spacing: .1em; color: var(--packet); margin-bottom: 2px; }
+      .packet-bar .p-route { font-weight: 700; font-size: 15px; }
+      .packet-bar .p-body { font-family: "IBM Plex Mono", monospace; font-size: 13.5px; margin-top: 2px; word-break: break-all; }
+      .step-card { margin-top: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 18px; }
+      .step-card .s-kicker { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--accent); font-weight: 600; letter-spacing: .06em; }
+      .step-card h3 { font-size: 19px; margin: 4px 0 8px; }
+      .step-card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+      .step-card p .mono { color: var(--ink); font-weight: 600; font-size: .94em; }
+      .tag { display: inline-block; font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 1px 10px; margin-left: 8px; vertical-align: 2px; }
+      .tag.rec { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+      .tag.itr { background: var(--packet-soft); color: var(--packet); border: 1px solid var(--packet); }
+
+      /* ---------- supplements ---------- */
+      .cards { display: grid; grid-template-columns: 1fr; gap: 14px; }
+      @media (min-width: 720px) { .cards.two { grid-template-columns: 1fr 1fr; } .cards.three { grid-template-columns: repeat(3, 1fr); } }
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+      .card p { margin: 0; font-size: 14.5px; color: var(--ink-2); }
+      .card p + p { margin-top: 8px; }
+      .card .mono { color: var(--ink); font-weight: 600; }
+      .vs-route { font-family: "IBM Plex Mono", monospace; font-size: 13px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; line-height: 1.9; word-break: break-all; }
+      dl.glossary { display: grid; grid-template-columns: 1fr; gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin: 0; }
+      @media (min-width: 720px) { dl.glossary { grid-template-columns: 1fr 1fr; } }
+      .glossary .g-item { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+      .glossary dt { font-weight: 700; font-size: 15px; }
+      .glossary dt .mono { font-size: 13px; color: var(--accent); font-weight: 600; margin-left: 6px; }
+      .glossary dd { margin: 4px 0 0; font-size: 14px; color: var(--ink-2); }
+      .note-box { border: 1px solid var(--line); border-left: 4px solid var(--accent); background: var(--surface); border-radius: 6px; padding: 14px 18px; font-size: 14.5px; color: var(--ink-2); margin-top: 14px; }
+      .note-box strong { color: var(--ink); }
+      footer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--ink-3); }
+
+      /* ---------- doc prose ---------- */
+      .doc p { font-size: 15.5px; line-height: 1.9; margin: 0 0 14px; color: var(--ink); }
+      .doc p:last-child { margin-bottom: 0; }
+      .doc h3 { font-size: 16.5px; margin: 24px 0 8px; border-left: 4px solid var(--accent); padding-left: 10px; }
+      .doc h3:first-of-type { margin-top: 2px; }
+      .doc.summary p { font-size: 16px; line-height: 1.85; margin: 0 0 8px; }
+      .doc.summary p:last-child { margin-bottom: 0; }
+      @media (prefers-reduced-motion: reduce) {
+        html { scroll-behavior: auto; }
+        .spinner { animation: none; }
+        .progress-fill { transition: none; }
+        .actor { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Skills over MCP ― サーバーが「使い方の説明書」まで配る</h1>
+      <p class="lede">
+        MCPサーバーはこれまでツールとリソースを配ってきました。<span class="mono">Skills over MCP</span> では、そこに「スキルの配布」が加わります。
+        スキルとはツールの使い方の手順・ベストプラクティス・ワークフローをまとめた指示書で、接続時に発見され、必要になったときだけ本文が読み込まれます。
+        発見から実行、更新までの流れを7ステップで再生できます。
+      </p>
+
+      <!-- 概要：3行 -->
+      <div class="sec-head">
+        <span class="sec-num">SUMMARY</span>
+        <h2>概要</h2>
+      </div>
+      <div class="card doc summary">
+        <p>Skills over MCP は、MCPサーバーがツールやリソースに加えて「スキル」――ツールの使い方の手順やワークフローをまとめた指示書――まで配布できるようにする拡張です。</p>
+        <p>スキルは接続したときに名前と短い説明だけが分かり、本文はタスクに必要になった時点で初めて読み込まれるため、コンテキストを圧迫しません。</p>
+        <p>スキルはサーバーと一緒に更新されるので、開発者はツールと使い方を1回のリリースで配れ、使う側は別途インストールする手間がありません。</p>
+      </div>
+
+      <!-- 背景：読み物 -->
+      <div class="sec-head">
+        <span class="sec-num">BACKGROUND</span>
+        <h2>背景 — 道具は配れたが、「使い方」が付いてこなかった</h2>
+      </div>
+      <div class="card doc">
+        <h3>ツールがあることと、使いこなせることは別だった</h3>
+        <p>MCPによって、サーバーが提供するツールの一覧は接続するだけで手に入るようになりました。名前と説明と入力スキーマがあれば、モデルは「どのツールを、どの引数で呼ぶか」を決められます。けれど実務の作業は、ツールを1回呼べば終わるものばかりではありません。変更前にバックアップを取る、プレビューで確認してから公開する、といった手順の組み立てや、サービスごとの作法やベストプラクティスは、ツールの説明文だけでは伝わりきらない部分でした。</p>
+        <p>説明文は、ツールの定義に付く短い文章です。そこに作業手順のすべてを詰め込むと、今度は一覧を受け取るだけでコンテキストが膨らんでしまいます。かといって短くすれば、手順の知識はモデルの推測任せになります。「道具の定義」と「作業の進め方」は、本来は別の文書として持つべきものでした。足りなかったのは、その進め方をまとめた文書――スキル――を、誰がどうやって届けるかという仕組みです。</p>
+        <h3>説明書は、作った側がいちばんよく知っている</h3>
+        <p>その「使い方」をまとめたものがスキルです。本文の <span class="mono">SKILL.md</span> と補助ファイルからなるディレクトリで、Agent Skills として形式が定められ、2025年12月にはオープン標準になりました。ただ従来は、スキルを使う側が自分で探してインストールするもので、ツールを提供するサーバーとは別々に配られていました。ツールの仕様が変わっても説明書が古いまま、といったズレが起きる構造です。</p>
+        <h3>ないとどうなるか</h3>
+        <p>使い方の伝達手段がなければ、モデルはツールの説明文だけを頼りに手順を毎回その場で組み立てることになり、品質は試行錯誤の出来に左右されます。ベストプラクティスは利用者ごとに個別のプロンプトやメモとして散らばり、サーバーの開発者がせっかく持っているノウハウも届きません。2026年11月24日、MCP公開2周年に合わせて発表された Skills over MCP は、この「説明書の配り方」そのものを規格の側で解決しようとするものです。</p>
+      </div>
+
+      <!-- 1. 操作ボタン -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+      <div class="progress-line">
+        <span class="progress-label" data-progress-label>ステップ 1 / 7</span>
+        <div class="progress-track"><div class="progress-fill" data-progress-fill></div></div>
+        <div class="dots" data-dots aria-label="ステップ一覧"></div>
+      </div>
+
+      <!-- 2. 画面でこう見える -->
+      <div class="sec-head">
+        <span class="sec-num">VIEW</span>
+        <h2>画面でこう見える</h2>
+        <p>AIアプリのチャット画面と、その裏で流れる <span class="mono">JSON-RPC</span> メッセージです。どちらもステップに連動して変化します。</p>
+      </div>
+      <div class="stage-grid">
+        <div>
+          <div class="browser" aria-label="AIアプリのチャット画面のモック">
+            <div class="browser-bar">
+              <div class="traffic" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="win-title">AIアプリ（ホスト）</div>
+              <span class="spinner" data-spinner aria-hidden="true"></span>
+            </div>
+            <div class="chat-body">
+              <div class="srv-panel" aria-label="MCPサーバーの接続状態">
+                <div class="srv-head">MCPサーバー</div>
+                <div data-servers></div>
+              </div>
+              <div class="tools-row" data-tools></div>
+              <div class="chat-msgs" data-msgs aria-live="polite"></div>
+            </div>
+          </div>
+          <p class="fig-cap">チャット画面のモック。発見したスキルは名前だけが並び、本文は読み込まれた時点で初めて表示されます。</p>
+        </div>
+        <div>
+          <div class="term" aria-label="JSON-RPCメッセージのモック">
+            <div class="term-head">MCPの通信 — JSON-RPC 2.0 メッセージ</div>
+            <pre class="term-body" data-rpc></pre>
+          </div>
+          <p class="fig-cap">クライアント⇔サーバー間で実際に流れるメッセージのイメージです（値は説明用の例）。</p>
+        </div>
+      </div>
+
+      <!-- 3. 操作ボタン（連動） -->
+      <div class="controls" data-controls>
+        <button class="btn" data-action="reset" type="button">最初から</button>
+        <button class="btn" data-action="prev" type="button">← 前へ</button>
+        <button class="btn primary" data-action="play" type="button">▶ 再生</button>
+        <button class="btn" data-action="next" type="button">次へ →</button>
+        <label class="speedwrap">速度
+          <select class="speedsel" data-speed aria-label="再生速度">
+            <option value="0.5">0.5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+        </label>
+      </div>
+
+      <!-- 4. 実際の中身のフロー -->
+      <div class="sec-head">
+        <span class="sec-num">FLOW</span>
+        <h2>実際の中身のフロー</h2>
+        <p>ポイントは「発見」と「読み込み」が分かれていることです。接続時はスキルの目次だけを受け取り、本文はタスクに必要になった時点で、そのスキル分だけを読みにいきます。光っている登場人物が、そのステップで動いている側です。</p>
+      </div>
+      <div class="flow-wrap">
+        <div class="actors" role="img" aria-label="Skills over MCPの登場人物：あなた、ホスト、LLM、MCPサーバー、オンラインストア">
+          <div class="actor" data-actor="user">
+            <span class="a-icon" aria-hidden="true">🧑</span>
+            <span class="a-name">あなた</span>
+            <span class="a-sub">タスクを頼む人</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="host">
+            <span class="a-icon" aria-hidden="true">🖥️</span>
+            <span class="a-name">ホスト（AIアプリ）</span>
+            <span class="a-sub">スキルを発見し<br>必要になったら読み込む</span>
+            <span class="a-tag" data-tag>スキル 3件 発見済み</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="llm">
+            <span class="a-icon" aria-hidden="true">🧠</span>
+            <span class="a-name">LLM（モデル）</span>
+            <span class="a-sub">タスクに合うスキルを選ぶ</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="server">
+            <span class="a-icon" aria-hidden="true">🔌</span>
+            <span class="a-name">MCPサーバー</span>
+            <span class="a-sub">ツールとスキルを<br>配布するプログラム</span>
+            <span class="a-tag" data-tag>skills 拡張対応</span>
+          </div>
+          <div class="link-arrow" aria-hidden="true">→</div>
+          <div class="actor" data-actor="ext">
+            <span class="a-icon" aria-hidden="true">🛍️</span>
+            <span class="a-name">オンラインストア</span>
+            <span class="a-sub">ツールで実際に<br>変更される対象</span>
+          </div>
+        </div>
+        <div class="packet-bar" aria-live="polite">
+          <div class="p-label">いま飛んでいるメッセージ／処理</div>
+          <div class="p-route" data-packet-route>ホスト → MCPサーバー</div>
+          <div class="p-body mono" data-packet-body>接続を開始</div>
+        </div>
+        <div class="step-card">
+          <div class="s-kicker" data-step-kicker>STEP 1 / 7</div>
+          <h3 data-step-title>サーバーへ接続し、skills 拡張対応が宣言される</h3>
+          <p data-step-desc></p>
+        </div>
+      </div>
+
+      <!-- 読み物：仕組みを文章で -->
+      <div class="sec-head">
+        <span class="sec-num">READING</span>
+        <h2>仕組みを文章で読む — 発見・選択・読み込み・実行</h2>
+      </div>
+      <div class="card doc">
+        <p>アニメーションを再生しなくても流れが追えるよう、7ステップの内容を文章でもたどっておきます。</p>
+        <h3>発見は接続時、本文は必要になってから — 段階的開示</h3>
+        <p>接続すると、サーバーは <span class="mono">server/discover</span> で resources の能力と skills 拡張（<span class="mono">io.modelcontextprotocol/skills</span>）への対応を宣言します。続く <span class="mono">skills/list</span> や <span class="mono">skills/get</span> で返ってくるのは、スキルの名前と短い説明といったメタデータだけです。本文はまだ送られてきません。スキルが何十件あっても、接続時に増えるのは目次分だけなので、コンテキストは圧迫されません。この「まず目次だけ、本文は後から」という運び方が段階的開示です。</p>
+        <h3>選択はメタデータで、読み込みは resources/read で</h3>
+        <p>タスクが来たら、モデルはメタデータの説明と頼み事を照らし合わせ、合うスキルを選びます。選ばれたスキルのファイル実体は、通常のリソースと同じ <span class="mono">resources/read</span> で読み込まれます。主文書の <span class="mono">SKILL.md</span> に加え、テンプレートなどの補助ファイルも、必要になったものだけが対象です。使うかどうか分からない説明書を全部読み込むことはしません。</p>
+        <h3>実行は、スキルの手順に沿ったツール呼び出し</h3>
+        <p>読み込まれた SKILL.md には、そのサービスでの作業手順やベストプラクティスが書かれています。モデルはその手順書に沿って、サーバーのツールを順番に組み合わせて実行します。ツール自体は従来どおり <span class="mono">tools/call</span> で呼ばれ、結果も同じ形で返ります。変わったのは「どの順番で、何に気をつけて呼ぶか」の知識が、サーバー側から一緒に届くようになった点です。</p>
+        <h3>更新はサーバー側で完結する</h3>
+        <p>スキルはサーバーの一部として配られるため、開発者がスキルを直せば、次に接続したときには新しい版がそのまま使えます。利用者がスキルだけを別途インストールしたり、更新を追いかけたりする必要はありません。ツールの仕様変更と説明書の改訂を、開発者は1回のリリースにまとめられます。</p>
+        <h3>仕様の置き場所 — SEP-2640</h3>
+        <p>この仕組みは MCP の拡張仕様として定義されており、仕様提案 SEP-2640 は Final の状態です。一方で、SDKやホスト側の実装は進行中で、使える環境には条件があります。Anthropic の発表では、Claude と Claude Code でパブリックベータとして提供が始まりました。</p>
+      </div>
+
+      <!-- 5. 補足 -->
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>提供状況と広がり</h2>
+        <p>2026年11月24日、MCP公開2周年に合わせて Anthropic が発表した内容から、提供条件と周辺の動きをまとめます。</p>
+      </div>
+      <div class="cards three">
+        <div class="card">
+          <h3>利用条件</h3>
+          <p>Skills over MCP は Claude と Claude Code でパブリックベータです。Pro / Max / Ultra では既定で有効、Team では管理者が有効化し、Enterprise は近日対応とされています。Claude Code ではバージョン <span class="mono">v2.1.331</span> 以降が必要です。</p>
+        </div>
+        <div class="card">
+          <h3>初期パートナー</h3>
+          <p>発表時点で名前が挙がった例は、Shopify（ストアのデザインと更新）、HubSpot（オンボーディング手順）、Atlassian（組織情報を踏まえた分析）などで、Carta（株式関連のドラフト）は近日とされています。いずれも「ツールの使い方まで含めて配る」使い方です。</p>
+        </div>
+        <div class="card">
+          <h3>同じ発表の周辺</h3>
+          <p>同じタイミングで、長時間タスクを扱う Tasks と、途中で利用者に確認を取る Elicitation が正式版（GA）になり、File Uploads は近日提供とされました。MCP SDK の月間ダウンロードは7億を超え、Claude 向けコネクタは10,000を超えています。</p>
+        </div>
+      </div>
+      <div class="note-box">
+        <strong>位置づけ：</strong> ツールを「配る」仕組みが MCP、使い方を「まとめる」形式が Agent Skills。Skills over MCP は、その2つを同じサーバーから一緒に届けるための拡張です。
+      </div>
+
+      <!-- 読み物：良い点と弱点 -->
+      <div class="sec-head">
+        <span class="sec-num">PROS / CONS</span>
+        <h2>Skills over MCPの良い点と弱点</h2>
+      </div>
+      <div class="card doc">
+        <h3>良い点：ツールと「使い方」が同じ出所から届く</h3>
+        <p>開発者は、ツールの実装と、その正しい使い方・手順を1回のリリースでまとめて配れます。利用者はスキルを別途探してインストールする必要がなく、サーバーへ接続し直せば常に最新の説明書で作業できます。ツールの仕様と説明書がズレる問題が、構造として起きにくくなります。</p>
+        <h3>良い点：段階的開示で、コンテキストを無駄遣いしない</h3>
+        <p>接続時に届くのは名前と短い説明だけです。スキルの本文は、タスクに必要になったものだけが読み込まれます。サーバーが大量のスキルを持っていても、普段の会話に説明書の全文が載ることはありません。「たくさん配れる」と「軽く使える」を両立させる設計です。</p>
+        <h3>弱点：スキルは「外部から来る指示」である</h3>
+        <p>スキルは、サーバーが配る文章の形をした指示です。つまりモデルの振る舞いを左右する入力が、接続先のサーバーから届くということでもあります。悪意のあるスキルや改ざんされたスキルが紛れれば、モデルを望ましくない手順へ誘導するプロンプトインジェクションの入口になり得ます。スキルは「信頼できる説明書」ではなく「信頼できない入力」として扱うのが前提です。</p>
+        <p>そのための歯止めも仕様に含まれます。コードの実行やツール許可を含むスキルにはホスト側の承認が必要で、ファイルの内容が変わると承認は取り消されます（ダイジェストで変更を検知する仕組みです）。また Claude Code は、スキルが宣言する設定のうちツール許可やフックなどを無視します。管理者向けには、組織単位のスイッチや <span class="mono">disableDirectMcpSkills</span> のような無効化設定も用意されています。</p>
+        <h3>弱点：仕様は固まったが、実装はまだ途上</h3>
+        <p>拡張仕様 SEP-2640 は Final ですが、SDKとホスト側の実装は進行中です。使えるプランや有効化の条件も環境によって異なります。「規格がある」ことと「手元の環境でそのまま動く」ことの間には、まだ距離がある段階だと捉えておくのが安全です。</p>
+      </div>
+
+      <div class="sec-head">
+        <span class="sec-num">NOTES</span>
+        <h2>用語解説</h2>
+      </div>
+      <dl class="glossary">
+        <div class="g-item">
+          <dt>スキル<span class="mono">Skill</span></dt>
+          <dd>ツールの使い方の手順・ベストプラクティス・ワークフローをまとめた指示書。本文の <span class="mono">SKILL.md</span> と補助ファイルからなるディレクトリで、Agent Skills の形式に従います。</dd>
+        </div>
+        <div class="g-item">
+          <dt>Agent Skills<span class="mono">オープン標準</span></dt>
+          <dd>スキルの形式そのものを定めた仕様。2025年12月にオープン標準化され、特定の製品に縛られない「説明書のファイル形式」として扱われます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>段階的開示<span class="mono">progressive disclosure</span></dt>
+          <dd>最初は名前と短い説明だけを見せ、本文は必要になった時点で読み込む運び方。情報量の多いスキルを多数配っても、コンテキストを圧迫しないための工夫です。</dd>
+        </div>
+        <div class="g-item">
+          <dt>skills 拡張<span class="mono">io.modelcontextprotocol/skills</span></dt>
+          <dd>MCPサーバーがスキルを配布できることを示す拡張の識別子。サーバーは接続時の宣言で、この拡張に対応していることを伝えます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>server/discover<span class="mono">発見</span></dt>
+          <dd>接続時にサーバーの能力を問い合わせるやり取り。ここで resources の能力と skills 拡張への対応が宣言され、ホストはスキルの発見に進めます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>skills/list・skills/get<span class="mono">メタデータ取得</span></dt>
+          <dd>サーバーが配るスキルの名前や短い説明といったメタデータを返すリクエスト。本文は含まれず、モデルはこの情報だけを見てスキルを選びます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>resources/read<span class="mono">実体の読み込み</span></dt>
+          <dd>選ばれたスキルのファイル実体（SKILL.md や補助ファイル）を読み込むための、通常のリソース読み取りリクエスト。必要なときだけ発行されます。</dd>
+        </div>
+        <div class="g-item">
+          <dt>ダイジェスト<span class="mono">変更検知</span></dt>
+          <dd>ファイル内容から計算される要約値。スキルの承認後に内容が変わるとダイジェストも変わり、ホストは「承認したものと違う」と検知して承認を取り消せます。</dd>
+        </div>
+      </dl>
+
+      <!-- まとめ -->
+      <div class="sec-head">
+        <span class="sec-num">CONCLUSION</span>
+        <h2>まとめ</h2>
+      </div>
+      <div class="card doc">
+        <p>Skills over MCP は、MCPサーバーの配布物に「使い方の説明書」を加える拡張です。接続時に目次だけを発見し、タスクに合うスキルの本文だけを読み込み、その手順に沿ってツールを実行する。さらに更新はサーバー側で完結し、利用者は再インストールなしに新しい版へ追随できます。一方で、スキルは外部から届く指示でもあるため、承認やダイジェストによる変更検知といった歯止めとセットで捉える必要があります。「道具」と「説明書」を同じ出所から、必要な分だけ届ける――その配り方の規格化が、この拡張の持ち込んだ変化です。</p>
+      </div>
+
+      <footer>
+        このページのサーバー名・スキル名・メッセージ内容は説明用の例です。提供条件やバージョンなどの数値は2026年11月24日の Anthropic の発表および MCP の拡張仕様（SEP-2640）に基づくもので、実際の挙動は利用するホスト／サーバーの実装によって異なります。
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        "use strict";
+
+        var STEPS = [
+          {
+            title: "サーバーへ接続し、skills 拡張対応が宣言される",
+            tag: "<span class='tag rec'>server/discover</span>",
+            desc: "ホストがMCPサーバー（オンラインストア連携サーバー）へ接続します。接続時の <span class='mono'>server/discover</span> で、サーバーは resources の能力と、skills 拡張（<span class='mono'>io.modelcontextprotocol/skills</span>）に対応していることを宣言します。これでホストは「このサーバーはスキルも配っている」と知ります。",
+            route: "ホスト → MCPサーバー（ストア連携サーバー）",
+            packet: "server/discover → resources 能力 ＋ skills 拡張を宣言",
+            actors: ["host", "server"],
+            hostTag: false, serverTag: true
+          },
+          {
+            title: "スキル発見（skills/list）— 返るのは名前と説明だけ",
+            tag: "<span class='tag rec'>skills/list</span>",
+            desc: "ホストは <span class='mono'>skills/list</span> で「どんなスキルがありますか？」と尋ねます。返ってくるのは、スキルの<strong>名前と短い説明だけ</strong>で、本文の <span class='mono'>SKILL.md</span> はまだ送られてきません。スキルが何十件あっても目次分しか増えないので、<strong>コンテキストは軽いまま</strong>です。これが段階的開示の前半です。",
+            route: "ホスト → MCPサーバー →（メタデータ）→ ホスト",
+            packet: "skills/list → スキル3件の名前と説明（本文なし）",
+            actors: ["host", "server"],
+            hostTag: true, serverTag: true
+          },
+          {
+            title: "あなたがタスクを頼む",
+            tag: "",
+            desc: "ここで初めて、あなたの出番です。「オンラインストアのトップページを、冬のセール向けのデザインに変えて」とチャットで頼みます。この発言は、ツールの定義と、発見済みスキルのメタデータと一緒にモデルへ送られます。<strong>スキルの本文は、この時点でもまだ読み込まれていません</strong>。",
+            route: "あなた → ホスト → LLM",
+            packet: "「ストアのデザインを冬のセール向けに変えて」＋ スキルのメタデータ",
+            actors: ["user", "host", "llm"],
+            hostTag: true, serverTag: true
+          },
+          {
+            title: "モデルがタスクに合うスキルを選ぶ",
+            tag: "",
+            desc: "モデルは頼みとスキルの説明を照らし合わせ、「ストアのテーマを季節キャンペーン向けに変更する手順」という説明の <span class='mono'>theme-refresh</span> スキルが合うと判断します。判断材料は<strong>名前と短い説明だけ</strong>です。本文を読まずに選べるからこそ、目次だけを先に配る設計が成り立ちます。",
+            route: "LLM（メタデータとタスクを照合）",
+            packet: "スキル選択: theme-refresh がこのタスクに合う",
+            actors: ["llm", "host"],
+            hostTag: true, serverTag: true
+          },
+          {
+            title: "本文の読み込み（resources/read）— 必要なときだけ",
+            tag: "<span class='tag itr'>resources/read</span>",
+            desc: "選ばれたスキルのファイル実体を、ホストが <span class='mono'>resources/read</span> で読みにいきます。主文書の <span class='mono'>SKILL.md</span> と、作業に要る補助ファイルだけが対象です。段階的開示の後半――<strong>本文が届くのは、必要だと決まったこの瞬間だけ</strong>です。なお、コードやツール許可を含むスキルでは、この読み込みの前にホスト側の承認が求められます。",
+            route: "ホスト → MCPサーバー →（SKILL.md）→ ホスト",
+            packet: "resources/read: skill://theme-refresh/SKILL.md ＋ 補助ファイル",
+            actors: ["host", "server"],
+            hostTag: true, serverTag: true
+          },
+          {
+            title: "スキルの手順に沿って、ツールを組み合わせて実行",
+            tag: "<span class='tag itr'>tools/call</span>",
+            desc: "SKILL.md には「現在のテーマを取得 → 変更前にバックアップ → 配色とバナーを変更 → プレビューで確認」という手順が書かれています。モデルはこの<strong>手順書どおりの順番で</strong>サーバーのツールを <span class='mono'>tools/call</span> で実行し、ストアのデザインを変更します。ツールの説明文だけでは分からなかった「サービスの作法」が、ここで効いてきます。",
+            route: "ホスト → MCPサーバー → オンラインストア",
+            packet: "tools/call: get_theme → backup_theme → update_theme → render_preview",
+            actors: ["host", "server", "ext"],
+            hostTag: true, serverTag: true
+          },
+          {
+            title: "更新は次回接続で自動的に — 再インストール不要",
+            tag: "",
+            desc: "後日、サーバーの開発者がスキルを改訂したとします。スキルはサーバーの一部として配られているため、<strong>次に接続したときには新しい版がそのまま使えます</strong>。利用者がスキルだけを別途インストールしたり更新したりする作業はありません。ただし、ファイルの内容が変わるとダイジェストも変わるため、承認済みだったスキルは承認が取り消され、改めて確認してから使われます。",
+            route: "MCPサーバー（スキル改訂）→ 次回接続でホストへ",
+            packet: "skills/list: theme-refresh v2（ダイジェスト変化 → 再承認）",
+            actors: ["server", "host"],
+            hostTag: true, serverTag: true
+          }
+        ];
+
+        var USER_MSG = "<div class='msg user'><span class='who'>あなた</span>オンラインストアのトップページを、冬のセール向けのデザインに変えて</div>";
+
+        function srvRow(dotCls, name, meta, state, stateCls) {
+          return "<div class='srv-row'><span class='srv-dot " + dotCls + "'></span><span class='srv-name'>" + name +
+            "</span><span class='srv-meta'>" + meta + "</span><span class='srv-state " + stateCls + "'>" + state + "</span></div>";
+        }
+        var SRV_STORE = "ストア連携サーバー";
+        function servers(state) {
+          return {
+            off: srvRow("", SRV_STORE, "Streamable HTTP · リモート", "未接続", ""),
+            busy1: srvRow("busy", SRV_STORE, "Streamable HTTP · リモート", "接続中…", "busy"),
+            busy2: srvRow("busy", SRV_STORE, "Streamable HTTP · リモート", "スキル取得中…", "busy"),
+            on: srvRow("on", SRV_STORE, "Streamable HTTP · リモート", "接続済み · skills拡張対応", "ok"),
+            upd: srvRow("on", SRV_STORE, "Streamable HTTP · リモート", "接続済み · スキル新版あり", "ok")
+          }[state];
+        }
+        function skillsRow(kind) {
+          if (kind === "none") return "<span class='t-label'>発見したスキル</span><span class='chip gray'>まだありません</span>";
+          if (kind === "busy") return "<span class='t-label'>発見したスキル</span><span class='chip gray'>取得中…</span>";
+          var base = "<span class='t-label'>発見したスキル</span><span class='chip'>theme-refresh</span><span class='chip gray'>inventory-setup</span><span class='chip gray'>order-report</span>";
+          if (kind === "loaded") base = "<span class='t-label'>発見したスキル</span><span class='chip'>theme-refresh ✓本文読込済み</span><span class='chip gray'>inventory-setup</span><span class='chip gray'>order-report</span>";
+          if (kind === "v2") base = "<span class='t-label'>発見したスキル</span><span class='chip'>theme-refresh v2</span><span class='chip gray'>inventory-setup</span><span class='chip gray'>order-report</span>";
+          return base;
+        }
+
+        var VIEW = [
+          { spin: true, servers: servers("busy1"), tools: skillsRow("none"),
+            msgs: "<div class='chat-empty'>アプリが起動しました。裏側では、設定されたMCPサーバーへの接続が始まっています。</div>" },
+          { spin: true, servers: servers("busy2"), tools: skillsRow("busy"),
+            msgs: "<div class='chat-empty'>スキルを発見しています（skills/list）。返ってくるのは名前と短い説明だけで、本文はまだ来ません…</div>" },
+          { spin: false, servers: servers("on"), tools: skillsRow("list"),
+            msgs: USER_MSG },
+          { spin: true, servers: servers("on"), tools: skillsRow("list"),
+            msgs: USER_MSG + "<div class='tool-line'>スキル照合中 → 「theme-refresh」がこのタスクに合います（本文は未読）</div>" },
+          { spin: true, servers: servers("on"), tools: skillsRow("list"),
+            msgs: USER_MSG + "<div class='tool-line'>📖 resources/read → theme-refresh の SKILL.md を読み込んでいます…</div>" },
+          { spin: true, servers: servers("on"), tools: skillsRow("loaded"),
+            msgs: USER_MSG + "<div class='tool-line'>🔧 SKILL.md の手順どおり実行中：テーマ取得 → バックアップ → 配色・バナー変更 → プレビュー</div>" },
+          { spin: false, servers: servers("upd"), tools: skillsRow("v2"),
+            msgs: USER_MSG + "<div class='tool-line done'>✓ デザイン変更が完了しました</div>" +
+              "<div class='msg ai'><span class='who'>AI</span>トップページを冬のセール向けに変更しました。変更前のテーマはバックアップ済みです。<br><br>なお、このサーバーのスキルはサーバー側で更新されるため、次回接続からは新しい版の手順が自動で使われます（再インストールは不要です）。</div>" }
+        ];
+
+        var RPC = [
+          "<span class='dim'>→ リクエスト（クライアント → サーバー）</span>\n{\n  \"jsonrpc\": \"2.0\", \"id\": 1,\n  \"method\": <span class='hl'>\"server/discover\"</span>\n}\n\n<span class='dim'>← レスポンス：能力と拡張の宣言</span>\n{\n  \"jsonrpc\": \"2.0\", \"id\": 1,\n  \"result\": {\n    \"capabilities\": { \"resources\": {}, \"tools\": {} },\n    \"extensions\": {\n      <span class='hl'>\"io.modelcontextprotocol/skills\"</span>: {}\n    },\n    \"serverInfo\": { \"name\": \"store-server\", \"version\": \"1.4\" }\n  }\n}\n\n<span class='dim'>「ツールとリソースに加えて、スキルも配れます」\nという宣言が、ここで交換される</span>",
+          "<span class='dim'>→ リクエスト</span>\n{ \"jsonrpc\": \"2.0\", \"id\": 2, \"method\": <span class='hl'>\"skills/list\"</span> }\n\n<span class='dim'>← レスポンス：メタデータだけが返る</span>\n{\n  \"jsonrpc\": \"2.0\", \"id\": 2,\n  \"result\": { \"skills\": [\n    { \"name\": \"theme-refresh\",\n      \"description\": \"ストアのテーマを季節キャンペーン向けに変更する手順\",\n      \"uri\": \"skill://theme-refresh\" },\n    { \"name\": \"inventory-setup\", \"description\": \"…\", … },\n    { \"name\": \"order-report\", \"description\": \"…\", … }\n  ] }\n}\n\n<span class='dim'>本文（SKILL.md）は含まれない。\n名前と説明だけ ―― だから軽い。</span>",
+          "<span class='dim'>// 会話にユーザーの発言が追加され、\n// ツール定義とスキルのメタデータと一緒に\n// モデルへ送られる</span>\n{\n  \"role\": \"user\",\n  \"content\": \"オンラインストアのトップページを、\n              冬のセール向けのデザインに変えて\"\n}\n\n<span class='dim'>この時点でも、スキルの本文は\nまだ読み込まれていない</span>",
+          "<span class='dim'>// モデル内部の照合：\n// タスク × スキルのメタデータ（名前＋説明）</span>\nタスク: 「トップページを冬のセール向けに変更」\n候補:\n  theme-refresh   … テーマを季節キャンペーン向けに\n                    変更する手順 → <span class='hl'>一致</span>\n  inventory-setup … 在庫の初期設定 → 不一致\n  order-report    … 注文レポート作成 → 不一致\n\n<span class='dim'>選ばれたのは theme-refresh。\n本文を読まずに、説明だけで選べる。</span>",
+          "<span class='dim'>→ リクエスト（クライアント → サーバー）</span>\n{\n  \"jsonrpc\": \"2.0\", \"id\": 3,\n  \"method\": <span class='hl'>\"resources/read\"</span>,\n  \"params\": { \"uri\": \"skill://theme-refresh/SKILL.md\" }\n}\n\n<span class='dim'>← レスポンス：手順書の本文が返る</span>\n{\n  \"jsonrpc\": \"2.0\", \"id\": 3,\n  \"result\": { \"contents\": [\n    { \"uri\": \"skill://theme-refresh/SKILL.md\",\n      \"text\": \"# テーマ変更の手順\\n1. 現在のテーマを取得…\" }\n  ] }\n}\n\n<span class='dim'>補助ファイルも、必要になったものだけ\n同じ方法で読み込まれる</span>",
+          "<span class='dim'>// SKILL.md の手順に沿って、\n// tools/call が順番に発行される</span>\n<span class='dim'>→</span> tools/call: get_theme {}\n<span class='dim'>→</span> tools/call: backup_theme { \"label\": \"変更前\" }\n<span class='dim'>→</span> tools/call: update_theme {\n     \"palette\": \"winter-sale\", \"banner\": \"冬のセール\" }\n<span class='dim'>→</span> tools/call: render_preview {}\n\n<span class='dim'>ツール自体は従来どおり。\n変わったのは「呼ぶ順番と作法」の知識が\nサーバーから一緒に届いている点。</span>",
+          "<span class='dim'>// 後日、サーバー側でスキルが改訂された。\n// 次回の接続時の skills/list：</span>\n{ \"name\": \"theme-refresh\",\n  \"version\": \"2\",\n  \"digest\": \"sha256:9f2c…\" }  <span class='dim'>← 前回と違う</span>\n\n<span class='dim'>利用者は何もしていない。\n接続し直すだけで、新しい版の手順が使える。\n\nただしダイジェストが変わったため、\n以前の承認は取り消され、ホストは\n改めて承認を確認してから使う。</span>"
+        ];
+
+        var idx = 0;
+        var playing = false;
+        var speed = 1;
+        var timer = null;
+        var BASE_MS = 3400;
+
+        var els = {
+          label: document.querySelector("[data-progress-label]"),
+          fill: document.querySelector("[data-progress-fill]"),
+          dotsWrap: document.querySelector("[data-dots]"),
+          spinner: document.querySelector("[data-spinner]"),
+          servers: document.querySelector("[data-servers]"),
+          tools: document.querySelector("[data-tools]"),
+          msgs: document.querySelector("[data-msgs]"),
+          rpc: document.querySelector("[data-rpc]"),
+          route: document.querySelector("[data-packet-route]"),
+          packet: document.querySelector("[data-packet-body]"),
+          kicker: document.querySelector("[data-step-kicker]"),
+          stepTitle: document.querySelector("[data-step-title]"),
+          stepDesc: document.querySelector("[data-step-desc]")
+        };
+
+        /* build dots */
+        var dots = [];
+        for (var i = 0; i < STEPS.length; i++) {
+          (function (n) {
+            var b = document.createElement("button");
+            b.type = "button";
+            b.className = "dot";
+            b.textContent = String(n + 1);
+            b.setAttribute("aria-label", "ステップ" + (n + 1) + "へ移動");
+            b.addEventListener("click", function () { pause(); goTo(n); });
+            els.dotsWrap.appendChild(b);
+            dots.push(b);
+          })(i);
+        }
+
+        var actorEls = {};
+        document.querySelectorAll("[data-actor]").forEach(function (el) {
+          actorEls[el.getAttribute("data-actor")] = el;
+        });
+
+        function render() {
+          var s = STEPS[idx];
+          var v = VIEW[idx];
+          els.label.textContent = "ステップ " + (idx + 1) + " / " + STEPS.length;
+          els.fill.style.width = ((idx + 1) / STEPS.length * 100) + "%";
+          dots.forEach(function (d, i) {
+            d.classList.toggle("now", i === idx);
+            d.classList.toggle("done", i < idx);
+          });
+          /* chat mock + rpc */
+          els.spinner.classList.toggle("on", v.spin);
+          els.servers.innerHTML = v.servers;
+          els.tools.innerHTML = v.tools;
+          els.msgs.innerHTML = v.msgs;
+          els.rpc.innerHTML = RPC[idx];
+          /* flow */
+          els.route.textContent = s.route;
+          els.packet.textContent = s.packet;
+          els.kicker.textContent = "STEP " + (idx + 1) + " / " + STEPS.length;
+          els.stepTitle.innerHTML = s.title + (s.tag || "");
+          els.stepDesc.innerHTML = s.desc;
+          Object.keys(actorEls).forEach(function (k) {
+            actorEls[k].classList.toggle("active", s.actors.indexOf(k) !== -1);
+          });
+          actorEls.host.classList.toggle("tag-on", !!s.hostTag);
+          actorEls.server.classList.toggle("tag-on", !!s.serverTag);
+          /* controls state */
+          document.querySelectorAll("[data-action='prev']").forEach(function (b) { b.disabled = idx === 0; });
+          document.querySelectorAll("[data-action='next']").forEach(function (b) { b.disabled = idx === STEPS.length - 1; });
+          document.querySelectorAll("[data-action='play']").forEach(function (b) {
+            b.textContent = playing ? "⏸ 一時停止" : (idx === STEPS.length - 1 ? "↺ もう一度" : "▶ 再生");
+          });
+        }
+
+        function goTo(n) {
+          idx = Math.max(0, Math.min(STEPS.length - 1, n));
+          render();
+        }
+        function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+        function startTimer() {
+          stopTimer();
+          timer = setInterval(function () {
+            if (idx >= STEPS.length - 1) { pause(); return; }
+            goTo(idx + 1);
+            if (idx >= STEPS.length - 1) { pause(); }
+          }, BASE_MS / speed);
+        }
+        function play() {
+          if (idx >= STEPS.length - 1) { goTo(0); }
+          playing = true;
+          render();
+          startTimer();
+        }
+        function pause() {
+          playing = false;
+          stopTimer();
+          render();
+        }
+
+        document.querySelectorAll("[data-controls]").forEach(function (bar) {
+          bar.addEventListener("click", function (e) {
+            var btn = e.target.closest("[data-action]");
+            if (!btn || btn.disabled) return;
+            var a = btn.getAttribute("data-action");
+            if (a === "prev") { pause(); goTo(idx - 1); }
+            else if (a === "next") { pause(); goTo(idx + 1); }
+            else if (a === "reset") { pause(); goTo(0); }
+            else if (a === "play") { playing ? pause() : play(); }
+          });
+        });
+        document.querySelectorAll("[data-speed]").forEach(function (sel) {
+          sel.addEventListener("change", function () {
+            speed = parseFloat(sel.value);
+            document.querySelectorAll("[data-speed]").forEach(function (o) { o.value = sel.value; });
+            if (playing) startTimer();
+          });
+        });
+
+        render();
+      })();
+    </script>
+  </body>
+</html>
